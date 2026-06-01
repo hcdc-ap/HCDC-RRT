@@ -1,0 +1,3431 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+  <base target="_self">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <title>HCDC RRT System</title>
+  <link rel="stylesheet" href="styles.css">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default"> <meta name="theme-color" content="#ffffff"> 
+
+  <link rel="icon" type="image/png" href="https://github.com/hcdc-ap/images-host/blob/main/images/productivity.png?raw=true">
+  <link rel="apple-touch-icon" href="https://github.com/hcdc-ap/images-host/blob/main/images/productivity.png?raw=true">
+
+  <link rel="manifest" id="my-manifest-placeholder">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://unpkg.com">
+  <link rel="preconnect" href="https://cdn.jsdelivr.net">
+  <link rel="preconnect" href="https://code.jquery.com">
+
+  <link href="https://fonts.googleapis.com/css2?family=Ubuntu:wght@400;700&family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://unicons.iconscout.com/release/v4.0.8/css/line.css">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://code.jquery.com/ui/1.13.2/themes/base/jquery-ui.css">
+  <link rel="stylesheet" href="https://cdn.datatables.net/2.0.8/css/dataTables.dataTables.min.css">
+  <link rel="stylesheet" href="https://cdn.datatables.net/responsive/3.0.2/css/responsive.dataTables.min.css">
+  <link rel="stylesheet" href="https://cdn.datatables.net/buttons/3.0.2/css/buttons.dataTables.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.Default.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.css" />
+  <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="https://code.jquery.com/ui/1.13.2/jquery-ui.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.4/moment.min.js"></script>
+  <script src="https://cdn.datatables.net/2.0.8/js/dataTables.min.js" defer></script>
+  <script src="https://cdn.datatables.net/buttons/3.0.2/js/dataTables.buttons.min.js" defer></script>
+  <script src="https://cdn.datatables.net/buttons/3.0.2/js/buttons.html5.min.js" defer></script>
+  <script src="https://cdn.datatables.net/buttons/3.0.2/js/buttons.print.min.js" defer></script>
+  <script src="https://cdn.datatables.net/buttons/3.0.2/js/buttons.colVis.min.js" defer></script>
+  <script src="https://cdn.datatables.net/responsive/3.0.2/js/dataTables.responsive.min.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js" defer></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" defer></script>
+  <script src="https://unpkg.com/leaflet.markercluster@1.4.1/dist/leaflet.markercluster.js" defer></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js" defer></script>
+  <script src="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.js" defer></script>
+  <script src="https://unpkg.com/leaflet.browser.print@1.0.6/dist/leaflet.browser.print.min.js" defer></script>
+  <script src="https://code.highcharts.com/maps/highmaps.js" defer></script>
+  <script src="https://code.highcharts.com/maps/modules/exporting.js" defer></script>
+  <script src="https://code.highcharts.com/maps/modules/accessibility.js" defer></script>
+  <script src="https://code.highcharts.com/maps/modules/tiledwebmap.js" defer></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.4.4/proj4.js" defer></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js" defer></script>
+  <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js" defer></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.10/pdfmake.min.js" defer></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.10/vfs_fonts.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+  <div id="global-loading-overlay">
+    <div class="spinner-border text-primary" role="status"></div>
+    <div style="margin-top:10px;">Đang tải dữ liệu...</div>
+  </div>
+
+<div id="appToast" class="toast" role="alert" aria-live="assertive" aria-atomic="true" 
+     style="position: fixed; top: 20px; right: 20px; z-index: 10000; min-width: 300px; background-color: white; box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);">
+  
+  <div class="toast-header">
+    <i class='bx bx-bell me-2'></i>
+    <strong class="me-auto" id="toastTitle">Thông báo</strong>
+    
+    <button type="button" class="btn-close" onclick="hideToast()" aria-label="Close"></button>
+  </div>
+  
+  <div class="toast-body" id="appToastBody">
+    </div>
+
+</div>
+
+  <div id="view-login" class="app-view active">
+      <div class="block-mobile-landscape">Vui lòng xoay thiết bị của bạn</div>
+  <div class="slider" id="slider">
+    <div class="container" id="container">
+      <div class="left" id="left">
+        <!-- LOGIN FORM -->
+        <div class="content login active" id="login">
+          <div class="title">Đăng nhập</div>
+          <form id="login-form" method="post" novalidate>
+            <div class="info">
+              <div class="label-wrapper">
+                <label class="label" for="login-user"><i class="uil uil-user"></i>&nbsp; Email đăng nhập</label>
+              </div>
+              <i class="uil uil-check-circle validation-icon valid input-icon"></i>
+              <i class="uil uil-times-circle validation-icon invalid input-icon"></i>
+              <input id="login-user" name="user" type="text" class="input" required autocomplete="username">
+              <span class="border-corner-cover"></span>
+            </div>
+            <div class="info">
+              <div class="label-wrapper">
+                <label class="label" for="login-password"><i class="uil uil-lock-alt"></i>&nbsp; Mật khẩu</label>
+              </div>
+              <i class="uil uil-check-circle validation-icon valid input-icon password-icon"></i>
+              <i class="uil uil-times-circle validation-icon invalid input-icon password-icon"></i>
+              <input id="login-password" name="password" type="password" class="input password" required autocomplete="current-password">
+              <span class="border-corner-cover"></span>
+              <i class="uil uil-eye input-icon password-eye">
+                <i class="uil uil-line-alt password-eye-line"></i>
+                <span data-tooltip="show password"></span>
+              </i>
+            </div>
+            <div class="info">
+              <div class="presubmition-options">
+                <label for="remember-me" class="checkmark-label"><input id="remember-me" type="checkbox"><span class="checkmark"></span><span>Ghi nhớ</span></label>
+              <!-- 
+                <span class="forgot-pass" id="forgot-pass">Quên mật khẩu?</span>-->
+              </div>
+            </div>
+            <button type="submit" class="button">Đăng nhập</button>
+          </form>
+          
+          <div class="slide-button-container">Chưa có tài khoản? <span id="signup-slide-button" class="slide-button">Đăng ký</span></div>
+        </div>
+        <!-- RECOVER FORM -->
+        <div class="content recover" id="recover">
+          <div class="title">Khôi phục tài khoản</div>
+          <form id="recover-form" method="post" novalidate>
+            <div class="recovery-details">Nhập email của bạn và chúng tôi sẽ gửi cho bạn một liên kết để quay lại tài khoản của bạn.</div>
+            <div class="info">
+              <div class="label-wrapper">
+                <label class="label" for="recover-user"><i class="uil uil-mailbox"></i>&nbsp; Email</label>
+              </div>
+              <i class="uil uil-check-circle validation-icon valid input-icon"></i>
+              <i class="uil uil-times-circle validation-icon invalid input-icon"></i>
+              <input id="recover-user" name="user" type="text" class="input" required>
+              <span class="border-corner-cover"></span>
+            </div>
+            <button type="submit" class="button send-verification">Gửi liên kết</button>
+            <div class="or">HOẶC</div>
+            <div class="new-account"><span id="new-account">Tạo tài khoản mới</span></div>
+          </form>
+          <div class="slide-button-container"><span id="back-to-login" class="slide-button back-to-login">Quay lại Đăng nhập</span></div>
+        </div>
+
+        <!-- Form nhập OTP và đổi mật khẩu -->
+        <!-- OTP & Password Reset (Đồng bộ giao diện) -->
+        <div class="content otp-reset" id="otp-reset" style="display:none">
+          <div class="title">Xác thực OTP & Đặt lại mật khẩu</div>
+          <form id="otp-form" novalidate>
+            <div class="info">
+              <div class="label-wrapper">
+                <label class="label" for="otp-email"><i class="uil uil-envelope"></i>&nbsp; Email</label>
+              </div>
+              <i class="uil uil-check-circle validation-icon valid input-icon"></i>
+              <i class="uil uil-times-circle validation-icon invalid input-icon"></i>
+              <input id="otp-email" name="email" type="email" autocomplete="email" class="input" required readonly>
+              <span class="border-corner-cover"></span>
+            </div>
+            <div class="info">
+              <div class="label-wrapper">
+                <label class="label" for="otp-code"><i class="uil uil-key-skeleton"></i>&nbsp; Mã OTP</label>
+              </div>
+              <i class="uil uil-check-circle validation-icon valid input-icon"></i>
+              <i class="uil uil-times-circle validation-icon invalid input-icon"></i>
+              <input id="otp-code" name="otp" type="text" class="input" required maxlength="6" pattern="\d{6}">
+              <span class="border-corner-cover"></span>
+            </div>
+            <div class="info">
+              <div class="label-wrapper">
+                <label class="label" for="new-password" id="password-label"><i class="uil uil-lock"></i>&nbsp; Mật khẩu mới</label>
+              </div>
+              <i class="uil uil-check-circle validation-icon valid input-icon password-icon"></i>
+              <i class="uil uil-times-circle validation-icon invalid input-icon password-icon"></i>
+              <input id="new-password" name="password" type="password" class="input password" required autocomplete="new-password">
+              <span class="border-corner-cover"></span>
+              <i class="uil uil-eye input-icon password-eye">
+                <i class="uil uil-line-alt password-eye-line"></i>
+                <span data-tooltip="show password"></span>
+              </i>
+              <div class="otp-password-requirements-container" id="otp-password-requirements-container">
+                <ul class="otp-password-requirements" id="otp-password-requirements">
+                  <li id="otp-password-requirements-length"><i class="uil uil-info-circle"></i>&nbsp;Từ 8 đến 32 ký tự</li>
+                  <li id="otp-password-requirements-number"><i class="uil uil-info-circle"></i>&nbsp;Chứa ít nhất 1 số</li>
+                  <li id="otp-password-requirements-lower"><i class="uil uil-info-circle"></i>&nbsp;Chứa ít nhất 1 chữ cái thường</li>
+                  <li id="otp-password-requirements-upper"><i class="uil uil-info-circle"></i>&nbsp;Chứa ít nhất 1 chữ cái viết hoa</li>
+                  <li id="otp-password-requirements-special"><i class="uil uil-info-circle"></i>&nbsp;Chứa ít nhất 1 ký tự đặc biệt</li>
+                </ul>
+              </div>
+            </div>
+            <div class="info">
+              <div class="label-wrapper">
+                <label class="label" for="new-confirm-password" id="confirm-password-label"><i class="uil uil-lock-access"></i>&nbsp; Xác nhận Mật khẩu</label>
+              </div>
+              <i class="uil uil-check-circle validation-icon valid input-icon password-icon"></i>
+              <i class="uil uil-times-circle validation-icon invalid input-icon password-icon"></i>
+              <input id="new-confirm-password" name="confirm-password" type="password" class="input password" required autocomplete="new-password">
+              <span class="border-corner-cover"></span>
+              <i class="uil uil-eye input-icon password-eye">
+                <i class="uil uil-line-alt password-eye-line"></i>
+                <span data-tooltip="show password"></span>
+              </i>
+            </div>
+            <button type="submit" class="button">Xác nhận</button>
+          </form>
+          <div class="slide-button-container"><span id="back-to-recover" class="slide-button">Quay lại Đăng nhập</span></div>
+        </div>
+
+      </div>
+      <!-- SIGN UP FORM -->
+      <div class="right" id="right">
+        <div class="content">
+          <div class="title">Đăng ký</div>
+          <form id="signup-form" method="post" novalidate>
+            <div class="info">
+              <div class="label-wrapper">
+                <label class="label" for="signup-user" id="user-label"><i class="uil uil-user"></i>&nbsp; Tên người dùng</label>
+              </div>
+              <i class="uil uil-check-circle validation-icon valid input-icon"></i>
+              <i class="uil uil-times-circle validation-icon invalid input-icon"></i>
+              <input id="signup-user" name="user" type="text" class="input" required autocomplete="username">
+              <span class="border-corner-cover"></span>
+            </div>
+            <div class="info">
+              <div class="label-wrapper">
+                <label class="label" for="signup-company" id="company-label"><i class="uil uil-building"></i>&nbsp; Đơn vị công tác</label>
+              </div>
+              <i class="uil uil-check-circle validation-icon valid input-icon"></i>
+              <i class="uil uil-times-circle validation-icon invalid input-icon"></i>
+              <input id="signup-company" name="company" type="text" class="input" required autocomplete="company">
+              <span class="border-corner-cover"></span>
+            </div>
+            <div class="info">
+              <div class="label-wrapper">
+                <label class="label" for="signup-mail" id="mail-label"><i class="uil uil-envelope"></i>&nbsp; Email</label>
+              </div>
+              <i class="uil uil-check-circle validation-icon valid input-icon"></i>
+              <i class="uil uil-times-circle validation-icon invalid input-icon"></i>
+              <input id="signup-mail" name="mail" type="email" class="input" required autocomplete="email">
+              <span class="border-corner-cover"></span>
+            </div>
+            <div class="info">
+              <div class="label-wrapper">
+                <label class="label" for="signup-phone" id="phone-label"><i class="uil uil-mobile-android"></i>&nbsp; Số điện thoại</label>
+              </div>
+              <i class="uil uil-check-circle validation-icon valid input-icon"></i>
+              <i class="uil uil-times-circle validation-icon invalid input-icon"></i>
+              <input id="signup-phone" name="phone" type="text" class="input" required autocomplete="phone">
+              <span class="border-corner-cover"></span>
+            </div>
+
+            <div class="info">
+              <div class="label-wrapper">
+                <label class="label" for="signup-password" id="password-label"><i class="uil uil-lock"></i>&nbsp; Mật khẩu</label>
+              </div>
+              <i class="uil uil-check-circle validation-icon valid input-icon password-icon"></i>
+              <i class="uil uil-times-circle validation-icon invalid input-icon password-icon"></i>
+              <input id="signup-password" name="password" type="password" class="input password" required autocomplete="new-password">
+              <span class="border-corner-cover"></span>
+              <i class="uil uil-eye input-icon password-eye">
+                <i class="uil uil-line-alt password-eye-line"></i>
+                <span data-tooltip="show password"></span>
+              </i>
+              <div class="password-requirements-container" id="password-requirements-container">
+                <ul class="password-requirements" id="password-requirements">
+                  <li id="password-requirements-length"><i class="uil uil-info-circle"></i>&nbsp;Từ 8 đến 32 ký tự</li>
+                  <li id="password-requirements-number"><i class="uil uil-info-circle"></i>&nbsp;Chứa ít nhất 1 số</li>
+                  <li id="password-requirements-lower"><i class="uil uil-info-circle"></i>&nbsp;Chứa ít nhất 1 chữ cái thường</li>
+                  <li id="password-requirements-upper"><i class="uil uil-info-circle"></i>&nbsp;Chứa ít nhất 1 chữ cái viết hoa</li>
+                  <li id="password-requirements-special"><i class="uil uil-info-circle"></i>&nbsp;Chứa ít nhất 1 ký tự đặc biệt</li>
+                </ul>
+              </div>
+            </div>
+            <div class="info">
+              <div class="label-wrapper">
+                <label class="label" for="signup-confirm-password" id="confirm-password-label"><i class="uil uil-lock-access"></i>&nbsp; Xác nhận Mật khẩu</label>
+              </div>
+              <i class="uil uil-check-circle validation-icon valid input-icon password-icon"></i>
+              <i class="uil uil-times-circle validation-icon invalid input-icon password-icon"></i>
+              <input id="signup-confirm-password" name="confirm-password" type="password" class="input password" required autocomplete="new-password">
+              <span class="border-corner-cover"></span>
+              <i class="uil uil-eye input-icon password-eye">
+                <i class="uil uil-line-alt password-eye-line"></i>
+                <span data-tooltip="show password"></span>
+              </i>
+            </div>
+            <div class="info">
+              <label for="tos" class="checkmark-label tos"><input type="checkbox" id="tos" required><span class="checkmark"></span><span class="tos-text">TÔI CHẮC CHẮN ĐÃ DÀNH 10 PHÚT ĐỂ ĐỌC VÀ ĐỒNG Ý VỚI <a> ĐIỀU KHOẢN DỊCH VỤ </a> VÀ <a> CHÍNH SÁCH BẢO MẬT</a></span></label>
+            </div>
+            <button type="submit" class="button">Đăng ký</button>
+          </form>
+          <div class="slide-button-container">Đã có tài khoản? <span id="login-slide-button" class="slide-button">Đăng nhập</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Extra Themes UI giữ nguyên như của bạn -->
+  <!-- Everything below is for extra themes and will not be documented -->
+  <i class="uil uil-sort-amount-up open-themes-button" id="open-themes"></i>
+  <div class="themes" id="themes">
+    <i class="uil uil-sort-amount-down close-themes-button" id="close-themes"></i>
+    <span>Dưới đây là một số chủ đề khác mà tôi đã tạo mà bạn có thể lựa chọn: </span>
+    <div class="theme-styles-container">
+      <label for="sakura" class="radio-label theme-label"><input type="radio" name="theme" id="sakura" checked><span class="radio"></span>Hoa anh đào</label>
+      <label for="winter" class="radio-label theme-label"><input type="radio" id="winter" name="theme"><span class="radio"></span>Mùa đông</label>
+      <label for="fall" class="radio-label theme-label"><input type="radio" id="fall" name="theme"><span class="radio"></span>Mùa thu</label>
+      <label for="sunset" class="radio-label theme-label"><input type="radio" id="sunset" name="theme"><span class="radio"></span>Hoàng hôn</label>
+      <label for="mountain" class="radio-label theme-label"><input type="radio" id="mountain" name="theme"><span class="radio"></span>Tuyết sơn</label>
+      <label for="city" class="radio-label theme-label"><input type="radio" id="city" name="theme"><span class="radio"></span>Ánh sáng đô thị</label>
+      <label for="ocean" class="radio-label theme-label"><input type="radio" id="ocean" name="theme"><span class="radio"></span>Đại dương</label>
+      <label for="lanterns" class="radio-label theme-label"><input type="radio" id="lanterns" name="theme"><span class="radio"></span>Đèn lồng</label>
+    </div>
+    <span>*Hình ảnh chủ đề có độ phân giải 4k-8k nên vui lòng đợi chúng tải xong.</span>
+    <div class="extra-theme-options">
+      <span class="add-own-theme" id="add-own-theme">Thêm chủ đề của riêng bạn</span>
+      <span class="remove-themes" id="remove-themes">Xóa bảng màu</span>
+    </div>
+    <div class="own-theme">
+      <span class="back-to-themes" id="back-from-own-theme"><i class="uil uil-arrow-left"></i>Trở lại </span>
+      <span class="clear-custom-theme" id="clear-custom-theme">Xóa chủ đề tùy chỉnh</span>
+      <form id="custom-theme-form" autocomplete="off">
+        <div><label for="--background-image">Hình nền: </label><input name="--background-image" id="--background-image" class="own-theme-input" placeholder="An image, usually of nature"></div>
+        <div class="colors">
+          <div><input type="color" name="--primary-color" id="--primary-color" class="own-theme-input"><label for="--primary-color">Primary-Color</label></div>
+          <div><input type="color" name="--secondary-color" id="--secondary-color" class="own-theme-input"><label for="--secondary-color">Secondary-Color</label></div>
+          <div><input type="color" name="--body-color" id="--body-color" class="own-theme-input"><label for="--body-color">Body-Color</label></div>
+          <div><input type="color" name="--title-color" id="--title-color" class="own-theme-input"><label for="--title-color">Title-Color: </label></div>
+          <div><input type="color" name="--text-color" id="--text-color" class="own-theme-input"><label for="--text-color"></label>Text-Color</div>
+          <div><input type="color" name="--valid-color" id="--valid-color" class="own-theme-input"><label for="--valid-color"></label>Valid-Color</div>
+          <div><input type="color" name="--invalid-color" id="--invalid-color" class="own-theme-input"><label for="--invalid-color"></label>Invalid-Color</div>
+        </div>
+        <input type="submit" class="button" value="Áp dụng Chủ đề">
+      </form>
+    </div>
+    <div class="remove-themes-confirm-container">
+      <span>Bạn có chắc chắn muốn xóa hoàn toàn bảng màu này không?</span>
+      <span>Bạn sẽ không thể chọn hoặc tạo chủ đề mới trừ khi bạn làm mới trang.</span>
+      <div>
+        <span class="back-to-themes" id="back-from-remove-themes"><i class="uil uil-arrow-left"></i>Trở lại</span>
+        <span class="remove-themes-confirm" id="remove-themes-confirm">XÁC NHẬN</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast & Spinner -->
+  <div class="toast-container" id="toast-container"></div>
+  <div class="loading-overlay" id="loading-overlay">
+    <div class="spinner"></div>
+  </div>
+  
+  </div>
+
+  <div id="view-dashboard" class="app-view">
+      <!-- SIDEBAR -->
+  <section id="sidebar">
+    <a href="#" class="brand">
+      <i class='bx bxs-hot bx-lg'></i>
+      <span class="text">Phạm Anh</span>
+    </a>
+
+    <ul class="side-menu top">
+    <li class="active" id="menu-dashboard">
+      <a href="#" data-target="page-dashboard"><i class='bx bxs-dashboard bx-sm'></i><span class="text">Dashboard</span></a>
+    </li>
+    
+    <li id="menu-datatable">
+      <a href="#" data-target="page-datatable"><i class='bx bxs-data bx-sm'></i><span class="text">Biểu mẫu RRT</span></a>
+    </li>
+  
+    <li id="menu-roster" data-roles="admin">
+      <a href="#" data-target="page-roster"><i class='bx bxs-calendar-star bx-sm'></i><span class="text">Lịch trực</span></a>
+    </li>
+  
+    <li id="menu-active" data-roles="admin">
+      <a href="#" data-target="page-emergency"><i class='bx bxs-megaphone bx-sm'></i><span class="text">Kích hoạt khẩn cấp</span></a>
+    </li>
+  
+    <li id="menu-tracking">
+      <a href="#" data-target="page-tracking"><i class='bx bxs-tachometer bx-sm'></i><span class="text">Theo dõi sự kiện</span></a>
+    </li>
+  
+    <li id="menu-team" data-roles="admin,manager">
+      <a href="#" data-target="page-team"><i class='bx bxs-group bx-sm'></i><span class="text">Thành viên</span></a>
+    </li>
+  
+    <li id="menu-training" data-roles="admin,manager">
+      <a href="#" data-target="page-training"><i class='bx bxs-graduation bx-sm'></i><span class="text">Đào tạo</span></a>
+    </li>
+  
+    <li id="menu-logistics" data-roles="admin">
+      <a href="#" data-target="page-logistics"><i class='bx bxs-box bx-sm'></i><span class="text">Vật tư</span></a>
+    </li>
+  
+    <li id="menu-library">
+      <a href="#" data-target="page-library"><i class='bx bxs-book-content bx-sm'></i><span class="text">Thư viện</span></a>
+    </li>
+  
+    <li id="menu-map">
+      <a href="#" data-target="page-map"><i class='bx bxs-map-alt bx-sm'></i><span class="text">Bản đồ</span></a>
+    </li>
+  
+    <li id="menu-notification">
+      <a href="#" data-target="page-notification"><i class='bx bxs-message-dots bx-sm'></i><span class="text">Tin nhắn</span></a>
+    </li>
+  </ul>
+
+    <ul class="side-menu bottom">
+
+      <li>
+        <a href="#" class="logout" onclick="logout()" >
+          <i class='bx bx-power-off bx-sm bx-burst-hover'></i>
+          <span class="text">Đăng xuất</span>
+        </a>
+      </li>
+    </ul>
+  </section>
+  <!-- SIDEBAR -->
+
+  <!-- CONTENT -->
+  <section id="content">
+    <!-- NAVBAR -->
+    <nav>
+      <i class='bx bx-menu bx-sm'></i>
+      <a href="#" class="nav-link">RRT-HCDC</a>
+      <form action="#">
+        <div class="form-input">
+          <input id="search-input" type="search" placeholder="Search...">
+          <button type="submit" class="search-btn"><i class="bx bx-search"></i></button>
+        </div>
+      </form>
+      <input type="checkbox" class="checkbox" id="switch-mode" hidden />
+      <label class="swith-lm" for="switch-mode">
+        <i class="bx bxs-moon"></i>
+        <i class="bx bx-sun"></i>
+        <div class="ball"></div>
+      </label>
+      <!-- Chuông notification -->
+      <a href="#" class="notification" id="notificationIcon">
+        <i class='bx bxs-bell bx-tada-hover'></i>
+        <span class="num">AP</span>
+      </a>
+      <div class="notification-menu" id="notificationMenu" style="display:none;">
+        <ul id="notification-list"></ul>
+      </div>
+
+      <a href="#" class="profile" id="profileIcon">
+        <img src="https://github.com/hcdc-ap/images-host/blob/main/images/hcdc%20(1).png?raw=true" alt="Profile">
+      </a>
+      <div class="profile-menu" id="profileMenu">
+        <ul>
+          <li><a href="#" id="accountLink">Tài khoản</a></li>
+          <li><a href="#" id="changePassLink" onclick="openChangePassModal()">Đổi mật khẩu</a></li>
+          <li>
+            <a href="#" id="messageLink">Tin nhắn</a>
+          </li>
+          <li><a href="#" onclick="logout()">Đăng xuất</a></li>
+        </ul>
+      </div>
+    </nav>
+    <!-- NAVBAR -->
+
+    <!-- MAIN -->
+    <main>
+
+      <!-- Card Stats Section -->
+<div id="page-dashboard">
+  <!-- Admin View -->
+  <div id="dashboard-admin-view" style="display:none;">
+    <!-- Row 1: Schedule Stats -->
+    <div class="row row-cols-1 row-cols-sm-2 row-cols-lg-4 g-4 mb-5">
+      <!-- Card 1: Tổng Lịch Trực -->
+      <div class="col">
+        <div class="card h-100 border-start border-0 border-4 border-primary shadow-sm">
+          <div class="card-body d-flex align-items-center">
+            <div class="avatar-sm bg-primary-subtle rounded-circle me-3 d-flex align-items-center justify-content-center">
+              <i class='bx bxs-calendar-check text-primary fs-4'></i>
+            </div>
+            <div>
+              <h4 id="schedule-total-count" class="mb-0 fw-bold text-dark">0</h4>
+              <p class="card-text mb-0 text-muted small">Lịch trực</p>
+            </div>
+          </div>
+          <div class="card-footer bg-transparent border-top-0 py-2">
+            <p class="mb-0 text-muted small"><i class="bx bx-time-five"></i> <span id="schedule-dates-info">...</span></p>
+            <p class="mb-0 text-muted small"><i class="bx bxs-user-badge"></i> <span id="schedule-dates-team">...</span></p>
+          </div>
+        </div>
+      </div>
+      <!-- Card 2: Xác nhận Lịch Trực -->
+      <div class="col">
+        <div class="card h-100 border-start border-0 border-4 border-success shadow-sm">
+          <div class="card-body d-flex align-items-center">
+            <div class="avatar-sm bg-success-subtle rounded-circle me-3 d-flex align-items-center justify-content-center">
+              <i class='bx bxs-user-check text-success fs-4'></i>
+            </div>
+            <div>
+              <h4 id="schedule-confirmed-count" class="mb-0 fw-bold text-dark">0</h4>
+              <p class="card-text mb-0 text-muted small">Xác nhận</p>
+            </div>
+          </div>
+          <div class="card-footer bg-transparent border-top-0 py-2">
+            <p class="mb-0 text-muted small"><i class="bx bx-user-check"></i> <span id="schedule-confirmed-members">...</span></p>
+          </div>
+        </div>
+      </div>
+      <!-- Card 3: Từ chối Lịch Trực -->
+      <div class="col">
+        <div class="card h-100 border-start border-0 border-4 border-danger shadow-sm">
+          <div class="card-body d-flex align-items-center">
+            <div class="avatar-sm bg-danger-subtle rounded-circle me-3 d-flex align-items-center justify-content-center">
+              <i class='bx bxs-error-circle text-danger fs-4'></i>
+            </div>
+            <div>
+              <h4 id="schedule-declined-count" class="mb-0 fw-bold text-dark">0</h4>
+              <p class="card-text mb-0 text-muted small">Từ chối</p>
+            </div>
+          </div>
+          <div class="card-footer bg-transparent border-top-0 py-2">
+            <p class="mb-0 text-muted small"><i class="bx bx-user-x"></i> <span id="schedule-declined-members">...</span></p>
+          </div>
+        </div>
+      </div>
+      <!-- Card 4: Chưa phản hồi Lịch Trực -->
+      <div class="col">
+        <div class="card h-100 border-start border-0 border-4 border-warning shadow-sm">
+          <div class="card-body d-flex align-items-center">
+            <div class="avatar-sm bg-warning-subtle rounded-circle me-3 d-flex align-items-center justify-content-center">
+              <i class='bx bxs-time-five text-warning fs-4'></i>
+            </div>
+            <div>
+              <h4 id="schedule-pending-count" class="mb-0 fw-bold text-dark">0</h4>
+              <p class="card-text mb-0 text-muted small">Chưa phản hồi</p>
+            </div>
+          </div>
+          <div class="card-footer bg-transparent border-top-0 py-2">
+            <p class="mb-0 text-muted small"><i class="bx bx-time"></i> <span id="schedule-pending-members">...</span></p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Row 2: Emergency Stats -->
+    <div class="row row-cols-1 row-cols-sm-2 row-cols-lg-4 g-4 mb-5">
+      <!-- Card 5: Kích hoạt Khẩn cấp -->
+      <div class="col">
+        <div class="card h-100 border-start border-0 border-4 border-danger shadow-sm">
+          <div class="card-body d-flex align-items-center">
+            <div class="avatar-sm bg-danger-subtle rounded-circle me-3 d-flex align-items-center justify-content-center">
+              <i class='bx bxs-bell-ring text-danger fs-4'></i>
+            </div>
+            <div>
+              <h4 id="emergency-activations-count" class="mb-0 fw-bold text-dark">0</h4>
+              <p class="card-text mb-0 text-muted small">Kích hoạt khẩn cấp</p>
+            </div>
+          </div>
+          <div class="card-footer bg-transparent border-top-0 py-2">
+            <p class="mb-0 text-muted small"><i class="bx bx-time-five"></i> <span id="emergency-times-info">...</span></p>
+          </div>
+        </div>
+      </div>
+      <!-- Card 6: Xác nhận Khẩn cấp -->
+      <div class="col">
+        <div class="card h-100 border-start border-0 border-4 border-info shadow-sm">
+          <div class="card-body d-flex align-items-center">
+            <div class="avatar-sm bg-info-subtle rounded-circle me-3 d-flex align-items-center justify-content-center">
+              <i class='bx bxs-alarm-add text-info fs-4'></i>
+            </div>
+            <div>
+              <h4 id="emergency-confirmed-count" class="mb-0 fw-bold text-dark">0</h4>
+              <p class="card-text mb-0 text-muted small">Xác nhận</p>
+            </div>
+          </div>
+          <div class="card-footer bg-transparent border-top-0 py-2">
+            <p class="mb-0 text-muted small"><i class="bx bx-user-check"></i> <span id="emergency-confirmed-members">...</span></p>
+          </div>
+        </div>
+      </div>
+      <!-- Card 7: Từ chối Khẩn cấp -->
+      <div class="col">
+        <div class="card h-100 border-start border-0 border-4 border-danger shadow-sm">
+          <div class="card-body d-flex align-items-center">
+            <div class="avatar-sm bg-danger-subtle rounded-circle me-3 d-flex align-items-center justify-content-center">
+              <i class='bx bxs-error-circle text-danger fs-4'></i>
+            </div>
+            <div>
+              <h4 id="emergency-declined-count" class="mb-0 fw-bold text-dark">0</h4>
+              <p class="card-text mb-0 text-muted small">Từ chối</p>
+            </div>
+          </div>
+          <div class="card-footer bg-transparent border-top-0 py-2">
+            <p class="mb-0 text-muted small"><i class="bx bx-user-x"></i> <span id="emergency-declined-members">...</span></p>
+          </div>
+        </div>
+      </div>
+      <!-- Card 8: Chưa phản hồi Khẩn cấp -->
+      <div class="col">
+        <div class="card h-100 border-start border-0 border-4 border-warning shadow-sm">
+          <div class="card-body d-flex align-items-center">
+            <div class="avatar-sm bg-warning-subtle rounded-circle me-3 d-flex align-items-center justify-content-center">
+              <i class='bx bxs-time-five text-warning fs-4'></i>
+            </div>
+            <div>
+              <h4 id="emergency-pending-count" class="mb-0 fw-bold text-dark">0</h4>
+              <p class="card-text mb-0 text-muted small">Chưa phản hồi</p>
+            </div>
+          </div>
+          <div class="card-footer bg-transparent border-top-0 py-2">
+            <p class="mb-0 text-muted small"><i class="bx bx-time"></i> <span id="emergency-pending-members">...</span></p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Recent Reports & Todo List -->
+    <div class="row g-4 mb-5">
+      <div class="col-xl-7">
+        <div class="card shadow-sm h-100">
+          <div class="card-header bg-light d-flex justify-content-between align-items-center border-bottom-0">
+            <h5 class="mb-0 fw-semibold"><i class="bx bx-file me-2 text-primary"></i>Hồ sơ RRT gần đây</h5>
+            <div class="header-actions">
+              <button class="btn btn-sm btn-outline-secondary me-2"><i class="bx bx-search"></i></button>
+              <button class="btn btn-sm btn-outline-secondary"><i class="bx bx-filter-alt"></i></button>
+            </div>
+          </div>
+          <div class="card-body p-0">
+            <div class="table-responsive">
+              <table class="table table-hover table-nowrap align-middle mb-0">
+                <thead class="table-light">
+                  <tr>
+                    <th class="text-center px-4">Người dùng</th>
+                    <th class="text-center px-4">Thời gian</th>
+                    <th class="text-center px-4">Mã RRT</th>
+                    <th class="text-center px-4">Tình trạng</th>
+                    <th class="text-center px-4">Thao tác</th> </tr>
+                </thead>
+                <tbody id="recent-report-body">
+                  </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="col-xl-5">
+        <div class="card shadow-sm h-100">
+          <div class="card-header bg-light d-flex justify-content-between align-items-center border-bottom-0">
+            <h5 class="mb-0 fw-semibold"><i class="bx bx-task me-2 text-primary"></i>Việc cần làm</h5>
+            <div class="header-actions">
+              <button class="btn btn-sm btn-outline-primary me-2"><i class="bx bx-plus"></i></button>
+              <button class="btn btn-sm btn-outline-secondary"><i class="bx bx-filter-alt"></i></button>
+            </div>
+          </div>
+          <div class="card-body">
+            <ul class="todo-list list-group list-group-flush" id="todo-list">
+              <!-- Dynamic content -->
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Statistics Cards -->
+    <div class="row g-4 mb-5">
+      <div class="col-12">
+        <div class="card shadow-sm">
+          <div class="card-header bg-light">
+            <h5 class="mb-0 fw-semibold"><i class="bx bx-stats me-2 text-primary"></i>Thống kê thành viên</h5>
+          </div>
+          <div class="card-body">
+            <div class="row">
+              <div class="col-xxl-3 col-md-6">
+                <div class="chart-panel p-3 bg-light-subtle rounded-3 h-100 d-flex flex-column">
+                  <h6 class="fw-medium mb-3 text-center">Tổng quan</h6>
+                  <div id="summaryTable" class="flex-grow-1"></div>
+                </div>
+              </div>
+              <div class="col-xxl-5 col-md-6">
+                <div class="chart-panel p-3 bg-light-subtle rounded-3 h-100 d-flex flex-column">
+                  <h6 class="fw-medium mb-3 text-center">Phân bố trạng thái</h6>
+                  <div id="statusDistributionChart" class="flex-grow-1"></div>
+                </div>
+              </div>
+              <div class="col-xxl-4 col-md-6">
+                <div class="chart-panel p-3 bg-light-subtle rounded-3 h-100 d-flex flex-column">
+                  <h6 class="fw-medium mb-3 text-center">Cấp độ nhóm</h6>
+                  <div id="teamLevelChart" class="flex-grow-1"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Detailed Charts Row -->
+    <div class="row g-4 mb-5">
+      <div class="col-md-6 col-xxl-3">
+        <div class="card shadow-sm h-100">
+          <div class="card-body p-3 d-flex flex-column">
+            <h6 class="fw-medium mb-3 text-center">Phân bố giới tính</h6>
+            <div id="genderDistributionChart" class="flex-grow-1"></div>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-6 col-xxl-3">
+        <div class="card shadow-sm h-100">
+          <div class="card-body p-3 d-flex flex-column">
+            <h6 class="fw-medium mb-3 text-center">Chuyên môn học thuật</h6>
+            <div id="academicSpecializationChart" class="flex-grow-1"></div>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-6 col-xxl-3">
+        <div class="card shadow-sm h-100">
+          <div class="card-body p-3 d-flex flex-column">
+            <h6 class="fw-medium mb-3 text-center">Trình độ học vấn</h6>
+            <div id="academicLevelChart" class="flex-grow-1"></div>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-6 col-xxl-3">
+        <div class="card shadow-sm h-100">
+          <div class="card-body p-3 d-flex flex-column">
+            <h6 class="fw-medium mb-3 text-center">Ngoại ngữ</h6>
+            <div id="languageChart" class="flex-grow-1"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Definitions Section -->
+    <div class="definitionsSection">
+      <div class="row">
+        <div class="col-12">
+          <h4 class="mt-4 mb-4 text-center fw-bold text-uppercase text-muted">Thuật ngữ và định nghĩa</h4>
+        </div>
+      </div>
+      <div class="row g-4">
+        <div class="col-md-6">
+          <div class="card h-100 border-light shadow-sm">
+            <div class="card-body">
+              <h5 class="card-title fw-bold text-dark"><i class="bx bx-bar-chart-alt-2 me-2"></i>Phân phối trạng thái</h5>
+              <p class="card-text">
+                Biểu đồ này hiển thị tỷ lệ phần trăm thành viên theo trạng thái hiện tại:
+              <ul class="mb-0">
+                <li><strong>Approved:</strong> Đã hoàn thành hồ sơ và sẵn sàng.</li>
+                <li><strong>Edit:</strong> Đang cập nhật thông tin.</li>
+                <li><strong>Pending:</strong> Hồ sơ đang chờ xem xét.</li>
+              </ul>
+              </p>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-6">
+          <div class="card h-100 border-light shadow-sm">
+            <div class="card-body">
+              <h5 class="card-title fw-bold text-dark"><i class="bx bx-diamond me-2"></i>Chuyên môn & Học vấn</h5>
+              <p class="card-text">
+                Cung cấp cái nhìn tổng quan về trình độ và chuyên ngành:
+              <ul class="mb-0">
+                <li><strong>Chuyên ngành:</strong> Lĩnh vực chuyên môn (Y học dự phòng, Xét nghiệm, Điều dưỡng, v.v.).</li>
+                <li><strong>Trình độ học văn:</strong> Cấp bậc học thuật (Cao đẳng, Cử nhân, Thạc sĩ, Tiến sĩ).</li>
+              </ul>
+              </p>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-6">
+          <div class="card h-100 border-light shadow-sm">
+            <div class="card-body">
+              <h5 class="card-title fw-bold text-dark"><i class="bx bx-globe me-2"></i>Ngoại ngữ</h5>
+              <p class="card-text">
+                Hiển thị sự đa dạng ngôn ngữ của nhóm, giúp xác định các thành viên có thể giao tiếp đa ngôn ngữ.
+              </p>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-6">
+          <div class="card h-100 border-light shadow-sm">
+            <div class="card-body">
+              <h5 class="card-title fw-bold text-dark"><i class="bx bx-group me-2"></i>Cấp độ nhóm</h5>
+              <p class="card-text">
+                Phân loại các thành viên dựa trên vai trò và cấp bậc trong tổ chức hỗ trợ và quản lý (Trưởng nhóm, Thành viên).
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- User View -->
+  <div id="dashboard-user-view" style="display:none;">
+    <div class="welcome-banner mb-4 p-4 bg-gradient text-white rounded-3 shadow">
+      <h3 class="mb-1 fw-bold text-dark">👋 Xin chào, <span id="user-dash-name">...</span></h3>
+      <p class="mb-0 opacity-75  text-dark">Chúc bạn một ngày làm việc hiệu quả 🌟</p>
+    </div>
+    <div class="row g-4">
+      <div class="col-lg-6">
+        <div class="card shadow-sm text-center p-4 border-light">
+          <div id="user-status-icon" class="avatar-lg mx-auto bg-light-subtle rounded-circle d-flex align-items-center justify-content-center mb-3">
+            <i class='bx bx-check-circle fs-1 text-success'></i>
+          </div>
+          <h4 id="user-status-text" class="mt-1 fw-bold">Sẵn sàng</h4>
+          <p id="user-status-desc" class="text-muted small mb-0">Hiện không có nhiệm vụ khẩn cấp.</p>
+        </div>
+      </div>
+      <div class="col-lg-6">
+        <div class="card shadow-sm h-100 border-light">
+          <div class="card-header bg-light d-flex align-items-center">
+            <i class='bx bx-bell me-2 text-primary fs5'></i>
+            <b class="text-dark">Thông báo mới</b>
+          </div>
+          <ul class="list-group list-group-flush" id="user-dash-alerts">
+            <li class="list-group-item text-muted text-center py-3">Không có thông báo mới.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+      <div id="page-datatable" style="display:none;">
+        <div class="head-title">
+          <div class="left">
+            <h1>Biểu mẫu RRT</h1>
+            <ul class="breadcrumb">
+              <li><a href="#">AP RRT</a></li>
+              <li><i class='bx bx-chevron-right'></i></li>
+              <li><a class="active" href="#">Hồ sơ RRT</a></li>
+            </ul>
+          </div>
+        </div>
+        <div class="table-data">
+          <div class="order">
+            <div class="head">
+              <h3>Hồ sơ gần đây</h3>
+            </div>
+            <div class="datatable-controls-top">
+              <div class="filter-controls-group">
+                <div class="filter-group">
+                  <label for="filter-date-start">Từ ngày</label>
+                  <input type="text" id="filter-date-start" class="form-control">
+                </div>
+                <div class="filter-group">
+                  <label for="filter-date-end">Đến ngày</label>
+                  <input type="text" id="filter-date-end" class="form-control">
+                </div>
+                <div class="filter-buttons">
+                  <button id="btn-filter" class="btn btn-primary"><i class='bx bx-filter'></i> Lọc</button>
+                  <button id="btn-clear-filter" class="btn btn-secondary"><i class='bx bx-x-circle'></i> Xóa lọc</button>
+                  <button id="btn-export-members" class="btn btn-info text-white" style="display:none;" data-permission="admin">
+                      <i class='bx bxs-user'></i> Xuất RRT-ers
+                  </button>
+                </div>
+              </div>
+              <button id="btn-create-report" class="btn btn-success"><i class='bx bx-plus'></i> Biểu mẫu RRT</button>
+          
+            </div>
+            <table id="report-table" class="display responsive nowrap" style="width:100%">
+              <thead>
+                <tr>
+                  <th class="align-middle text-center" >TT</th>
+                  <th class="align-middle text-center" >Mã RRT</th>
+                  <th class="align-middle text-center" >Ngày cập nhật</th>
+                  <th class="align-middle text-center" >Họ Tên / Đơn vị</th>                 
+                  <th class="align-middle text-center">Số điện thoại</th>
+                  <th class="align-middle text-center">Phê duyệt</th>
+                  <th class="align-middle text-center">Điều động</th>
+                  <th class="align-middle text-center" >Đính kèm</th>
+                  <th class="align-middle text-center" >Hành động</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      <div id="page-roster" style="display:none;">
+        <div class="head-title">
+          <div class="left">
+            <h1>Quản lý Lịch trực</h1>
+            <ul class="breadcrumb">
+              <li><a href="#">AP RRT</a></li>
+              <li><i class='bx bx-chevron-right'></i></li>
+              <li><a class="active" href="#">Lịch trực định kỳ</a></li>
+            </ul>
+          </div>
+          <button id="btn-auto-trigger" class="btn btn-primary" data-permission="admin">
+            <i class='bx bxs-magic-wand'></i> Lịch trình (AP Assistant)
+        </button>
+        </div>
+        <div class="roster-container">
+          <div class="roster-control">
+            <div class="control-box">
+              <div class="cb-title"><i class='bx bx-calendar-plus'></i> Lịch trực</div>
+              <div class="form-group mb-2">
+                <label for="new-shift-date" class="form-label">Ngày trực</label>
+                <input type="date" id="new-shift-date" class="form-control">
+              </div>
+              <div class="form-group mb-2">
+                <label for="new-shift-team" class="form-label">Chọn Đội</label>
+                <select id="new-shift-team" class="form-select">
+                </select>
+              </div>
+              <div class="form-group mb-3">
+                <team class="new-shift-note">Ghi chú</label>
+                <textarea id="new-shift-note" class="form-control" rows="2" placeholder="VD: Trực sự kiện..."></textarea>
+              </div>
+              <button class="btn btn-primary w-100" onclick="submitNewShift()" data-permission="admin"><i class='bx bx-save'></i> XÁC NHẬN</button>
+            </div>
+
+            <div class="control-box" style="background: #f8fbff; border: 1px dashed #007bff;">
+              <div class="cb-title" style="color:#007bff; border-color:#dfe9f5;">
+                <i class='bx bx-user-pin'></i> Điều chỉnh Nhân sự
+              </div>
+              <div style="font-size:12px; color:#666; margin-bottom:15px;">
+                Thay thế nhân sự vắng mặt dựa trên chuyên môn, lịch nghỉ ngơi và trạng thái sẵn sàng.
+              </div>
+              <button onclick="openWizard()" class="btn btn-outline-primary w-100" data-permission="admin">
+                <i class='bx bx-transfer-alt'></i> Tạo yêu cầu Thay thế
+              </button>
+            </div>
+          </div>
+
+          <div class="roster-calendar">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+              <h3 style="margin:0;" id="cal-month-title">Tháng ...</h3>
+              <div class="btn-group">
+                <button class="btn btn-sm btn-light" onclick="prevMonth()"><i class='bx bx-chevron-left'></i></button>
+                <button class="btn btn-sm btn-light" onclick="todayMonth()">Hôm nay</button>
+                <button class="btn btn-sm btn-light" onclick="nextMonth()"><i class='bx bx-chevron-right'></i></button>
+              </div>
+            </div>
+            <div class="cal-grid" id="calendar-grid">
+              <div class="cal-day-header">CN</div>
+              <div class="cal-day-header">T2</div>
+              <div class="cal-day-header">T3</div>
+              <div class="cal-day-header">T4</div>
+              <div class="cal-day-header">T5</div>
+              <div class="cal-day-header">T6</div>
+              <div class="cal-day-header">T7</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="page-emergency" style="display:none;">
+        <div class="head-title">
+          <div class="left">
+            <h1>Emergency Activation</h1>
+            <ul class="breadcrumb">
+              <li><a href="#">AP RRT</a></li>
+              <li><i class='bx bx-chevron-right'></i></li>
+              <li><a class="active" href="#">Activation</a></li>
+            </ul>
+          </div>
+        </div>
+
+        <div id="on-duty-alert" class="alert alert-secondary d-flex align-items-center justify-content-between shadow-sm mb-4" style="border-left: 5px solid #ccc;">
+          <div>
+            <h5 class="alert-heading mb-1" id="on-duty-title"><i class='bx bx-calendar-x'></i> Không có lịch trực hôm nay</h5>
+            <p class="mb-0 small" id="on-duty-desc">Hệ thống không tìm thấy đội nào được phân công trực vào ngày này.</p>
+          </div>
+          <div id="on-duty-action">
+          </div>
+        </div>
+
+        <div class="table-data">
+          <div class="order">
+            <div class="head" style="flex-wrap: wrap; gap: 10px;">
+              <h3 style="margin-right: auto;">Danh sách Thành viên</h3>
+
+              <select class="form-select form-select-sm" style="width: 150px;" id="emer-filter-team">
+                <option value="all">-- Tất cả Đội --</option>
+              </select>
+              <select class="form-select form-select-sm" style="width: 150px;" id="emer-filter-role">
+                <option value="all">-- Tất cả Vị trí --</option>
+                <option value="Leader">Đội trưởng</option>
+                <option value="Epidemic">Cán bộ Dịch tễ</option>
+                <option value="Member">Cán bộ Lấy mẫu</option>
+                <option value="Engineer">Cán bộ Xử lý môi trường</option>
+                <option value="Media">Cán bộ Truyền thông</option>
+                <option value="Logistic">Hậu cần</option>
+                <option value="Driver">Lái xe</option>
+              </select>
+
+              <button id="btn-activate-emergency" class="btn btn-danger" data-permission="admin">
+                <i class='bx bxs-megaphone'></i> KÍCH HOẠT (<span id="selected-count">0</span>)
+              </button>
+            </div>
+
+            <table id="memberListTable" class="display responsive nowrap" style="width:100%">
+              <thead>
+                <tr>
+                  <th class="align-middle text-center"><input type="checkbox" id="selectAllMembers"></th>
+                  <th class="align-middle text-center">Họ Tên</th>
+                  <th class="align-middle text-center">Đội</th>
+                  <th class="align-middle text-center">Vị trí</th>
+                  <th class="align-middle text-center">Số điện thoại</th>
+                  <th class="align-middle text-center">Chuyên môn</th>
+                  <th class="align-middle text-center">Khoa/Phòng</th>
+                  <th class="align-middle text-center">Địa chỉ</th>
+                </tr>
+              </thead>
+              <tbody id="memberListTable-body"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div id="page-notification" style="display:none;">
+        <div class="head-title">
+          <div class="left">
+            <h1>Tin nhắn</h1>
+            <ul class="breadcrumb">
+              <li><a href="#">AP RRT</a></li>
+              <li><i class='bx bx-chevron-right'></i></li>
+              <li><a class="active" href="#">Tin nhắn</a></li>
+            </ul>
+          </div>
+        </div>
+        <div class="table-data">
+          <div class="order">
+            <div class="head">
+              <h3>Tin nhắn gần đây</h3>
+              <i class="bx bx-search"></i>
+              <i class="bx bx-filter"></i>
+            </div>
+            <table id="message-table" class="display responsive nowrap" style="width:100%">
+              <thead>
+                <tr>
+                  <th class="align-middle text-center">Thời gian</th>
+                  <th class="align-middle text-center">Tin nhắn</th>
+                  <th class="align-middle text-center">Tình trạng</th>
+                </tr>
+              </thead>
+              <tbody id="message-table-body"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+<div id="page-tracking" style="display:none;">
+
+        <div class="head-title">
+
+          <div class="left">
+
+            <h1>Theo dõi - Vận hành</h1>
+
+            <ul class="breadcrumb">
+
+              <li><a href="#">AP RRT</a></li>
+
+              <li><i class='bx bx-chevron-right'></i></li>
+
+              <li><a class="active" href="#">Hồ sơ sự kiện</a></li>
+
+            </ul>
+
+          </div>
+
+        </div>
+
+
+
+        <div id="tracking-view-list">
+
+          <div class="tracking-toolbar">
+
+            <i class='bx bx-search' style="color:#999; font-size: 20px;"></i>
+
+            <input type="text" id="tracking-search-input" class="tracking-search" placeholder="Tìm kiếm sự kiện (Tên, địa điểm, ID)...">
+
+            <input type="text" id="filter-date-start-tracking" class="form-control datepicker" placeholder="Từ ngày" style="width: 120px;">
+
+            <input type="text" id="filter-date-end-tracking" class="form-control datepicker" placeholder="Đến ngày" style="width: 120px;">
+
+
+
+            <button class="btn btn-primary" id="btn-filter-tracking"><i class='bx bx-filter'></i> Lọc</button>
+
+            <button class="btn btn-secondary" id="btn-clear-filter-tracking"><i class='bx bx-x-circle'></i>Xóa Lọc</button>
+
+          </div>
+
+
+
+          <div id="event-grid-container" class="event-grid">
+
+            <p class="text-center text-muted" style="grid-column: 1/-1; padding: 20px;">Đang tải dữ liệu...</p>
+
+          </div>
+
+        </div>
+
+
+
+        <div id="tracking-view-dossier" class="dossier-view" style="display: none;">
+          <div class="dossier-header">
+            <div>
+              <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 5px;">
+                <span id="dossier-status-badge" class="ev-status st-active" style="position:static;">🔴 ĐANG HOẠT ĐỘNG</span>
+                <span id="dossier-id" style="color:#999; font-size: 12px;">#INC-001</span>
+              </div>
+              <h2 class="dh-title" id="dossier-title">Tiêu đề sự kiện</h2>
+              <div class="dh-meta">
+                <i class='bx bx-time'></i> <span id="dossier-time">...</span> &nbsp;|&nbsp;
+                <i class='bx bx-map'></i> <span id="dossier-location">...</span>
+              </div>
+            </div>
+            <div style="display:flex; gap:10px;">
+              <button class="btn btn-light border" onclick="closeDossierView()"><i class='bx bx-arrow-back'></i> Quay lại</button>
+              <button class="btn btn-warning" id="btn-open-plan-modal" style="display:none;"><i class='bx bx-map-alt'></i> Phương án (IAP)</button>
+              <button class="btn btn-primary" id="btn-open-aar-modal" style="display:none;"><i class='bx bx-notepad'></i> Đánh giá (AAR)</button>
+            </div>
+          </div>
+          <div id="dossier-action-bar" class="alert alert-warning shadow-sm mb-3" style="display:none; border-left: 5px solid #ffc107; align-items: center; justify-content: space-between;">
+            <div>
+              <h5 style="margin:0; color:#856404; font-size:16px;">
+
+                <i class='bx bxs-megaphone'></i> YÊU CẦU TỪ HỆ THỐNG
+
+              </h5>
+
+              <p style="margin:0; font-size:13px; color:#856404;">
+
+                Bạn được điều động tham gia sự kiện này. Vui lòng phản hồi ngay!
+
+              </p>
+
+            </div>
+
+            <div style="display:flex; gap:10px;">
+
+              <button class="btn btn-success btn-sm fw-bold" onclick="submitIncidentResponse('confirm')">
+
+                <i class='bx bx-check'></i> XÁC NHẬN
+
+              </button>
+
+              <button class="btn btn-danger btn-sm fw-bold" onclick="submitIncidentResponse('decline')">
+
+                <i class='bx bx-x'></i> TỪ CHỐI
+
+              </button>
+
+            </div>
+
+          </div>
+
+
+
+          <div class="dossier-body">
+
+            <div class="col-static">
+
+              <div class="panel">
+
+                <h5>👥 Nhân sự Điều động</h5>
+
+                <div id="dossier-member-list">
+
+                </div>
+
+              </div>
+
+              <div id="admin-rotation-controls" style="margin-top:10px; display:none; gap:5px;">
+
+                <button class="btn btn-sm btn-outline-warning text-dark" onclick="openWizard('incident')" style="flex:1;">
+
+                  <i class='bx bx-user-x'></i> 🧑‍🤝‍🧑 Người
+
+                </button>
+
+                <button class="btn btn-sm btn-outline-primary" onclick="openTeamRotationModal()" style="flex:1;">
+
+                  <i class='bx bx-refresh'></i> 👩‍👩‍👦‍👦 Đội
+
+                </button>
+
+              </div>
+
+
+
+              <div class="panel">
+
+                <h5>📊 Thống kê Phản hồi</h5>
+
+                <div class="d-flex justify-content-between mb-2">
+
+                  <span class="text-success"><i class='bx bx-check-circle'></i> Xác nhận:</span>
+
+                  <strong id="dossier-stat-confirmed">0</strong>
+
+                </div>
+
+                <div class="d-flex justify-content-between">
+
+                  <span class="text-danger"><i class='bx bx-x-circle'></i> Từ chối/Chờ:</span>
+
+                  <strong id="dossier-stat-declined">0</strong>
+                </div>
+              </div>
+            </div>
+            <div class="col-dynamic">
+              <div class="tabs-nav">
+                <div class="tab-btn active" onclick="switchDossierTab('tab-live-log', this)">📝 Nhật ký & Thông tin</div>
+                <div class="tab-btn" onclick="switchDossierTab('tab-aar-preview', this)">📋 Kết quả AAR</div>
+              </div>
+
+          <div id="tab-live-log" class="tab-pane active">
+              
+              <div class="chat-history" id="dossier-chat-box">
+              </div>
+
+              <div class="input-wrapper" style="margin-top: 10px; display: flex; gap: 10px;">
+                  <input type="text" class="chat-input" id="inp-chat" placeholder="Nhập tin nhắn..." style="flex: 1; padding: 10px; border: 1px solid #ddd; border-radius: 20px; outline: none;">
+
+                  <button class="btn-send" onclick="sendDossierMessage('Message')" title="Gửi tin nhắn" style="background: #007bff; color: white; border: none; width: 40px; height: 40px; border-radius: 50%; cursor: pointer;">
+                      <i class="bx bxs-send"></i>
+                  </button>
+              </div>
+
+              <div class="chat-tools" style="display: flex; gap: 10px; margin-bottom: 10px; align-items: center; flex-wrap: wrap; margin-top: 10px;">
+                  
+                  <input type="file" id="chat-file-input" style="display: none;" onchange="handleChatFileUpload(this)">
+
+                  <div class="tool-icon" id="btn-open-attach-modal" title="Đính kèm" onclick="document.getElementById('chat-file-input').click()" style="cursor: pointer; color: #666; font-size: 13px; display: flex; align-items: center; gap: 5px; border: 1px solid #ddd; padding: 5px 10px; border-radius: 15px;">
+                      <i class="bx bxs-file"></i> <b>Đính kèm</b>
+                  </div>
+                  
+                  <div class="tool-icon text-warning" id="btn-open-sos-modal" title="Yêu cầu hỗ trợ SOS" onclick="openModal('modal-sos')" style="cursor: pointer; font-size: 13px; display: flex; align-items: center; gap: 5px; border: 1px solid #ffc107; padding: 5px 10px; border-radius: 15px; background-color: #fff3cd;">
+                  <i class="bx bx-help-circle"></i> <b>Yêu cầu hỗ trợ SOS</b>
+                  </div>
+
+                  <div class="tool-icon btn-sos-tool" id="btn-open-report-modal" title="Lập báo cáo" onclick="window.openReportModal()"  style="cursor: pointer; color: #dc3545; font-size: 13px; display: flex; align-items: center; gap: 5px; margin-left: auto; border: 1px solid #dc3545; padding: 5px 10px; border-radius: 15px; background-color: #f8d7da;">
+                      <i class="bx bxs-report"></i><b>Lập báo cáo</b>
+                  </div>
+
+
+
+              </div>
+          </div>
+              <div id="tab-aar-preview" class="tab-pane">
+                <div id="aar-content-placeholder">
+                  <p class="text-muted text-center mt-5">Chưa có báo cáo đánh giá cho sự kiện này.</p>
+                </div>
+                <div id="aar-content-real" style="display:none;">
+                  <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h6 class="mb-0">Nội dung Đánh giá:</h6>
+                    <button class="btn btn-sm btn-warning" onclick="autoFillAarFromLogs()">
+                      <i class='bx bxs-magic-wand'></i> Tổng hợp Báo cáo (AP Assistant)
+                    </button>
+                  </div>
+                  <div id="aar-badge-closed" class="alert alert-success" style="display:none;">
+                    <strong><i class='bx bx-check-double'></i> Sự kiện đã đóng</strong>
+                  </div>
+                  <div id="aar-badge-active" class="alert alert-warning" style="display:none;">
+                    <strong><i class='bx bx-time-five'></i> Đã lưu đánh giá (Sự kiện đang mở)</strong>
+                  </div>
+                  <h6>1. Tóm tắt & Kết quả:</h6>
+                  <p id="view-aar-summary" class="bg-light p-2 rounded">...</p>
+                  <h6>2. Vấn đề gặp phải:</h6>
+                  <p id="view-aar-issues" class="bg-light p-2 rounded">...</p>
+                  <h6>3. Bài học kinh nghiệm:</h6>
+                  <p id="view-aar-lessons" class="bg-light p-2 rounded">...</p>
+                  <div class="text-end text-muted small mt-3">
+                    Báo cáo bởi: <span id="view-aar-admin">Admin</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="page-team" style="display:none;">
+        <div class="head-title">
+          <div class="left">
+            <h1>Thành viên</h1>
+            <ul class="breadcrumb">
+              <li><a href="#">AP RRT</a></li>
+              <li><i class='bx bx-chevron-right'></i></li>
+              <li><a class="active" href="#">Hồ sơ năng lực</a></li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="table-data">
+          <div class="order">
+            <div class="head">
+              <h3>Năng lực Thành viên</h3>
+            </div>
+            <div class="datatable-controls-top">
+              <div class="filter-controls-group">
+                <div class="filter-group">
+                  <label for="filter-date-start-team">Từ ngày</label>
+                  <input type="text" id="filter-date-start-team" class="form-control datepicker">
+                </div>
+                <div class="filter-group">
+                  <label for="filter-date-end-team">Đến ngày</label>
+                  <input type="text" id="filter-date-end-team" class="form-control datepicker">
+                </div>
+
+                <div class="filter-group">
+                  <div class="mb-3 position-relative">
+                    <label for="filter-team-select" class="form-label fw-bold">Đội</label>
+                    <select id="filter-team-select" class="form-select" multiple="multiple" style="width:100%" data-placeholder="-- Chọn nhiều đội --">
+                      <option value="all" selected>Tất cả Đội</option>
+                      <option value="No team">Chưa phân đội</option>
+                      <option value="Team 1">Team 1</option>
+                      <option value="Team 2">Team 2</option>
+                      <option value="Team 3">Team 3</option>
+                      <option value="Team 4">Team 4</option>
+                      <option value="Team 5">Team 5</option>
+                      <option value="Team 6">Team 6</option>
+                      <option value="Team 7">Team 7</option>
+                      <option value="Team 8">Team 8</option>
+                      <option value="Team 9">Team 9</option>
+                      <option value="Team 10">Team 10</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="filter-buttons">
+                  <button id="btn-filter-team" class="btn btn-primary"><i class='bx bx-filter'></i>Lọc</button>
+                  <button id="btn-clear-filter-team" class="btn btn-secondary"><i class='bx bx-x-circle'></i>Xóa lọc</button>
+                  <button id="btn-compare-teams" class="btn btn-success me-2"><i class='bx bx-git-compare'></i>So sánh</button>
+                  <button id="btn-clear-team-filter" class="btn btn-secondary"><i class='bx bx-x-circle'></i>Xóa so sánh</button>
+                </div>
+              </div>
+            </div>
+            <table id="team-table" class="display responsive nowrap" style="width:100%">
+              <thead>
+                <tr>
+                  <th class="align-middle text-center" style="width: 1%">TT</th>
+                  <th class="align-middle text-center" style="width: 5%">Người dùng</th>
+                  <th class="align-middle text-center" style="width: 4%">Xếp hạng</th>
+                  <th class="align-middle text-center" style="width: 10%">Khoa phòng</th>
+                  <th class="align-middle text-center" style="width: 5%">Số điện thoại</th>
+                  <th class="align-middle text-center" style="width: 10%">Ngày đăng ký</th>
+                  <th class="align-middle text-center" style="width: 12%">Email</th>
+                  <th class="align-middle text-center" style="width: 18%">Đội</th>
+                  <th class="align-middle text-center" style="width: 35%">Vị trí</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+        <div class="table-data">
+          <div class="order">
+            <div class="head">
+              <h3>Thống kê thành viên</h3>
+            </div>
+            <div class="charts-container">
+              <div class="row">
+                <div class="col-md-4">
+                  <div id="summaryTableAP" class="chart-panel"></div>
+                </div>
+                <div class="col-md-4">
+                  <div id="teamComparisonChartAP" class="chart-panel"></div>
+                </div>
+                <div class="col-md-4">
+                  <div id="statusDistributionChartAP" class="chart-panel"></div>
+                </div>
+              </div>
+              <div class="row">
+                <div class="col-md-4">
+                  <div id="genderDistributionChartAP" class="chart-panel"></div>
+                </div>
+                <div class="col-md-4">
+                  <div id="academicSpecializationChartAP" class="chart-panel"></div>
+                </div>
+                <div class="col-md-4">
+                  <div id="academicLevelChartAP" class="chart-panel"></div>
+                </div>
+              </div>
+              <div class="row">
+                <div class="col-md-6">
+                  <div id="languageChartAP" class="chart-panel"></div>
+                </div>
+
+                <div class="col-md-6">
+                  <div id="teamLevelChartAP" class="chart-panel"></div>
+                </div>
+              </div>
+              <div class="row">
+                <div class="col-md-12">
+                  <div id="detailedSummaryTableAP" class="chart-panel"></div>
+                </div>
+              </div>
+              <div class="row mt-4">
+                <div class="col-12">
+                  <div class="card shadow-sm">
+                    <div class="card-header bg-white border-bottom">
+                      <h5 class="mb-0 text-primary"><i class="fa-solid fa-chart-line"></i> Đánh giá Năng lực Tổng hợp (Đào tạo vs Thực chiến)</h5>
+                    </div>
+                    <div class="card-body">
+                      <div id="competencyChartAP" class="chart-panel" style="height: 400px;"></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="definitionsSectionAP">
+          <div class="row">
+            <div class="col-md-12">
+              <h4 class="mt-4 mb-3" style="text-align: center;">Thuật ngữ và định nghĩa</h4>
+            </div>
+          </div>
+          <div class="row">
+            <div class="col-md-6 mb-3">
+              <div class="card h-100">
+                <div class="card-body">
+                  <h5 class="card-title">📊 Biểu đồ phân phối trạng thái</h5>
+                  <p class="card-text">
+                    Biểu đồ này hiển thị tỷ lệ thành viên theo trạng thái hiện tại:
+                  <ul>
+                    <li>✅ <strong>Approved:</strong> Các thành viên đã hoàn thành hồ sơ và sẵn sàng tham gia.</li>
+                    <li>✍️ <strong>Editing:</strong> Các thành viên đang cập nhật thông tin hồ sơ của họ.</li>
+                    <li>⏳ <strong>Pending:</strong> Hồ sơ của thành viên đang chờ được xem xét.</li>
+                  </ul>
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div class="col-md-6 mb-3">
+              <div class="card h-100">
+                <div class="card-body">
+                  <h5 class="card-title">🎓 Biểu đồ chuyên môn và giáo dục</h5>
+                  <p class="card-text">
+                    Các biểu đồ này cung cấp cái nhìn tổng quan về trình độ và chuyên ngành của các thành viên.
+                  <ul>
+                    <li>🩺 <strong>Chuyên ngành:</strong> Phân loại thành viên theo lĩnh vực chuyên môn (ví dụ: Y học dự phòng, Y học xét nghiệm, Điều dưỡng, v.v.).</li>
+                    <li>📚 <strong>Trình độ học vấn:</strong> Phân loại thành viên dựa trên trình độ học vấn cao nhất của họ (ví dụ: Cao đẳng, Cử nhân, Thạc sĩ, Tiến sĩ).</li>
+                  </ul>
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="row">
+            <div class="col-md-6 mb-3">
+              <div class="card h-100">
+                <div class="card-body">
+                  <h5 class="card-title">🗣️ Biểu đồ ngoại ngữ</h5>
+                  <p class="card-text">
+                    Biểu đồ này hiển thị sự đa dạng ngôn ngữ của nhóm, giúp xác định những thành viên có thể giao tiếp bằng nhiều ngôn ngữ khác nhau khi triển khai nhiệm vụ.
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div class="col-md-6 mb-3">
+              <div class="card h-100">
+                <div class="card-body">
+                  <h5 class="card-title">👨‍👩‍👧‍👦 Biểu đồ cấp độ nhóm</h5>
+                  <p class="card-text">
+                    Biểu đồ này phân loại các thành viên dựa trên vai trò và cấp bậc của họ trong nhóm (ví dụ: Trưởng nhóm, Thành viên), tổ chức hỗ trợ và quản lý.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div id="page-training" style="display:none;">
+        <div class="head-title">
+          <div class="left">
+            <h1>Đào tạo - Phát triển</h1>
+            <ul class="breadcrumb">
+              <li><a href="#">AP RRT</a></li>
+              <li><i class='bx bx-chevron-right'></i></li>
+              <li><a class="active" href="#">Hồ sơ đào tạo</a></li>
+            </ul>
+          </div>
+        </div>
+
+        <div id="training-list-view">
+          <div class="row mb-4">
+            <div class="col-md-4">
+              <div class="card shadow-sm h-100">
+                <div class="card-header bg-white border-bottom-0">
+                  <h6 class="mb-0 text-primary"><i class='bx bx-pie-chart-alt-2'></i> Kết quả Đào tạo</h6>
+                </div>
+                <div class="card-body p-0">
+                  <div id="trainingResultChart" style="height: 250px;"></div>
+                </div>
+              </div>
+            </div>
+            <div class="col-md-8">
+              <div class="card shadow-sm h-100">
+                <div class="card-header bg-white border-bottom-0">
+                  <h6 class="mb-0 text-primary"><i class='bx bx-bar-chart-alt-2'></i> Mức độ Tham gia theo Đội</h6>
+                </div>
+                <div class="card-body p-0">
+                  <div id="trainingTeamChart" style="height: 250px;"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div style="display: flex; justify-content: space-between; align-items: center; background: white; padding: 15px; border-radius: 12px; margin-bottom: 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.05);">
+            <div class="training-toolbar">
+              <i class='bx bx-search' style="color:#999; font-size: 20px;"></i>
+              <input type="text" id="training-search" class="training-search" placeholder="Tìm kiếm khóa học..." style="width: 550px;">
+
+              <button id="btn-create-course-trigger" class="btn btn-primary" onclick="openModal('modal-create-course')" style="display:none;"><i class="bx bx-plus" data-permission="admin"></i> Khóa Đào tạo</button>
+            </div>
+          </div>
+          <div id="course-grid-container" class="course-grid">
+            <p class="text-center text-muted" style="grid-column: 1/-1;">Đang tải dữ liệu đào tạo...</p>
+          </div>
+        </div>
+
+<div id="training-dossier-view" class="training-dossier">
+          <div class="td-header">
+            <div>
+              <h3 style="margin:0; color:#1a3b5d;" id="td-title">Tên khóa đào tạo</h3>
+              <div style="color:#666; font-size: 13px; margin-top: 5px;">
+                <span class="me-3"><i class="fa-solid fa-calendar"></i> <span id="td-date">...</span></span>
+                <span><i class="fa-solid fa-location-dot"></i> <span id="td-loc">...</span></span>
+              </div>
+            </div>
+            <div style="display:flex; gap:10px;">
+              <button class="btn btn-secondary" onclick="closeTrainingDossier()">Quay lại</button>
+              <button class="btn btn-primary" onclick="saveTrainingResultsClick()"><i class="bx fluentui-save-arrow-right-20-o"></i> Lưu Kết Quả</button>
+            </div>
+          </div>
+
+          <div style="padding: 20px;">
+            
+            <div class="card bg-light border-0 mb-4 shadow-sm">
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-8 border-end">
+                            <h6 class="fw-bold text-primary mb-2"><i class='bx bx-detail'></i> Nội dung tập huấn: </h6>
+                            <p id="td-desc" class="mb-0 text-muted" style="white-space: pre-line;">(Không có mô tả)</p>
+                        </div>
+                        <div class="col-md-4 d-flex flex-column justify-content-center align-items-start ps-4">
+                            <h6 class="fw-bold text-primary mb-2"><i class='bx bx-folder'></i> Tài liệu tập huấn:</h6>
+                            <div id="td-file-container">
+                                <span class="text-muted fst-italic small">Không có tài liệu đính kèm.</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="table-responsive">
+              <table class="trainee-table">
+                <thead>
+                  <tr>
+                    <th class="align-middle text-center">Họ tên</th>
+                    <th class="align-middle text-center">Team</th>
+                    <th class="align-middle text-center">Vị trí</th>
+                    <th class="align-middle text-center">Số điện thoại</th>
+                    <th class="align-middle text-center">Email/User</th>
+                    <th class="align-middle text-center">Có mặt</th>
+                    <th class="align-middle text-center">Kết quả</th>
+                    <th class="align-middle text-center">Ghi chú</th>
+                  </tr>
+                </thead>
+                <tbody id="trainee-list-body">
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+<div id="modal-create-course" class="modal">
+          <div class="modal-content" style="max-width: 700px;"> <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; border-bottom: 1px solid #eee; padding-bottom: 10px;">
+              <h3 style="margin:0; color:#1a3b5d;"><i class='bx bx-book-add'></i> Tạo Khóa Đào tạo</h3>
+              <span class="close" onclick="closeModal('modal-create-course')" style="cursor:pointer; font-size:24px;">&times;</span>
+            </div>
+
+            <div class="form-group mb-3">
+              <label for="new-course-name" class="form-label fw-bold">Tên khóa đào tạo <span class="text-danger">*</span></label>
+              <input type="text" id="new-course-name" class="form-control" placeholder="VD: Tập huấn An toàn sinh học...">
+            </div>
+
+            <div class="row mb-3">
+              <div class="col-md-6">
+                <div class="form-group">
+                  <label for="new-course-date"class="form-label fw-bold">Ngày tổ chức <span class="text-danger">*</span></label>
+                  <input type="date" id="new-course-date" class="form-control">
+                </div>
+              </div>
+              <div class="col-md-6">
+                <div class="form-group">
+                  <label for="new-course-loc" class="form-label fw-bold">Địa điểm</label>
+                  <input type="text" id="new-course-loc" class="form-control" placeholder="Hội trường HCDC...">
+                </div>
+              </div>
+            </div>
+
+            <div class="row mb-4">
+                <div class="col-md-12 mb-3">
+                    <label for="new-course-desc" class="form-label fw-bold">Mô tả nội dung</label>
+                    <textarea id="new-course-desc" class="form-control" rows="2" placeholder="Nội dung tóm tắt, yêu cầu chuẩn bị..."></textarea>
+                </div>
+                <div class="col-md-12">
+                    <label for="new-course-file" class="form-label fw-bold">Tài liệu đính kèm (Link)</label>
+                    <div class="input-group">
+                        <span class="input-group-text"><i class='bx bx-link'></i></span>
+                        <input type="text" id="new-course-file" class="form-control" placeholder="Dán link Google Drive/OneDrive tài liệu tại đây...">
+                    </div>
+                </div>
+            </div>
+
+            <div class="card bg-light border-0 mb-4">
+              <div class="card-body">
+                <h6 class="card-title fw-bold mb-3 text-primary"><i class='bx bx-user-plus'></i> Chọn đối tượng tham gia:</h6>
+                
+                <div class="row g-3">
+                  <div class="col-md-6">
+                    <label for="new-course-team-select" class="form-label small text-muted">Lọc theo Đội (Team)</label>
+                    <select id="new-course-team-select" class="form-select">
+                      <option value="all">-- Tất cả Đội --</option>
+                      <option value="Team 1">Team 1</option>
+                      <option value="Team 2">Team 2</option>
+                      <option value="Team 3">Team 3</option>
+                      <option value="Team 4">Team 4</option>
+                      <option value="Team 5">Team 5</option>
+                      <option value="Team 6">Team 6</option>
+                      <option value="Team 7">Team 7</option>
+                      <option value="Team 8">Team 8</option>
+                      <option value="Team 9">Team 9</option>
+                      <option value="Team 10">Team 10</option>
+                    </select>
+                  </div>
+
+                  <div class="col-md-6">
+                    <label for="new-course-role-select" class="form-label small text-muted">Lọc theo Vai trò (Position)</label>
+                    <select id="new-course-role-select" class="form-select">
+                        <option value="all">-- Tất cả Vai trò --</option>
+                        <option value="Leader">Đội trưởng</option>
+                        <option value="Epidemic">Cán bộ Dịch tễ</option>
+                        <option value="Member">Cán bộ Lấy mẫu</option>
+                        <option value="Engineer">Cán bộ Xử lý môi trường</option>
+                        <option value="Media">Cán bộ Truyền thông</option>
+                        <option value="Logistic">Hậu cần</option>
+                        <option value="Driver">Lái xe</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="mt-2">
+                   <small class="text-muted fst-italic"><i class='bx bx-info-circle'></i> Hệ thống sẽ chọn ra các thành viên thỏa mãn <b>CẢ HAI</b> điều kiện trên.</small>
+                </div>
+              </div>
+            </div>
+
+            <div style="display:flex; justify-content:flex-end; gap: 10px; border-top: 1px solid #eee; padding-top: 15px;">
+              <button class="btn btn-secondary" onclick="closeModal('modal-create-course')">Hủy bỏ</button>
+              <button class="btn btn-primary px-4" onclick="submitCreateCourse()"><i class='bx bx-save'></i> XÁC NHẬN</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="page-logistics" style="display:none;">
+        <div class="head-title">
+          <div class="left">
+            <h1>Quản lý hậu cần</h1>
+            <ul class="breadcrumb">
+              <li><a href="#">AP RRT</a></li>
+              <li><i class='bx bx-chevron-right'></i></li>
+              <li><a class="active" href="#">Hàng tồn kho</a></li>
+            </ul>
+          </div>
+        </div>
+
+        <ul class="box-info">
+          <li>
+            <i class='bx bxs-package' style="color:#007bff; background:#e1f0ff;"></i>
+            <span class="text">
+              <h3 id="log-total-items">0</h3>
+              <p>Tổng Mã Vật tư</p>
+            </span>
+          </li>
+          <li>
+            <i class='bx bxs-error-circle' style="color:#dc3545; background:#ffe2e5;"></i>
+            <span class="text">
+              <h3 id="log-low-stock">0</h3>
+              <p>Cảnh báo Sắp hết vật tư</p>
+            </span>
+          </li>
+          <li>
+            <i class='bx bxs-calendar-x' style="color:#ffc107; background:#fff3cd;"></i>
+            <span class="text">
+              <h3 id="log-expired">0</h3>
+              <p>Cảnh báo Hết hạn sử dụng</p>
+            </span>
+          </li>
+        </ul>
+
+        <div class="table-data" style="display:block; padding:0; overflow:hidden;">
+          <div class="tabs-nav" style="background:#f1f1f1; display:flex;">
+            <div class="tab-btn active" onclick="switchLogisticsTab('tab-inventory', this)" style="flex:1; padding:15px; text-align:center; cursor:pointer; font-weight:bold; border-bottom:3px solid #007bff; background:white;">📦 Kho Hiện tại</div>
+            <div class="tab-btn" onclick="switchLogisticsTab('tab-history', this)" style="flex:1; padding:15px; text-align:center; cursor:pointer; font-weight:bold; border-bottom:3px solid transparent;">📜 Lịch sử giao dịch</div>
+          </div>
+
+          <div id="tab-inventory" class="tab-pane-log active" style="padding:20px; background:white;">
+            <div class="head" style="display:flex; justify-content:space-between; margin-bottom:15px;">
+              <h3>Danh mục Vật tư</h3>
+              <div style="display:flex; gap:10px;">
+                <input type="text" id="log-search" class="form-control" placeholder="Tìm tên, mã..." style="width:200px;" onkeyup="filterLogistics()">
+                <button class="btn btn-primary" onclick="openModal('modal-add-item')" data-permission="admin"><i class='bx bx-plus'></i> Vật tư</button>
+              </div>
+            </div>
+            <table class="table table-hover">
+              <thead>
+                <tr>
+                  <th class="align-middle text-center">Mã VT</th>
+                  <th class="align-middle text-center">Tên vật tư</th>
+                  <th class="align-middle text-center">Đội</th>
+                  <th class="align-middle text-center">ĐVT</th>
+                  <th class="align-middle text-center">Tồn kho</th>
+                  <th class="align-middle text-center">Hạn sử dụng</th>
+                  <th class="align-middle text-center">Vị trí</th>
+                  <th class="align-middle text-center">Thao tác</th>
+                </tr>
+              </thead>
+              <tbody id="logistics-table-body"></tbody>
+            </table>
+          </div>
+
+          <div id="tab-history" class="tab-pane-log" style="display:none; padding:20px; background:white;">
+            <div class="head">
+              <h3>Nhật ký Nhập/ Xuất kho</h3>
+                 <button id="btn-export-logistics" class="btn btn-info text-white" style="display:none;">
+                      <i class='bx bxs-package'></i> Xuất Logistics
+                  </button>
+            </div>
+            <table class="table table-striped">
+              <thead>
+                <tr>
+                  <th class="align-middle text-center">Thời gian</th>
+                  <th class="align-middle text-center">Loại</th>
+                  <th class="align-middle text-center">Mã VT</th>
+                  <th class="align-middle text-center">Số lượng</th>
+                  <th class="align-middle text-center">Nơi nhận/Nguồn</th>
+                  <th class="align-middle text-center">Sự kiện (Event ID)</th>
+                  <th class="align-middle text-center">Người thực hiện</th>
+                </tr>
+              </thead>
+              <tbody id="logistics-logs-body"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div id="modal-transaction" class="modal">
+          <div class="modal-content" style="width:500px;">
+            <h3 id="trans-title" style="margin-top:0;">Điều phối Vật tư</h3>
+            <input type="hidden" id="trans-item-id">
+
+            <div class="form-group"><label for = "trans-item-name" class="form-label">Vật tư:</label><input type="text" id="trans-item-name" class="form-control" readonly style="background:#eee;"></div>
+            <div class="form-group"><label for = "trans-type" class="form-label">Loại giao dịch:</label>
+              <select id="trans-type" class="form-select" onchange="toggleTransFields()">
+                <option value="EXPORT">📤 XUẤT KHO (Cấp phát)</option>
+                <option value="IMPORT">📥 NHẬP KHO (Bổ sung)</option>
+              </select>
+            </div>
+            <div class="row">
+              <div class="col-md-6">
+                <div class="form-group"><label for = "trans-qty" class="form-label">Số lượng:</label><input type="number" id="trans-qty" class="form-control" min="1"></div>
+              </div>
+              <div class="col-md-6">
+                <div class="form-group"><label for = "trans-current-stock" class="form-label">Tồn hiện tại:</label><input type="text" id="trans-current-stock" class="form-control" readonly></div>
+              </div>
+            </div>
+
+            <div id="div-export-details">
+              <div class="form-group">
+                <label for="trans-recipient" class="form-label">Nơi nhận / Đội RRT:</label>
+                <select id="trans-recipient" class="form-select">
+                      <option value="Team 1">Team 1</option>
+                      <option value="Team 2">Team 2</option>
+                      <option value="Team 3">Team 3</option>
+                      <option value="Team 4">Team 4</option>
+                      <option value="Team 5">Team 5</option>
+                      <option value="Team 6">Team 6</option>
+                      <option value="Team 7">Team 7</option>
+                      <option value="Team 8">Team 8</option>
+                      <option value="Team 9">Team 9</option>
+                      <option value="Team 10">Team 10</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label for="trans-event-id" class="form-label">Liên kết Sự kiện:</label>
+                <select id="trans-event-id" class="form-select">
+                  <option value="">-- Không liên kết / Hoạt động thường quy --</option>
+                </select>
+              </div>
+            </div>
+
+            <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:20px;">
+              <button class="btn btn-secondary" onclick="closeModal('modal-transaction')">Hủy</button>
+              <button class="btn btn-success" onclick="submitTransaction()"><i class='bx bx-save'></i> XÁC NHẬN</button>
+            </div>
+          </div>
+        </div>
+
+        <div id="modal-add-item" class="modal">
+          <div class="modal-content">
+            <h3>📦 Dụng cụ - Vật tư</h3>
+            <div class="row">
+              <div class="col-md-6">
+                <div class="form-group"><label for = "new-item-name" >Tên vật tư</label><input type="text" id="new-item-name" class="form-control"></div>
+              </div>
+              <div class="col-md-6">
+                <div class="form-group"><label for = "new-item-cat">Nhóm</label><select id="new-item-cat" class="form-select">
+                    <option>PPE (Bảo hộ)</option>
+                    <option>Y tế / Thuốc</option>
+                    <option>Văn phòng phẩm</option>
+                    <option>Hậu cần</option>
+                  </select></div>
+              </div>
+            </div>
+            <div class="row">
+              <div class="col-md-4">
+                <div class="form-group"><label for = "new-item-unit">Đơn vị tính</label><input type="text" id="new-item-unit" class="form-control" placeholder="Hộp/Cái"></div>
+              </div>
+              <div class="col-md-4">
+                <div class="form-group"><label for = "new-item-qty">Số lượng đầu</label><input type="number" id="new-item-qty" class="form-control" value="0"></div>
+              </div>
+              <div class="col-md-4">
+                <div class="form-group"><label for = "new-item-min">Định mức báo động</label><input type="number" id="new-item-min" class="form-control" value="10"></div>
+              </div>
+            </div>
+            <div class="row">
+              <div class="col-md-6">
+                <div class="form-group"><label for = "new-item-expiry">Hạn sử dụng</label><input type="date" id="new-item-expiry" class="form-control"></div>
+              </div>
+              <div class="col-md-6">
+                <div class="form-group"><label for = "new-item-loc">Vị trí kho</label><input type="text" id="new-item-loc" class="form-control"></div>
+              </div>
+            </div>
+            <div style="text-align:right; margin-top:15px;">
+              <button class="btn btn-secondary" onclick="closeModal('modal-add-item')">Hủy</button>
+              <button class="btn btn-primary" onclick="submitNewItem()"><i class='bx bx-save'></i>XÁC NHẬN</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="page-library" style="display:none;">
+        <div class="head-title">
+          <div class="left">
+            <h1>Trung tâm tài liệu</h1>
+            <ul class="breadcrumb">
+              <li><a href="#">AP RRT</a></li>
+              <li><i class='bx bx-chevron-right'></i></li>
+              <li><a class="active" href="#">SOPs & Hướng dẫn</a></li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="lib-toolbar">
+          <input type="text" id="lib-search" class="lib-search" placeholder="Tìm kiếm quy trình, biểu mẫu..." onkeyup="filterLibrary()">
+          <select id="lib-cat-filter" class="form-select" style="max-width: 250px;" onchange="filterLibrary()">
+            <option value="all">Tất cả danh mục</option>
+            <option value="SOP">SOPs</option>
+            <option value="Form">Biểu mẫu</option>
+            <option value="Guide">Hướng dẫn chuyên môn</option>
+            <option value="Other">Khác</option>
+          </select>
+          <button id="btn-add-doc" class="btn btn-primary" onclick="openLibModal()" style="display:none;"><i class='bx bx-upload'></i> Đăng tải</button>
+        </div>
+
+        <div id="library-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(400px, 1fr)); gap: 20px;">
+          <p class="text-muted">Đang tải thư viện...</p>
+        </div>
+
+<div id="modal-library" class="modal">
+  <div class="modal-content">
+    <h3 style="margin-top:0; color:#1a3b5d;" id="lib-modal-title">📤 Đăng tải Tài liệu</h3>
+    <input type="hidden" id="lib-id">
+    <input type="hidden" id="lib-current-url">
+
+    <div class="form-group">
+      <label for = "lib-title" class="form-label">Tên tài liệu</label>
+      <input type="text" id="lib-title" class="form-control" placeholder="VD: Quy trình lấy mẫu...">
+    </div>
+
+    <div class="row">
+      <div class="col-md-4">
+        <div class="form-group">
+          <label for="lib-doc-type" class="form-label">Loại</label>
+          <select id="lib-doc-type" class="form-select" onchange="toggleLibType()">
+            <option value="FILE">Tải lên File</option>
+            <option value="LINK">Liên kết (URL)</option>
+          </select>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="form-group">
+          <label for="lib-category" class="form-label">Danh mục</label>
+          <select id="lib-category" class="form-select">
+            <option value="SOP">SOPs</option>
+            <option value="Form">Biểu mẫu</option>
+            <option value="Guide">Hướng dẫn chuyên môn</option>
+            <option value="Other">Khác</option>
+          </select>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="form-group">
+          <label for = "lib-version" class="form-label">Phiên bản</label>
+          <input type="text" id="lib-version" class="form-control" placeholder="v1.0">
+        </div>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label for = "lib-desc" class="form-label">Mô tả ngắn</label>
+      <textarea id="lib-desc" class="form-control" rows="2"></textarea>
+    </div>
+
+    <div class="form-group" id="group-lib-file">
+      <label for = "lib-file" class="form-label">File đính kèm (PDF, Docx, Xlsx,...)</label>
+      <input type="file" id="lib-file" class="form-control">
+    </div>
+
+    <div class="form-group" id="group-lib-url" style="display:none;">
+      <label for = "lib-url-input"class="form-label">Địa chỉ URL (Link web, Google Docs,...)</label>
+      <input type="url" id="lib-url-input" class="form-control" placeholder="https://hcdc.vn/">
+    </div>
+
+    <div id="lib-file-status" class="text-muted small mt-1"></div>
+
+    <div style="text-align:right; margin-top:15px;">
+      <button class="btn btn-secondary" onclick="closeModal('modal-library')">Hủy</button>
+      <button class="btn btn-primary" onclick="submitLibrary()"><i class='bx bx-save'></i>XÁC NHẬN</button>
+    </div>
+  </div>
+</div>
+      </div>
+
+      <div id="page-map" style="display:none;">
+        <div class="head-title">
+          <div class="left">
+            <h1>Bản đồ</h1>
+            <ul class="breadcrumb">
+              <li><a href="#">AP RRT</a></li>
+              <li><i class='bx bx-chevron-right'></i></li>
+              <li><a class="active" href="#">Bản đồ</a></li>
+            </ul>
+          </div>
+        </div>
+        <div class="table-data">
+          <div class="order">
+            <div class="head">
+              <h5>Thành phố Hồ Chí Minh</h5>
+              <div class="search-bar">
+                <input type="text" id="rrt-search" placeholder="Tìm thành viên RRT...">
+                <button id="search-button" class="search-button"><i class='bx bx-filter'></i>Lọc</button>
+              </div>
+              <div class="filter-bar mt-6">
+                <select id="departmentAP" class="form-select" multiple="multiple">
+                </select>
+              </div>
+              <div style="margin-top: 10px;">
+                <input type="checkbox" id="toggleFillMap" checked>
+                <label for="toggleFillMap">Thành viên theo Phường</label>
+              </div>
+            </div>
+            <div id="containerMap"></div>
+          </div>
+        </div>
+      </div>
+
+      
+    </main>
+    <!-- MAIN -->
+  </section>
+  <div id="loadingSpinner" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); color: white; justify-content: center; align-items: center; z-index: 9999;">
+    <div class="spinner-border" role="status">
+      <span class="visually-hidden">Loading...</span>
+    </div>
+  </div>
+  <div id="appToast" class="toast" role="alert" aria-live="assertive" aria-atomic="true" style="position: fixed; top: 20px; right: 20px; z-index: 10000; min-width: 250px;">
+    <div class="toast-header">
+      <strong class="me-auto" id="toastTitle">Thông báo</strong>
+      <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+    </div>
+    <div class="toast-body" id="appToastBody">
+    </div>
+  </div>
+  <!-- CONTENT -->
+  <!-- Loading toàn cục – DÁN VÀO CUỐI <body> -->
+<div id="global-loading-spinner" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:9999999; justify-content:center; align-items:center; flex-direction:column; color:white; font-size:18px;">
+    <i class='bx bx-loader-alt bx-spin' style="font-size:50px; margin-bottom:15px;"></i>
+    <div>Đang xử lý...</div>
+</div>
+  </div>
+<div class="modal fade" id="emergencyDetailsModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="emergencyDetailsModalLabel">🚨 Kích hoạt khẩn cấp 🚨</h5>
+      </div>
+<div class="modal-body">
+        <form id="emergencyDetailsForm">
+          <div class="form-group mb-3">
+             <label class="fw-bold mb-2">Loại kích hoạt:</label>
+             <div class="d-flex gap-3">
+                <div class="form-check">
+                    <input class="form-check-input" type="radio" name="activationType" id="typeNew" value="new" checked onchange="toggleActivationType()">
+                    <label class="form-check-label fw-bold text-success" for="typeNew">🔥 Sự kiện Mới</label>
+                </div>
+                <div class="form-check">
+                    <input class="form-check-input" type="radio" name="activationType" id="typeAdd" value="add" onchange="toggleActivationType()">
+                    <label class="form-check-label fw-bold text-primary" for="typeAdd">➕ Bổ sung nhân sự</label>
+                </div>
+             </div>
+          </div>
+
+          <div class="form-group mb-3" id="group-existing-incident" style="display:none;">
+            <label for="existingIncidentSelect" class="fw-bold">Chọn sự kiện đang hoạt động:</label>
+            <select class="form-select" id="existingIncidentSelect">
+                <option value="">-- Đang tải danh sách... --</option>
+            </select>
+            <small class="text-muted">Chọn sự kiện bạn muốn điều động thêm người vào.</small>
+          </div>
+
+          <div id="group-new-incident">
+              <div class="form-group mb-2">
+                <label for="activationTime">🕗 Thời gian kích hoạt</label>
+                <input type="text" class="form-control" id="activationTime" value="" readonly>
+              </div>
+              <div class="mb-3">
+                <label for="incidentLocation" class="form-label">📍 Địa điểm (Chọn trên bản đồ)</label>
+                <input type="text" class="form-control" id="incidentLocation" placeholder="Nhập địa chỉ hoặc di chuyển ghim trên bản đồ bên dưới...">
+            </div>
+            
+            <div class="mb-3">
+                <div id="miniMap" style="height: 250px; width: 100%; border-radius: 8px; border: 1px solid #ccc; z-index: 1;"></div>
+                <small class="text-muted"><i class='bx bx-move'></i> Kéo thả ghim đỏ để chọn vị trí chính xác của ổ dịch.</small>
+            </div>
+            
+            <input type="hidden" id="incidentLat" value="">
+            <input type="hidden" id="incidentLng" value="">
+            <input type="hidden" id="incidentWard" value="">
+              <div class="form-group mb-2">
+                <label for="incidentDetails"> 🔎 Chi tiết sự kiện</label>
+                <textarea class="form-control" id="incidentDetails" rows="3" placeholder="Mô tả sự cố, hành động cần thiết, v.v.."></textarea>
+              </div>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" id="closeModalButton" data-bs-dismiss="modal">🔘 Hủy</button>
+        <button type="button" class="btn btn-primary" id="nextToReviewBtn">▶️ Tiếp tục</button>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="modal fade" id="finalReviewModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h6 class="modal-title" id="finalReviewModalLabel">📝 Vui lòng xem lại thông tin trước khi gửi</h6>
+      </div>
+      <div class="modal-body">
+        <h6>🔎 Chi tiết sự kiện</h6>
+        <p><b>🕗 Thời gian:</b> <span id="reviewTime"></span></p>
+        <p><b>📍 Địa điểm:</b> <span id="reviewLocation"></span></p>
+        <p><b>🎟️ Chi tiết:</b> <span id="reviewDetails"></span></p>
+        <hr>
+        <h6>🧑‍🤝‍🧑 Thành viên được chọn (<span id="reviewMemberCount"></span>)</h6>
+        <ul id="reviewMemberList" class="list-unstyled"></ul>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" id="backToDetailsBtn">◀️ Quay lại</button>
+        <button type="button" class="btn btn-primary" id="confirmAndSendBtn">☑️ XÁC NHẬN</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="aarModal">
+  <div class="modal-dialog sitrep-modal-dialog"> <div class="modal-content sitrep-modal-content">
+
+      <div class="modal-header bg-white border-bottom py-2 px-3" style="height: 60px; flex-shrink: 0;">
+        <div class="d-flex align-items-center gap-3">
+          <div class="bg-warning text-dark rounded p-2"><i class='bx bx-history fs-4'></i></div>
+          <div>
+            <h5 class="mb-0 text-dark fw-bold">BÁO CÁO SAU HÀNH ĐỘNG (AAR)</h5>
+            <small class="text-muted">Đánh giá kết quả, bài học kinh nghiệm và đóng sự kiện (AP Assistant)</small>
+          </div>
+        </div>
+        <div class="ms-auto d-flex gap-2">
+           <button class="btn btn-warning fw-bold btn-sm px-3" id="btn-submit-aar" form="aarForm">
+             <i class='bx bxs-save me-2'></i> LƯU & ĐÓNG SỰ KIỆN
+           </button>
+           <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+      </div>
+
+      <div class="modal-body sitrep-body">
+        <form id="aarForm" class="h-100 container-fluid px-0">
+          <div class="sitrep-grid-container">
+            
+            <div class="sitrep-col-left">
+               
+               <div class="sitrep-mini-card">
+                  <div class="mini-card-title text-primary"><i class='bx bx-info-circle'></i> THÔNG TIN</div>
+                  <div class="mb-2">
+                     <label class="d-block small fw-bold text-muted mb-1">Sự kiện</label>
+                     <div id="aar-event-display" class="fw-bold text-dark" style="font-size: 0.9rem;">...</div>
+                  </div>
+                  <div class="mb-2">
+                     <label class="d-block small fw-bold text-muted mb-1">Mã ID</label>
+                     <div id="aar-incident-id-display" class="text-secondary font-monospace">...</div>
+                  </div>
+                  <div>
+                     <label class="d-block small fw-bold text-muted mb-1">Địa điểm</label>
+                     <div id="aar-location-display" class="text-dark">...</div>
+                  </div>
+                  <input type="hidden" id="aar-incident-id" name="incidentId">
+               </div>
+
+               <div class="sitrep-mini-card">
+                  <div class="mini-card-title text-danger"><i class='bx bx-toggle-right'></i> TRẠNG THÁI</div>
+                  <label for="aar-status" class="d-block small fw-bold text-muted mb-2">Hành động tiếp theo</label>
+                  <select class="form-select form-select-sm fw-bold border-warning" id="aar-status" name="problem_status">
+                    <option value="closed" selected>🏁 Đóng sự cố này (Hoàn tất)</option>
+                    <option value="active">🟢 Giữ trạng thái xử lý</option>
+                  </select>
+               </div>
+
+               <div class="sitrep-mini-card flex-grow-1 bg-light border-0">
+                  <div class="mini-card-title text-muted"><i class='bx bx-support'></i> HỖ TRỢ</div>
+                  <p class="small text-muted mb-3">Sử dụng dữ liệu từ Nhật ký và Phương án để tự động điền báo cáo.</p>
+                  <button type="button" class="btn btn-white border w-100 fw-bold text-primary shadow-sm mb-2" onclick="autoFillAarFromLogs()">
+                    <i class='bx bxs-magic-wand me-1'></i> Tự động tổng hợp 
+                  </button>
+                  <small class="d-block text-center text-muted fst-italic" style="font-size: 0.75rem;">(Nên kiểm tra lại sau khi tổng hợp)</small>
+               </div>
+
+            </div>
+
+            <div class="sitrep-col-right p-4">
+                <h6 class="text-warning fw-bold border-bottom pb-2 mb-3"><i class='bx bx-edit'></i> NỘI DUNG ĐÁNH GIÁ</h6>
+                
+                <div class="mb-4">
+                  <label for="aar-summary" class="d-block fw-bold small text-dark mb-2">1. TÓM TẮT KẾT QUẢ / DIỄN TIẾN</label>
+                  <textarea class="sitrep-textarea" id="aar-summary" name="aar_summary" rows="12" placeholder="Mô tả kết quả cuối cùng: Số liệu, các hoạt động chính đã thực hiện..."></textarea>
+                </div>
+
+                <div class="row g-3 h-50"> <div class="col-md-6 d-flex flex-column">
+                    <label for="aar-issues" class="d-block fw-bold small text-dark mb-2">2. CÁC VẤN ĐỀ / KHÓ KHĂN</label>
+                    <textarea class="sitrep-textarea flex-grow-1" id="aar-issues" name="aar_issues" placeholder="Các khó khăn gặp phải: Thiếu vật tư, nhân sự, tiếp cận..."></textarea>
+                  </div>
+                  <div class="col-md-6 d-flex flex-column">
+                    <label class="d-block fw-bold small text-dark mb-2">3. BÀI HỌC KINH NGHIỆM / ĐỀ XUẤT</label>
+                    <textarea class="sitrep-textarea flex-grow-1" id="aar-lessons-learned" name="aar_lessons_learned" placeholder="Rút kinh nghiệm cho lần sau..."></textarea>
+                  </div>
+                </div>
+
+            </div>
+
+          </div>
+        </form>
+      </div>
+
+    </div>
+  </div>
+</div>
+<div id="modal-sos" class="modal">
+  <div class="modal-content" style="border-top: 5px solid #dc3545;">
+    <div class="modal-header" style="border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; padding-bottom: 15px; margin-bottom: 20px;">
+      <h3 style="margin:0; color:#dc3545;"><i class="fa-solid fa-triangle-exclamation"></i> Gửi yêu cầu hỗ trợ</h3>
+      <span class="close" onclick="closeModal('modal-sos')" style="cursor:pointer; font-size: 24px;">&times;</span>
+    </div>
+
+    <div class="form-group mb-3">
+      <label for="sos-type" class="form-label">Loại hỗ trợ:</label>
+      <select class="form-select" id="sos-type">
+        <option value="Nhân lực">👥 Nhân lực (Bác sĩ, TNV...)</option>
+        <option value="Vật tư">📦 Vật tư (PPE, Kit test...)</option>
+        <option value="Phương tiện">🚑 Phương tiện (Xe cấp cứu...)</option>
+        <option value="Khác">❓ Khác</option>
+      </select>
+    </div>
+
+    <div class="form-group mb-3">
+      <label for="sos-qty" class="form-label">Số lượng / Chi tiết:</label>
+      <input type="text" class="form-control" id="sos-qty" placeholder="VD: 2 xe, 50 bộ PPE...">
+    </div>
+
+    <div class="form-group mb-3">
+      <label for="sos-desc" class="form-label">Mô tả tình huống / Lý do:</label>
+      <textarea class="form-control" id="sos-desc" rows="3" placeholder="VD: Bệnh nhân trở nặng, khu vực bị phong tỏa..."></textarea>
+    </div>
+
+    <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:20px;">
+      <button class="btn btn-secondary" onclick="closeModal('modal-sos')">Hủy</button>
+      <button class="btn btn-danger" style="background:#dc3545; color:white;" onclick="submitSOS()">XÁC NHẬN</button>
+    </div>
+  </div>
+</div>
+
+<div id="modal-auto" class="modal">
+  <div class="modal-content" style="width: 500px;">
+    <div class="modal-header" style="background: #f8f9fa; padding: 15px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center;">
+      <h5 style="margin:0; color:#1a3b5d;"><i class="bx bx-bot"></i> Trợ lý xếp Lịch tự động</h5>
+      <span class="close" onclick="closeModal('modal-auto')" style="cursor:pointer; font-size: 24px;">&times;</span>
+    </div>
+
+    <div class="modal-body" style="padding: 20px; max-height: 60vh; overflow-y: auto;">
+
+      <div class="form-group">
+        <label for="auto-date-input" class="form-label" style="font-weight:bold;">Gợi ý lịch trực cho ngày:</label>
+        <input type="date" class="form-control" id="auto-date-input" onchange="window.suggestRoster(this.value)">
+      </div>
+
+      <label class="form-label" style="margin-top:15px; border-top:1px solid #eee; padding-top:10px; font-weight:bold; display:block;">
+        Phân tích & Đề xuất (Dựa trên thời gian nghỉ):
+      </label>
+
+      <div id="auto-suggestions-container">
+        <p class="text-center text-muted mt-3">
+          <span class="spinner-border spinner-border-sm"></span> Đang tải dữ liệu...
+        </p>
+      </div>
+
+    </div>
+
+    <div class="modal-footer" style="padding: 15px; border-top: 1px solid #eee; text-align: right;">
+      <button class="btn btn-secondary" onclick="closeModal('modal-auto')">Hủy</button>
+    </div>
+  </div>
+</div>
+
+<div id="modal-wizard" class="modal">
+  <div class="modal-content" style="width: 500px;">
+    <div class="modal-header">
+      <h5 class="modal-title"><i class='bx bx-transfer'></i> Trình hướng dẫn thay thế thông minh</h5>
+      <button type="button" class="btn-close" onclick="closeModal('modal-wizard')"></button>
+    </div>
+    <div class="modal-body">
+
+      <div id="wiz-step-1" class="step-container step-active">
+        <div class="step-indicator">Bước 1/3: Chọn Lịch trực cần thay người</div>
+        <div id="wiz-shift-list">
+          <p class="text-center"><span class="spinner-border spinner-border-sm"></span> Đang tải lịch...</p>
+        </div>
+      </div>
+
+      <div id="wiz-step-2" class="step-container">
+        <div class="step-indicator">Bước 2/3: Chọn thành viên <b class="text-danger">VẮNG MẶT</b></div>
+        <button class="btn btn-sm btn-link text-decoration-none mb-2" onclick="goToStep(1)">← Quay lại</button>
+        <div id="wiz-member-list">
+        </div>
+      </div>
+
+      <div id="wiz-step-3" class="step-container">
+        <div class="step-indicator">Bước 3/3: Tìm nhân sự <b class="text-success">THAY THẾ</b></div>
+        <button class="btn btn-sm btn-link text-decoration-none mb-2" onclick="goToStep(2)">← Quay lại</button>
+
+        <div class="alert alert-info py-2 px-3" style="font-size:13px;">
+          <strong><i class='bx bx-filter'></i> Tiêu chí tìm kiếm:</strong><br>
+          • Vị trí: <span class="badge bg-light text-dark" id="wiz-target-role">...</span><br>
+          • Trạng thái: <b>Đang Rảnh</b> (Không trực hôm nay)<br>
+          • An toàn: <b>Nghỉ ít nhất 2 ngày</b> trước/sau.
+        </div>
+
+        <div id="wiz-suggestion-list" style="max-height: 300px; overflow-y: auto;">
+          <p class="text-center"><span class="spinner-border spinner-border-sm"></span> Đang tìm kiếm ứng viên phù hợp...</p>
+        </div>
+      </div>
+
+      <div id="wiz-step-4" class="step-container text-center pt-4">
+        <i class='bx bx-check-circle text-success' style="font-size: 60px;"></i>
+        <h3 class="mt-3">Thay thế Hoàn tất!</h3>
+        <p class="text-muted">
+          Đã cập nhật lịch trực và gửi thông báo đến:<br>
+          <b><span id="wiz-res-new">...</span></b> (Thay cho <span id="wiz-res-old">...</span>)
+        </p>
+        <button class="btn btn-primary mt-3" onclick="closeModal('modal-wizard'); window.renderRosterPage();">Đóng</button>
+      </div>
+
+    </div>
+  </div>
+</div>
+<div id="modal-roster-detail" class="modal">
+  <div class="modal-content" style="width: 500px;">
+    <div class="modal-header" style="background: #f8f9fa; padding: 15px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center;">
+      <h5 style="margin:0; color:#1a3b5d;"><i class="fa-solid fa-circle-info"></i> Chi tiết Lịch trực</h5>
+      <span class="close" onclick="closeModal('modal-roster-detail')" style="cursor:pointer; font-size: 24px;">&times;</span>
+    </div>
+
+    <div class="modal-body" style="padding: 20px;">
+      <div style="text-align: center; margin-bottom: 20px;">
+        <h2 id="detail-roster-team" style="margin: 0; color: #007bff;">Team ...</h2>
+        <div style="font-size: 14px; color: #666; margin-top: 5px;">
+          <i class="fa-regular fa-calendar"></i> <span id="detail-roster-date">...</span>
+          &nbsp;|&nbsp;
+          <span id="detail-roster-id" style="font-family: monospace; background: #eee; padding: 2px 6px; border-radius: 4px;">ID</span>
+        </div>
+        <div id="detail-roster-status" style="margin-top: 10px;">
+        </div>
+      </div>
+
+      <hr style="border-top: 1px dashed #ddd;">
+
+      <h6 style="font-weight: bold; color: #333; margin-bottom: 10px;">👥 Danh sách thành viên:</h6>
+      <div id="detail-roster-members" style="max-height: 250px; overflow-y: auto; background: #f9f9f9; border: 1px solid #eee; border-radius: 8px;">
+      </div>
+
+      <div id="detail-roster-note-container" style="margin-top: 15px; display: none;">
+        <label style="font-size: 12px; font-weight: bold; color: #666;">Ghi chú:</label>
+        <div id="detail-roster-note" style="font-size: 13px; font-style: italic; color: #333; background: #fff3cd; padding: 10px; border-radius: 6px;"></div>
+      </div>
+    </div>
+
+    <div class="modal-footer" style="padding: 15px; border-top: 1px solid #eee; text-align: right;">
+      <button id="btn-delete-roster" class="btn btn-danger btn-sm" style="float: left; display: none;">
+        <i class="fa-solid fa-trash"></i> Xóa Lịch
+      </button>
+      <button class="btn btn-secondary" onclick="closeModal('modal-roster-detail')">Đóng</button>
+    </div>
+  </div>
+</div>
+
+<div id="modal-team-rotate" class="modal">
+  <div class="modal-content" style="width: 450px;">
+    <div class="modal-header">
+      <h5 class="modal-title"><i class='bx bx-refresh'></i> Luân chuyển Đội (Team Rotation)</h5>
+      <span class="close" onclick="closeModal('modal-team-rotate')">&times;</span>
+    </div>
+    <div class="modal-body">
+      <div class="alert alert-info small">
+        <i class='bx bx-info-circle'></i> Chức năng này thay thế <b>TOÀN BỘ</b> thành viên của Đội cũ bằng Đội mới.
+      </div>
+
+      <div class="form-group">
+        <label for="rot-old-team-display" class="form-label">Đội rút về (Old Team):</label>
+        <input type="text" id="rot-old-team-display" class="form-control" readonly style="background: #eee; font-weight: bold;">
+        <input type="hidden" id="rot-old-team-value">
+        <small class="text-danger" id="rot-old-team-warning" style="display:none;">
+          * Sự kiện này là đội hỗn hợp. Vui lòng dùng chức năng "🧑‍🤝‍🧑 Thành viên".
+        </small>
+      </div>
+
+      <div class="form-group">
+        <label for="rot-new-team" class="form-label">Đội thay thế (New Team):</label>
+        <div style="display: flex; gap: 5px;">
+          <select id="rot-new-team" class="form-select">
+            <option value="">-- Chọn đội --</option>
+          </select>
+          <button class="btn btn-success btn-sm" onclick="suggestNewTeam()" title="Team (AP Assistant)">
+            <i class='bx bxs-magic-wand'></i>
+          </button>
+        </div>
+        <small class="text-muted" id="rot-suggestion-text"></small>
+      </div>
+
+      <div class="form-group">
+        <label for="rot-reason" class="form-label">Lý do thay thế:</label>
+        <input type="text" id="rot-reason" class="form-control" value="Luân chuyển định kỳ">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-team-rotate')">Hủy</button>
+      <button class="btn btn-primary" id="btn-confirm-rotate" onclick="submitTeamRotation()">Thực hiện</button>
+    </div>
+  </div>
+</div>
+
+<div id="modal-quick-report" class="modal">
+  <div class="modal-content" style="border-top: 5px solid #ffc107;">
+    <h3 style="margin-top:0; color:#b45309;">📝 Báo cáo Nhanh</h3>
+    <p class="text-muted small">Vui lòng điền thông tin cập nhật hiện trường.</p>
+
+    <div class="form-group">
+      <label for="qr-situation" class="form-label">1. Diễn biến / Tình hình hiện tại:</label>
+      <textarea id="qr-situation" class="form-control" rows="3" placeholder="- Số ca mắc mới/tử vong...&#10;- Diễn biến ổ dịch..."></textarea>
+    </div>
+
+    <div class="form-group">
+      <label for="qr-action" class="form-label">2. Hoạt động đã triển khai:</label>
+      <textarea id="qr-action" class="form-control" rows="3" placeholder="- Đã khoanh vùng, khử khuẩn...&#10;- Đã lấy mẫu xét nghiệm..."></textarea>
+    </div>
+
+    <div class="form-group">
+      <label for="qr-request" class="form-label">3. Đề xuất / Kiến nghị:</label>
+      <textarea id="qr-request" class="form-control" rows="2" placeholder="- Cần hỗ trợ thêm nhân lực/vật tư..."></textarea>
+    </div>
+
+    <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:15px;">
+      <button type="button" class="btn btn-secondary" onclick="closeModal('modal-quick-report')">Hủy bỏ</button>
+      <button type="button" class="btn btn-warning" style="color:#333; font-weight:bold;" onclick="submitQuickReport()">XÁC NHẬN</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="modal-official-report" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog sitrep-modal-dialog">
+    <div class="modal-content sitrep-modal-content">
+
+      <div class="modal-header bg-white border-bottom py-2 px-3" style="height: 60px; flex-shrink: 0;">
+        <div class="d-flex align-items-center gap-3">
+          <div class="bg-primary text-white rounded p-2"><i class='bx bxs-file-doc fs-4'></i></div>
+          <div>
+            <h5 class="mb-0 text-primary fw-bold">LẬP BÁO CÁO (SITREP)</h5>
+            <small class="text-muted" style="font-size: 0.75rem;"><i class='bx bx-edit-alt'></i> SITREP Assistant</small>
+          </div>
+        </div>
+        <div class="ms-auto d-flex gap-2">
+           <button class="btn btn-primary fw-bold btn-sm px-3" id="btn-save-report" onclick="submitOfficialReport()">
+             <i class='bx bxs-save me-2'></i> LƯU & XUẤT
+           </button>
+           <button type="button" class="btn-close" onclick="closeModal('modal-official-report')"></button>
+        </div>
+      </div>
+
+      <div class="sitrep-grid-container">
+        
+        <div class="sitrep-col-left">
+           
+           <div class="sitrep-mini-card">
+              <div class="mini-card-title text-primary"><i class='bx bx-slider'></i> CẤU HÌNH</div>
+              <div class="mb-2">
+                 <label for="report-type" class="d-block small fw-bold text-muted mb-1">Loại báo cáo</label>
+                 <select class="form-select form-select-sm fw-bold" id="report-type" onchange="onReportTypeChange()">
+                    <option value="EMERGENCY">🚨 Báo cáo Khẩn cấp</option>
+                    <option value="DAILY">📄 Báo cáo Ngày (16:00/ngày)</option>
+                    <option value="COMPLETION">🏁 Báo cáo Hoàn thành</option>
+                 </select>
+              </div>
+              <div class="mb-2">
+                 <label for="rpt-event-name" class="d-block small fw-bold text-muted mb-1">Tên sự kiện</label>
+                 
+                <textarea class="form-control form-control-sm bg-light" id="rpt-event-name" rows="4"></textarea>
+              </div>
+              <div>
+                 <label for="rpt-level" class="d-block small fw-bold text-muted mb-1">Mức độ nguy cơ</label>
+                 <select class="form-select form-select-sm fw-bold" id="rpt-level">
+                    <option value="Chưa xác định">⚪ Chưa xác định</option>
+                    <option value="Theo dõi">🟢 Theo dõi</option>
+                    <option value="Cảnh báo">🟡 Cảnh báo</option>
+                    <option value="Đáp ứng">🔴 Đáp ứng</option>
+                 </select>
+              </div>
+           </div>
+
+           <div class="sitrep-mini-card">
+              <div class="mini-card-title text-danger">
+                  <span><i class='bx bx-grid-alt'></i> SỐ LIỆU</span>
+                  <span style="font-size: 0.65rem; text-transform: none; color: #888;">(🟦 Trong kỳ / 🟥 Tích lũy)</span>
+              </div>
+              
+              <div class="stat-row">
+                 <div class="stat-label">SỐ MẮC</div>
+                 <div class="stat-box"><input type="number" id="rpt-cases-new" class="stat-input text-primary" placeholder="Mới"></div>
+                 <div class="stat-box"><input type="number" id="rpt-cases-total" class="stat-input text-danger bg-light" placeholder="Tổng"></div>
+              </div>
+              
+              <div class="stat-row">
+                 <div class="stat-label">NGHI NGỜ</div>
+                 <div class="stat-box"><input type="number" id="rpt-suspected-new" class="stat-input text-primary" placeholder="Mới"></div>
+                 <div class="stat-box"><input type="number" id="rpt-suspected-total" class="stat-input text-danger bg-light" placeholder="Tổng"></div>
+              </div>
+
+              <div class="stat-row border-0">
+                 <div class="stat-label">TỬ VONG</div>
+                 <div class="stat-box"><input type="number" id="rpt-deaths-new" class="stat-input text-primary" placeholder="Mới"></div>
+                 <div class="stat-box"><input type="number" id="rpt-deaths-total" class="stat-input text-danger bg-light" placeholder="Tổng"></div>
+              </div>
+           </div>
+
+           <div class="sitrep-mini-card flex-grow-1 d-flex flex-column">
+              <div class="mini-card-title text-warning"><i class='bx bx-note'></i> CÁC VẤN ĐỀ KHÁC</div>
+              
+              <label for="rpt-detected-incidents" class="small fw-bold text-danger mt-2">Sự cố / SOS</label>
+              <textarea class="form-control form-control-sm mb-2" id="rpt-detected-incidents" style="flex:1; background:#fff5f5; border-color:#fed7d7;" rows="6"></textarea>
+              
+              <label for="rpt-hr-changes" class="small fw-bold text-dark">Biến động nhân sự</label>
+              <textarea class="form-control form-control-sm" id="rpt-hr-changes" style="flex:1; background:#f8f9fa;" rows="6"></textarea>
+           </div>
+
+        </div>
+
+        <div class="sitrep-col-right p-4">
+            <h6 class="text-success fw-bold border-bottom pb-2 mb-3"><i class='bx bx-edit'></i> NỘI DUNG CHI TIẾT</h6>
+            
+            <div class="mb-3">
+               <label for="rpt-overview" class="d-block fw-bold small text-muted mb-1">1. TỔNG QUAN / DIỄN TIẾN</label>
+               <textarea class="sitrep-textarea" id="rpt-overview" rows="8"></textarea>
+            </div>
+
+            <div class="mb-3">
+               <label for="rpt-activities" class="d-block fw-bold small text-muted mb-1">2. HOẠT ĐỘNG ĐÃ TRIỂN KHAI</label>
+               <textarea class="sitrep-textarea" id="rpt-activities" rows="8"></textarea>
+            </div>
+
+            <div class="row g-3">
+               <div class="col-6">
+                  <label for="rpt-issues" class="d-block fw-bold small text-muted mb-1">3. KHÓ KHĂN / TỒN TẠI</label>
+                  <textarea class="sitrep-textarea" id="rpt-issues" rows="6"></textarea>
+               </div>
+               <div class="col-6">
+                  <label for="rpt-next-steps" class="d-block fw-bold small text-muted mb-1">4. ĐỀ XUẤT / KIẾN NGHỊ</label>
+                  <textarea class="sitrep-textarea" id="rpt-next-steps" rows="6"></textarea>
+               </div>
+            </div>
+            
+            <div id="section-completion" style="display:none;" class="mt-3 pt-3 border-top">
+                <label for="rpt-lessons" class="d-block fw-bold small text-primary mb-1">5. BÀI HỌC KINH NGHIỆM</label>
+                <textarea class="sitrep-textarea border-primary" id="rpt-lessons" rows="4"></textarea>
+            </div>
+        </div>
+
+      </div>
+
+    </div>
+  </div>
+</div>
+
+
+<div id="modal-install-pwa" class="modal fade" tabindex="-1" style="z-index: 9999;">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content" style="border-radius: 15px;">
+      <div class="modal-header bg-light-subtle text-dark text-center" style="border-top-left-radius: 15px; border-top-right-radius: 15px;">
+        <h5 class="modal-title"><i class='bx bxs-mobile'></i> CÀI ĐẶT ỨNG DỤNG </h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body text-center">
+        <img src="https://github.com/hcdc-ap/images-host/blob/main/images/productivity.png?raw=true" style="width: 80px; margin-bottom: 15px; border-radius: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
+        <h5 class="mb-3">HCDC RRT System</h5>
+
+        <div id="guide-ios" style="display:none; text-align: left; background: #f8f9fa; padding: 15px; border-radius: 10px;">
+          <p class="mb-2"><b>Dành cho iPhone (Safari):</b></p>
+          1. Nhấn nút <b>Chia sẻ</b> <i class='bx bx-share-alt' style="font-size:18px; color:#007bff;"></i> ở thanh dưới cùng.<br>
+          2. Chọn <b>"Thêm vào màn hình chính"</b> (Add to Home Screen) <i class='bx bxs-plus-square'></i>.<br>
+          3. Nhấn <b>Thêm</b> (Add) ở góc trên.
+        </div>
+
+        <div id="guide-android" style="display:none; text-align: left; background: #f8f9fa; padding: 15px; border-radius: 10px;">
+          <p class="mb-2"><b>Dành cho Android (Chrome):</b></p>
+          1. Nhấn nút <b>3 chấm</b> <i class='bx bx-dots-vertical-rounded' style="font-size:18px;"></i> ở góc trên bên phải.<br>
+          2. Chọn <b>"Thêm vào màn hình chính"</b> (Add to Home Screen) hoặc "Cài đặt ứng dụng".<br>
+          3. Nhấn <b>Thêm</b>.
+        </div>
+
+        <div id="guide-pc" style="display:none;">
+          <p>Trên máy tính, bạn có thể Bookmark trang này hoặc cài đặt qua biểu tượng trên thanh địa chỉ (nếu dùng Chrome/Edge).</p>
+        </div>
+
+      </div>
+      <div class="modal-footer justify-content-center">
+        <button type="button" class="btn btn-primary w-100" data-bs-dismiss="modal">Đã hiểu</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="modal-rrtForm" class="modal">
+  <div class="modal-content">
+    <span class="close" id="close-modal-span" onclick="closeModal('modal-rrtForm')">x</span>
+    <h2 id="modal-title">Mẫu đăng ký RRT</h2>
+    <!-- MODAL FORM - có thể đặt trong modal hoặc popup, hoặc section riêng -->
+    <form id="rrtForm">
+      <!-- Hidden fields for update/duplicate -->
+      <input type="hidden" name="rrtRecordId" value="">
+      <input type="hidden" name="rowIndex" value="">
+      <input type="hidden" name="originalFileUrl" value="">
+      <input type="hidden" name="username" value="">
+      <input type="hidden" name="reportId" value="">
+      <input type="hidden" name="maXa" value="">
+      <input type="hidden" name="addressFromGeo" value="">
+      <input type="hidden" name="timestamp">
+      <input type="hidden" name="timeSent">
+      <input type="hidden" name="latitude" value="">
+      <input type="hidden" name="longitude" value="">
+      <div id="edit-requirements-display" style="display: none; margin-bottom: 15px;"></div>
+      <div class="row">
+        <div class="col-md-6">
+          <div class="form-group mb-3">
+            <label for="fullName">1. Họ Tên:</label>
+            <input type="text" id="fullName" name="fullName" class="form-control" required>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <div class="form-group mb-3">
+            <label for="gender"> Giới tính:</label>
+            <select id="gender" name="gender" class="form-select" required>
+              <option value="">Chọn</option>
+              <option value="Male">Nam</option>
+              <option value="Female">Nữ</option>
+            </select>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <div class="form-group mb-3">
+            <label for="dob">2. Năm sinh:</label>
+            <input type="number" id="dob" name="dob" class="form-control" min="1970" max="2003" step="1" required>
+          </div>
+        </div>
+      </div>
+      <div class="row">
+        <div class="col-md-4">
+          <div class="form-group mb-3">
+            <label for="address">3. Địa chỉ:</label>
+            <input type="text" id="address" name="address" class="form-control" required="" autocomplete="street-address">
+          </div>
+        </div>
+        <div class="col-md-3">
+          <div class="form-group mb-3">
+            <label for="ward">Phường:</label>
+            <select class="form-select" id="ward" name="ward" required>
+              <option value="">Chọn</option>
+            </select>
+          </div>
+        </div>
+        <div class="col-md-2">
+          <div class="form-group mb-3">
+            <label for="phone">4. Số điện thoại:</label>
+            <input type="text" id="phone" name="phone" class="form-control" required="" autocomplete="tel">
+          </div>
+        </div>
+        <div class="col-md-3">
+          <div class="form-group mb-3">
+            <label for="email">5. Email:</label>
+            <input type="email" id="email" autocomplete="email" name="email" class="form-control" required>
+          </div>
+        </div>
+      </div>
+      <div class="row">
+        <div class="col-md-5">
+          <div class="form-group mb-3">
+            <label for="fax">6. Đơn vị công tác:</label>
+            <select class="form-select" id="fax" name="fax" required>
+              <option value="">Chọn</option>
+            </select>
+          </div>
+        </div>
+        <div class="col-md-4">
+          <div class="form-group mb-3">
+            <label for="department">Khoa/phòng:</label>
+            <select class="form-select" id="department" name="department" required>
+              <option value="">Chọn</option>
+            </select>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <div class="form-group mb-3">
+            <label for="employeeStatus">Chức vụ:</label>
+            <select class="form-select" id="employeeStatus" name="employeeStatus" required>
+              <option value="">Chọn</option>
+
+            </select>
+          </div>
+        </div>
+      </div>
+      <div class="row">
+        <label for="academic">7. Kinh nghiệm chuyên môn</label>
+        <div class="col-md-7">
+          <div class="form-group mb-3">
+            <label for="academic">7.1. Chuyên ngành:</label>
+            <div class="input-group">
+              <select class="form-select" id="academic" name="academic" required >
+                <option value="">Chọn</option>
+              </select>
+              <span class="input-group-text">Cấp bậc:</span>
+              <select class="form-select" id="academicLevel" name="academicLevel" required>
+                <option value="">Chọn</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-5">
+          <div class="form-group mb-3">
+            <label for="language">7.2. Ngoại ngữ:</label>
+            <div class="input-group">
+              <select class="form-select" id="language" name="language" required>
+                <option value="">Chọn</option>
+                <option value="Anh">Anh</option>
+                <option value="Trung">Trung</option>
+                <option value="Pháp">Pháp</option>
+                <option value="Nhật">Nhật</option>
+                <option value="Hàn">Hàn</option>
+              </select>
+              <span class="input-group-text">Trình độ:</span>
+              <select class="form-select" id="languageLevel" name="languageLevel" required>
+                <option value="">Chọn</option>
+                <option value="beginner">Sơ cấp</option>
+                <option value="intermediate">Trung bình</option>
+                <option value="advanced">Nâng cao</option>
+                <option value="expert">Chuyên gia</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+      <h5 class="mt-3">8. Kỹ năng</h5>
+      <div class="row">
+        <div class="col-md-3">
+          <div class="form-group mb-3">
+            <h6 class="mt-3">8.1. Kinh nghiệm ứng phó khẩn cấp:</h6>
+            <div class="form-check form-check-inline">
+              <input class="form-check-input skill-radio" type="radio" name="skill_ungpho" id="skill_ungpho_co" value="Yes">
+              <label class="form-check-label" for="skill_ungpho_co">Có</label>
+            </div>
+            <div class="form-check form-check-inline">
+              <input class="form-check-input skill-radio" type="radio" name="skill_ungpho" id="skill_ungpho_khong" value="No" checked>
+              <label class="form-check-label" for="skill_ungpho_khong">Không</label>
+            </div>
+            <select class="form-select skill-level" id="skill_ungpho_level" name="skill_ungpho_level" style="display:none;">
+              <option value="">Chọn</option>
+              <option value="beginner">Sơ cấp</option>
+              <option value="intermediate">Trung bình</option>
+              <option value="advanced">Nâng cao</option>
+              <option value="expert">Chuyên gia</option>
+            </select>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <div class="form-group mb-3">
+            <h6 class="mt-3">8.2. Truyền thông rủi ro, Tham gia cộng đồng và Chính sách:</h6>
+            <div class="form-check form-check-inline">
+              <input class="form-check-input skill-radio" type="radio" name="skill_ruiro" id="skill_ruiro_co" value="Yes">
+              <label class="form-check-label" for="skill_ruiro_co">Có</label>
+            </div>
+            <div class="form-check form-check-inline">
+              <input class="form-check-input skill-radio" type="radio" name="skill_ruiro" id="skill_ruiro_khong" value="No" checked>
+              <label class="form-check-label" for="skill_ruiro_khong">Không</label>
+            </div>
+            <select class="form-select skill-level" id="skill_ruiro_level" name="skill_ruiro_level" style="display:none;">
+              <option value="">Chọn</option>
+              <option value="beginner">Sơ cấp</option>
+              <option value="intermediate">Trung bình</option>
+              <option value="advanced">Nâng cao</option>
+              <option value="expert">Chuyên gia</option>
+            </select>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <div class="form-group mb-3">
+            <h6 class="mt-3">8.3. Kinh nghiệm tâm lý xã hội:</h6>
+            <div class="form-check form-check-inline">
+              <input class="form-check-input skill-radio" type="radio" name="skill_tamly" id="skill_tamly_co" value="Yes">
+              <label class="form-check-label" for="skill_tamly_co">Có</label>
+            </div>
+            <div class="form-check form-check-inline">
+              <input class="form-check-input skill-radio" type="radio" name="skill_tamly" id="skill_tamly_khong" value="No" checked>
+              <label class="form-check-label" for="skill_tamly_khong">Không</label>
+            </div>
+            <select class="form-select skill-level" id="skill_tamly_level" name="skill_tamly_level" style="display:none;">
+              <option value="">Chọn</option>
+              <option value="beginner">Sơ cấp</option>
+              <option value="intermediate">Trung bình</option>
+              <option value="advanced">Nâng cao</option>
+              <option value="expert">Chuyên gia</option>
+            </select>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <div class="form-group mb-3">
+            <h6 class="mt-3">8.4. Quản lý dữ liệu:</h6>
+            <div class="form-check form-check-inline">
+              <input class="form-check-input skill-radio" type="radio" name="skill_dulieu" id="skill_dulieu_co" value="Yes">
+              <label class="form-check-label" for="skill_dulieu_co">Có</label>
+            </div>
+            <div class="form-check form-check-inline">
+              <input class="form-check-input skill-radio" type="radio" name="skill_dulieu" id="skill_dulieu_khong" value="No" checked>
+              <label class="form-check-label" for="skill_dulieu_khong">Không</label>
+            </div>
+            <select class="form-select skill-level" id="skill_dulieu_level" name="skill_dulieu_level" style="display:none;">
+              <option value="">Chọn</option>
+              <option value="beginner">Sơ cấp</option>
+              <option value="intermediate">Trung bình</option>
+              <option value="advanced">Nâng cao</option>
+              <option value="expert">Chuyên gia</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <div class="row">
+        <div class="col-md-3">
+          <div class="form-group mb-3">
+            <h6 class="mt-3">8.5. Dịch tễ học:</h6>
+            <div class="form-check form-check-inline">
+              <input class="form-check-input skill-radio" type="radio" name="skill_dichte" id="skill_dichte_co" value="Yes">
+              <label class="form-check-label" for="skill_dichte_co">Có</label>
+            </div>
+            <div class="form-check form-check-inline">
+              <input class="form-check-input skill-radio" type="radio" name="skill_dichte" id="skill_dichte_khong" value="No" checked>
+              <label class="form-check-label" for="skill_dichte_khong">Không</label>
+            </div>
+            <select class="form-select skill-level" id="skill_dichte_level" name="skill_dichte_level" style="display:none;">
+              <option value="">Chọn</option>
+              <option value="beginner">Sơ cấp</option>
+              <option value="intermediate">Trung bình</option>
+              <option value="advanced">Nâng cao</option>
+              <option value="expert">Chuyên gia</option>
+            </select>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <div class="form-group mb-3">
+            <h6 class="mt-3">8.6. Phòng ngừa và kiểm soát nhiễm trùng:</h6>
+            <div class="form-check form-check-inline">
+              <input class="form-check-input skill-radio" type="radio" name="skill_nhiemtrung" id="skill_nhiemtrung_co" value="Yes">
+              <label class="form-check-label" for="skill_nhiemtrung_co">Có</label>
+            </div>
+            <div class="form-check form-check-inline">
+              <input class="form-check-input skill-radio" type="radio" name="skill_nhiemtrung" id="skill_nhiemtrung_khong" value="No" checked>
+              <label class="form-check-label" for="skill_nhiemtrung_khong">Không</label>
+            </div>
+            <select class="form-select skill-level" id="skill_nhiemtrung_level" name="skill_nhiemtrung_level" style="display:none;">
+              <option value="">Chọn</option>
+              <option value="beginner">Sơ cấp</option>
+              <option value="intermediate">Trung bình</option>
+              <option value="advanced">Nâng cao</option>
+              <option value="expert">Chuyên gia</option>
+            </select>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <div class="form-group mb-3">
+            <h6 class="mt-3">8.7. Phòng thí nghiệm:</h6>
+            <div class="form-check form-check-inline">
+              <input class="form-check-input skill-radio" type="radio" name="skill_thinghiem" id="skill_thinghiem_co" value="Yes">
+              <label class="form-check-label" for="skill_thinghiem_co">Có</label>
+            </div>
+            <div class="form-check form-check-inline">
+              <input class="form-check-input skill-radio" type="radio" name="skill_thinghiem" id="skill_thinghiem_khong" value="No" checked>
+              <label class="form-check-label" for="skill_thinghiem_khong">Không</label>
+            </div>
+            <select class="form-select skill-level" id="skill_thinghiem_level" name="skill_thinghiem_level" style="display:none;">
+              <option value="">Chọn</option>
+              <option value="beginner">Sơ cấp</option>
+              <option value="intermediate">Trung bình</option>
+              <option value="advanced">Nâng cao</option>
+              <option value="expert">Chuyên gia</option>
+            </select>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <div class="form-group mb-3">
+            <h6 class="mt-3">8.8. Hậu cần khẩn cấp:</h6>
+            <div class="form-check form-check-inline">
+              <input class="form-check-input skill-radio" type="radio" name="skill_haucan" id="skill_haucan_co" value="Yes">
+              <label class="form-check-label" for="skill_haucan_co">Có</label>
+            </div>
+            <div class="form-check form-check-inline">
+              <input class="form-check-input skill-radio" type="radio" name="skill_haucan" id="skill_haucan_khong" value="No" checked>
+              <label class="form-check-label" for="skill_haucan_khong">Không</label>
+            </div>
+            <select class="form-select skill-level" id="skill_haucan_level" name="skill_haucan_level" style="display:none;">
+              <option value="">Chọn</option>
+              <option value="beginner">Sơ cấp</option>
+              <option value="intermediate">Trung bình</option>
+              <option value="advanced">Nâng cao</option>
+              <option value="expert">Chuyên gia</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <div class="row">
+        <div class="col-md-3">
+          <div class="form-group mb-3">
+            <h6 class="mt-3">8.9. Quản lý và vận hành:</h6>
+            <div class="form-check form-check-inline">
+              <input class="form-check-input skill-radio" type="radio" name="skill_vanhanh" id="skill_vanhanh_co" value="Yes">
+              <label class="form-check-label" for="skill_vanhanh_co">Có</label>
+            </div>
+            <div class="form-check form-check-inline">
+              <input class="form-check-input skill-radio" type="radio" name="skill_vanhanh" id="skill_vanhanh_khong" value="No" checked>
+              <label class="form-check-label" for="skill_vanhanh_khong">Không</label>
+            </div>
+            <select class="form-select skill-level" id="skill_vanhanh_level" name="skill_vanhanh_level" style="display:none;">
+              <option value="">Chọn</option>
+              <option value="beginner">Sơ cấp</option>
+              <option value="intermediate">Trung bình</option>
+              <option value="advanced">Nâng cao</option>
+              <option value="expert">Chuyên gia</option>
+            </select>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <div class="form-group mb-3">
+            <h6 class="mt-3">8.10. Quản lý ca bệnh:</h6>
+            <div class="form-check form-check-inline">
+              <input class="form-check-input skill-radio" type="radio" name="skill_cabenh" id="skill_cabenh_co" value="Yes">
+              <label class="form-check-label" for="skill_cabenh_co">Có</label>
+            </div>
+            <div class="form-check form-check-inline">
+              <input class="form-check-input skill-radio" type="radio" name="skill_cabenh" id="skill_cabenh_khong" value="No" checked>
+              <label class="form-check-label" for="skill_cabenh_khong">Không</label>
+            </div>
+            <select class="form-select skill-level" id="skill_cabenh_level" name="skill_cabenh_level" style="display:none;">
+              <option value="">Chọn</option>
+              <option value="beginner">Sơ cấp</option>
+              <option value="intermediate">Trung bình</option>
+              <option value="advanced">Nâng cao</option>
+              <option value="expert">Chuyên gia</option>
+            </select>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <div class="form-group mb-3">
+            <h6 class="mt-3">8.11. Dinh dưỡng:</h6>
+            <div class="form-check form-check-inline">
+              <input class="form-check-input skill-radio" type="radio" name="skill_dinhduong" id="skill_dinhduong_co" value="Yes">
+              <label class="form-check-label" for="skill_dinhduong_co">Có</label>
+            </div>
+            <div class="form-check form-check-inline">
+              <input class="form-check-input skill-radio" type="radio" name="skill_dinhduong" id="skill_dinhduong_khong" value="No" checked>
+              <label class="form-check-label" for="skill_dinhduong_khong">Không</label>
+            </div>
+            <select class="form-select skill-level" id="skill_dinhduong_level" name="skill_dinhduong_level" style="display:none;">
+              <option value="">Chọn</option>
+              <option value="beginner">Sơ cấp</option>
+              <option value="intermediate">Trung bình</option>
+              <option value="advanced">Nâng cao</option>
+              <option value="expert">Chuyên gia</option>
+            </select>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <div class="form-group mb-3">
+            <h6 class="mt-3">8.12. Nước sạch, Vệ sinh và Vệ sinh cá nhân (WASH):</h6>
+            <div class="form-check form-check-inline">
+              <input class="form-check-input skill-radio" type="radio" name="skill_nuoc" id="skill_nuoc_co" value="Yes">
+              <label class="form-check-label" for="skill_nuoc_co">Có</label>
+            </div>
+            <div class="form-check form-check-inline">
+              <input class="form-check-input skill-radio" type="radio" name="skill_nuoc" id="skill_nuoc_khong" value="No" checked>
+              <label class="form-check-label" for="skill_nuoc_khong">Không</label>
+            </div>
+            <select class="form-select skill-level" id="skill_nuoc_level" name="skill_nuoc_level" style="display:none;">
+              <option value="">Chọn</option>
+              <option value="beginner">Sơ cấp</option>
+              <option value="intermediate">Trung bình</option>
+              <option value="advanced">Nâng cao</option>
+              <option value="expert">Chuyên gia</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <div class="row">
+        <div class="col-md-3">
+          <div class="form-group mb-3">
+            <h6 class="mt-3">8.13. Vật liệu nguy hiểm:</h6>
+            <div class="form-check form-check-inline">
+              <input class="form-check-input skill-radio" type="radio" name="skill_nguyhiem" id="skill_nguyhiem_co" value="Yes">
+              <label class="form-check-label" for="skill_nguyhiem_co">Có</label>
+            </div>
+            <div class="form-check form-check-inline">
+              <input class="form-check-input skill-radio" type="radio" name="skill_nguyhiem" id="skill_nguyhiem_khong" value="No" checked>
+              <label class="form-check-label" for="skill_nguyhiem_khong">Không</label>
+            </div>
+            <select class="form-select skill-level" id="skill_nguyhiem_level" name="skill_nguyhiem_level" style="display:none;">
+              <option value="">Chọn</option>
+              <option value="beginner">Sơ cấp</option>
+              <option value="intermediate">Trung bình</option>
+              <option value="advanced">Nâng cao</option>
+              <option value="expert">Chuyên gia</option>
+            </select>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <div class="form-group mb-3">
+            <h6 class="mt-3">8.14. Quản lý an ninh:</h6>
+            <div class="form-check form-check-inline">
+              <input class="form-check-input skill-radio" type="radio" name="skill_anninh" id="skill_anninh_co" value="Yes">
+              <label class="form-check-label" for="skill_anninh_co">Có</label>
+            </div>
+            <div class="form-check form-check-inline">
+              <input class="form-check-input skill-radio" type="radio" name="skill_anninh" id="skill_anninh_khong" value="No" checked>
+              <label class="form-check-label" for="skill_anninh_khong">Không</label>
+            </div>
+            <select class="form-select skill-level" id="skill_anninh_level" name="skill_anninh_level" style="display:none;">
+              <option value="">Chọn</option>
+              <option value="beginner">Sơ cấp</option>
+              <option value="intermediate">Trung bình</option>
+              <option value="advanced">Nâng cao</option>
+              <option value="expert">Chuyên gia</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div class="row">
+        <!-- Acceptance -->
+        <div class="form-check">
+          <input type="checkbox" class="form-check-input" name="acceptance" id="acceptance" required>
+          <label for="acceptance">Tôi chấp nhận tham gia Rapid Response Team (RRT) của Trung tâm Kiểm soát bệnh tật Thành phố Hồ Chí Minh (HCDC)</label>
+        </div>
+      </div>
+      <div class="form-group mb-3">
+        <label for="reportFile" class="form-label">Đăng tải hình ảnh (nếu có):</label>
+        <input type="file" class="form-control" id="reportFile" name="reportFile" accept=".pdf, .doc, .docx, .xls, .xlsx, .jpg, .jpeg, .png">
+        <div id="currentFileDisplay" class="mt-2 text-muted">Chưa có tệp đính kèm.</div>
+      </div>
+      <!-- ĐÁNH GIÁ TÌNH TRẠNG (CHỈ ADMIN ĐƯỢC HIỆN) -->
+      <div id="admin-evaluate-block" class="form-group mb-3" style="display:none;">
+        <div style="display: flex; gap: 17px; align-items: flex; flex-wrap: wrap;">
+          <div style="min-width: 171px;">
+            <label for="tinh_trang_select" class="form-label">Status:</label>
+            <select id="tinh_trang_select" name="tinh_trang" class="form-select">
+              <option value="pending">pending</option>
+              <option value="edit">edit</option>
+              <option value="approved">approved</option>
+            </select>
+          </div>
+          <div id="edit_comment_block" style="display:none; min-width:200px; flex:1;">
+            <label for="edit_comment" class="form-label">Comments:</label>
+            <textarea id="edit_comment" name="edit_comment" class="form-control" rows="1"></textarea>
+          </div>
+        </div>
+      </div>
+      <div class="row mt-4 mb-3">
+        <div class="col-12">
+          <h5 style="border-bottom: 2px solid #eee; padding-bottom: 10px; color: #1a3b5d;">
+            <i class="fa-solid fa-graduation-cap"></i> Lịch sử Đào tạo & Chứng chỉ
+          </h5>
+          <div class="table-responsive">
+            <table class="table table-bordered table-sm table-hover" id="profile-training-table">
+              <thead class="table-light">
+                <tr>
+                  <th class="align-middle" style="width: 40%">Khóa học</th>
+                  <th class="align-middle" style="width: 20%">Thời gian</th>
+                  <th class="align-middle" style="width: 15%">Kết quả</th>
+                  <th>Ghi chú</th>
+                </tr>
+              </thead>
+              <tbody id="profile-training-body">
+                <tr>
+                  <td colspan="4" class="text-center text-muted">Đang tải dữ liệu...</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      <div class="row mt-4 mb-3">
+        <div class="col-12">
+          <h5 style="border-bottom: 2px solid #eee; padding-bottom: 10px; color: #dc3545;">
+            <i class="fa-solid fa-medal"></i> Kinh nghiệm Thực chiến
+          </h5>
+          <div id="roster-count-display" style="display:none;"></div>
+          <div class="table-responsive">
+            <table class="table table-bordered table-sm table-hover">
+              <thead class="table-light">
+                <tr>
+                  <th class="align-middle">Sự kiện khẩn cấp</th>
+                  <th class="align-middle">Vai trò</th>
+                  <th class="align-middle">Hành động</th>
+                  <th class="align-middle">Thời gian</th>
+                </tr>
+              </thead>
+              <tbody id="profile-rrt-exp-body">
+                <tr>
+                  <td colspan="4" class="text-center text-muted">Đang tải dữ liệu...</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-group mb-4">
+        <button type="submit" id="btnCreate" class="btn btn-primary submit-btn mt-2">XÁC NHẬN</button>
+
+        <span class="float-end">
+          <!-- ============================================================ -->
+          <!--<button type="submit" id="btnDuplicateReport" class="btn btn-outline-success mt-2 ms-2" disabled>Nhân bản</button>
+          <button type="button" id="btn-print-report" class="btn btn-outline-warning mt-2 ms-2">🏵️ PDF</button>
+          <button type="button" id="btn-export-excel" class="btn btn-outline-info mt-2 ms-2">💠 Excel</button> -->
+          <!-- ============================================================ -->
+          <button type="button" onclick="closeModal('modal-rrtForm')" id="close-modal-btn" class="btn btn-outline-secondary ms-2">Đóng</button>
+        </span>
+      </div>
+    </form>
+
+  </div>
+</div>
+
+
+<div class="modal fade" id="modal-incident-plan" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog iap-modal-dialog">
+    <div class="modal-content iap-modal-content">
+
+      <div class="modal-header bg-white border-bottom py-2 px-3 shadow-sm" style="flex-shrink: 0; height: 65px; z-index: 1000;">
+        <div class="d-flex align-items-center gap-3 overflow-hidden" style="flex: 1;">
+          <div class="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center flex-shrink-0" style="width:38px; height:38px;">
+             <i class='bx bx-file' style="font-size: 20px;"></i>
+          </div>
+          <div class="overflow-hidden">
+            <h5 class="modal-title text-primary fw-bold mb-0 text-truncate" id="plan-incident-title" style="font-size: 0.86rem; line-height: 1.2;">Loading...</h5>
+            <div class="d-flex align-items-center mt-1">
+               <span class="badge bg-warning text-dark me-2" id="plan-status-badge" style="font-size: 0.65rem;">...</span>
+               <small class="text-muted" style="font-size: 0.75rem;"><i class='bx bx-edit-alt'></i> IAP Assistant</small>
+            </div>
+          </div>
+        </div>
+
+        <div class="d-flex align-items-center gap-2 flex-shrink-0 ms-3">
+           <button class="btn btn-outline-danger btn-sm fw-bold d-flex align-items-center px-3 py-2" onclick="exportIAPWord()">
+             <i class='bx bxs-file-pdf me-2'></i> XUẤT IAP
+           </button>
+           <button class="btn btn-primary btn-sm fw-bold d-flex align-items-center px-3 py-2" onclick="submitIAP()">
+             <i class='bx bx-save me-2'></i> LƯU IAP
+           </button>
+           <button type="button" class="btn-close ms-2" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+      </div>
+
+      <div class="bg-white border-bottom shadow-sm" style="flex-shrink: 0;">
+        <ul class="nav nav-tabs border-0 px-3" id="iapTabs" role="tablist">
+          <li class="nav-item"><button class="nav-link iap-nav-link active" data-bs-toggle="tab" data-bs-target="#tab-assessment">1. NHẬN ĐỊNH</button></li>
+          <li class="nav-item"><button class="nav-link iap-nav-link" data-bs-toggle="tab" data-bs-target="#tab-actions">2. HÀNH ĐỘNG</button></li>
+          <li class="nav-item"><button class="nav-link iap-nav-link" data-bs-toggle="tab" data-bs-target="#tab-resources">3. NGUỒN LỰC</button></li>
+          <li class="nav-item"><button class="nav-link iap-nav-link" data-bs-toggle="tab" data-bs-target="#tab-approval">4. PHÊ DUYỆT</button></li>
+        </ul>
+      </div>
+
+      <div class="modal-body iap-modal-body p-3">
+        <div class="tab-content h-100 w-100">
+          
+          <div class="tab-pane fade show active h-100" id="tab-assessment">
+             <div class="row g-3 h-100">
+              <div class="col-lg-5 h-100">
+                <div class="card iap-card">
+                  <div class="iap-card-header text-primary"><i class='bx bx-data'></i> A. DỮ LIỆU ĐẦU VÀO</div>
+                  <div class="iap-card-body">
+                        <div class="mb-3">
+                          <label for="iap-risk-level" class="iap-label text-danger">Mức độ nguy cơ sự kiện (từ đánh giá nguy cơ)</label>
+                          <select class="form-select fw-bold text-primary" id="iap-risk-level">
+                            <option value="Chưa xác định">⚪ Chưa xác định</option>
+                            <option value="Theo dõi">🟢 Theo dõi</option>
+                            <option value="Cảnh báo">🟡 Cảnh báo</option>
+                            <option value="Đáp ứng">🔴 Đáp ứng</option>
+                          </select>
+                        </div>
+
+                        <div class="mb-3 d-flex flex-column" style="height: 35%;">
+                          <label for="iap-summary" class="iap-label">Tóm tắt tình hình hiện tại</label>
+                          <textarea id="iap-summary" class="form-control flex-grow-1" placeholder="Nhập tóm tắt diễn biến..."></textarea>
+                        </div>
+
+                        <div class="mb-0 d-flex flex-column flex-grow-1">
+                          <label for="iap-context" class="iap-label">Bối cảnh & Yếu tố nguy cơ</label>
+                          <textarea id="iap-context" class="form-control iap-context-textarea flex-grow-1" placeholder="Mô tả bối cảnh..."></textarea>
+                        </div>
+                  </div>
+                </div>
+              </div>
+
+               <div class="col-lg-7 h-100">
+                 <div class="card iap-card">
+                    <div class="iap-card-header text-danger"><i class='bx bx-pulse'></i> B. ĐÁNH GIÁ CHUYÊN MÔN</div>
+                    <div class="iap-card-body">
+                         <div class="d-flex flex-column h-100 gap-4">
+                             <div class="flex-grow-1 d-flex flex-column">
+                               <label for="iap-causes" class="iap-label">Nguyên nhân (Tác nhân/Nguồn lây)</label>
+                               <textarea id="iap-causes" class="form-control flex-grow-1"></textarea>
+                             </div>
+                             <div class="flex-grow-1 d-flex flex-column">
+                               <label for="iap-clinical" class="iap-label">Đặc tính Lâm sàng / Dịch tễ</label>
+                               <textarea id="iap-clinical" class="form-control iap-context-textarea flex-grow-1"></textarea>
+                             </div>
+                             <div class="flex-grow-0">
+                               <div class="p-3 bg-warning bg-opacity-10 rounded border border-warning">
+                                   <label for="iap-forecast"  class="iap-label text-danger"><i class='bx bx-line-chart'></i> Dự báo/nhận định xu hướng tình hình sắp tới</label>
+                                   <textarea id="iap-forecast" class="form-control border-warning bg-white" rows="3"></textarea>
+                               </div>
+                             </div>
+                         </div>
+                    </div>
+                 </div>
+               </div>
+             </div>
+          </div>
+
+          <div class="tab-pane fade h-100 overflow-auto" id="tab-actions">
+             <div class="container-fluid px-0" style="max-width: 1400px; margin: 0 auto;">
+                 <div id="iap-objectives-container"></div>
+                 
+                 <div class="text-center mt-4 pb-5">
+                   <button class="btn btn-outline-primary border-2 fw-bold rounded-pill px-4 shadow-sm" onclick="addObjectiveBlock()">
+                     <i class='bx bx-plus-circle'></i> THÊM MỤC TIÊU MỚI
+                   </button>
+                 </div>
+             </div>
+          </div>
+
+          <div class="tab-pane fade h-100" id="tab-resources">
+             <div class="d-flex flex-column h-100 gap-3">
+               
+               <div class="row g-3 resource-top-section">
+                  <div class="col-lg-6 h-100">
+                      <div class="card iap-card">
+                          <div class="iap-card-header bg-danger text-white">IV. THÔNG TIN YÊU CẦU QUAN TRỌNG (CIR)</div>
+<div class="iap-card-body" id="iap-cir-container">
+    <div class="h-100 d-flex flex-column">
+        <textarea 
+            class="form-control flex-grow-1" 
+            id="iap-cir-content" 
+            placeholder="Nhập các thông tin yêu cầu quan trọng (CIR)..."
+            style="min-height: 200px; resize: vertical;"
+        ></textarea>
+    </div>
+</div>
+                      </div>
+                  </div>
+                  <div class="col-lg-6 h-100">
+                      <div class="card iap-card">
+                          <div class="iap-card-header bg-info text-white">V. CƠ CHẾ PHỐI HỢP – CHIA SẺ BÁO CÁO</div>
+                          <div class="iap-card-body">
+                              <div class="row g-2">
+                                  <div class="col-6"><div class="mb-2"><label for="iap-coord-name" class="iap-label">Đầu mối điều phối</label><input type="text" id="iap-coord-name" class="form-control"></div></div>
+                                  <div class="col-12"><div class="mb-2"><label for="iap-coord-mode" class="iap-label">Chế độ báo cáo</label><input type="text" id="iap-coord-mode" class="form-control"></div></div>
+                                  <div class="col-12"><div class="h-100 d-flex flex-column"><label for="iap-coord-partners" class="iap-label">Đơn vị phối hợp</label><textarea id="iap-coord-partners" class="form-control flex-grow-1" rows="2"></textarea></div></div>
+                              </div>
+                          </div>
+                      </div>
+                  </div>
+               </div>
+
+               <div class="resource-bottom-section">
+                  <div class="card iap-card h-100">
+                      <div class="iap-card-header d-flex justify-content-between align-items-center bg-light text-dark">
+                          <span><i class='bx bx-box'></i> VI. HẬU CẦN </span>
+                          <button class="btn btn-sm btn-primary fw-bold shadow-sm" onclick="addLogisticsRow()">+ Thêm dòng</button>
+                      </div>
+                      <div class="iap-card-body p-0">
+                          <table class="table table-bordered mb-0 table-hover table-striped">
+                              <thead class="bg-white text-center align-middle text-secondary" style="height: 45px;">
+                                <tr>
+                                  <th width="30%">Tên vật tư / Trang thiết bị</th>
+                                  <th width="12%">Số lượng</th>
+                                  <th width="10%">Đơn vị</th>
+                                  <th width="45%">Ghi chú / Mục đích sử dụng</th>
+                                  <th width="3%"></th>
+                                </tr>
+                              </thead>
+                              <tbody id="iap-logistics-body"></tbody>
+                          </table>
+                          <div class="p-5 text-center text-muted" id="iap-logistics-empty" style="display:none">
+                             Chưa có yêu cầu hậu cần nào.
+                          </div>
+                      </div>
+                  </div>
+               </div>
+
+             </div>
+          </div>
+
+          <div class="tab-pane fade h-100 overflow-auto" id="tab-approval">
+             <div class="container py-4" style="max-width: 900px;">
+                 <div class="card iap-card">
+                     <div class="iap-card-header text-center fs-6 py-3 bg-light text-dark border-bottom">VII. THÔNG TIN HÀNH CHÍNH & PHÊ DUYỆT</div>
+                     <div class="iap-card-body p-5">
+                         <div class="row g-4">
+                             <div class="col-12"><label for="iap-lead-unit" class="iap-label">Đơn vị chủ trì</label><input type="text" id="iap-lead-unit" class="form-control" placeholder="Nhập đơn vị chủ trì (VD: Đội RRT HCDC)..."></div>
+                             <div class="col-6"><label for="iap-part-internal" class="iap-label">Khoa/phòng chuyên môn HCDC</label><textarea id="iap-part-internal" class="form-control" rows="3"></textarea></div>
+                             <div class="col-6"><label for="iap-part-external" class="iap-label">Đơn vị khác</label><textarea id="iap-part-external" class="form-control" rows="3"></textarea></div>
+                             <div class="col-12"><hr class="my-2 opacity-25"></div>
+                             <div class="col-6"><label for="iap-approver-name" class="iap-label">Người phê duyệt</label><input type="text" id="iap-approver-name" class="form-control"></div>
+                             <div class="col-6"><label for="iap-approver-title" class="iap-label">Chức vụ</label><input type="text" id="iap-approver-title" class="form-control"></div>
+                             <div class="col-4"><label for="iap-date-from" class="iap-label">Áp dụng IAP từ ngày</label><input type="date" id="iap-date-from" class="form-control"></div>
+                             <div class="col-4"><label for="iap-date-to" class="iap-label">Đến ngày</label><input type="date" id="iap-date-to" class="form-control"></div>
+                             <div class="col-4"><label for="iap-version" class="iap-label">Phiên bản</label><input type="text" id="iap-version" class="form-control text-center fw-bold text-primary" readonly></div>
+                         </div>
+                     </div>
+                 </div>
+             </div>
+          </div>
+
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="modal-confirm-delete" tabindex="-1" aria-hidden="true" style="z-index: 1060;">
+  <div class="modal-dialog modal-dialog-centered" style="max-width: 380px;"> <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
+      
+      <div class="bg-danger" style="height: 6px;"></div>
+
+      <div class="modal-body p-4 text-center">
+        <div class="mb-3 d-inline-flex align-items-center justify-content-center bg-danger bg-opacity-10 text-danger rounded-circle" style="width: 70px; height: 70px;">
+          <i class='bx bx-trash' style="font-size: 32px;"></i>
+        </div>
+
+        <h5 class="fw-bold mb-2 text-dark">Xác nhận xóa dữ liệu?</h5>
+        
+        <p class="text-muted small mb-4 px-3" style="line-height: 1.5;">
+          Bạn đang thực hiện xóa <b>Mục tiêu</b> này cùng toàn bộ các hoạt động bên trong. Hành động này <span class="text-danger fw-bold">không thể hoàn tác</span>.
+        </p>
+        
+        <div class="d-flex gap-2 justify-content-center">
+          <button type="button" class="btn btn-light fw-bold w-50 py-2 rounded-3 text-secondary" data-bs-dismiss="modal">
+            Quay lại
+          </button>
+          <button type="button" class="btn btn-danger fw-bold w-50 py-2 rounded-3 shadow-sm" id="btn-confirm-delete-yes">
+            <i class='bx bx-trash me-1'></i> Xóa ngay
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+  <div id="modal-change-password" class="modal fade" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form id="form-change-password">
+        <input type="text" id="lib-user-hidden" name="username" style="display:none;" autocomplete="username">
+        <div class="modal-header">
+          <h5 class="modal-title"><i class='bx bx-key'></i> Đổi mật khẩu</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        
+      <div class="mb-3">
+        <label for="old-pass" class="form-label">Mật khẩu hiện tại</label>
+        <div class="input-group">
+          <input type="password" id="old-pass" name="old-pass" class="form-control" autocomplete="current-password" placeholder="Nhập mật khẩu đang dùng">
+          <button class="btn btn-outline-secondary" type="button" onclick="togglePassword('old-pass', this)">
+            <i class='bx bx-show'></i>
+          </button>
+        </div>
+      </div>
+
+      <div class="mb-3">
+        <label for="new-pass" class="form-label">Mật khẩu mới</label>
+        <div class="input-group">
+          <input type="password" id="new-pass" name="new-pass" class="form-control" autocomplete="new-password" placeholder="Tối thiểu 6 ký tự">
+          <button class="btn btn-outline-secondary" type="button" onclick="togglePassword('new-pass', this)">
+            <i class='bx bx-show'></i>
+          </button>
+        </div>
+      </div>
+
+      <div class="mb-3">
+        <label for="confirm-pass" class="form-label">Xác nhận mật khẩu mới</label>
+        <div class="input-group">
+          <input type="password" id="confirm-pass" name="confirm-pass" class="form-control" autocomplete="new-password" placeholder="Nhập lại mật khẩu mới">
+          <button class="btn btn-outline-secondary" type="button" onclick="togglePassword('confirm-pass', this)">
+            <i class='bx bx-show'></i>
+          </button>
+        </div>
+      </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Hủy</button>
+          <button type="submit" class="btn btn-primary">XÁC NHẬN</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+<!-- Image Modal/Lightbox -->
+<div id="image-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 9999; justify-content: center; align-items: center;" onclick="this.style.display='none'">
+  <img id="image-modal-img" src="" style="max-width: 90%; max-height: 90%; object-fit: contain; border-radius: 8px;">
+  <button onclick="document.getElementById('image-modal').style.display='none'" 
+          style="position: absolute; top: 20px; right: 40px; background: white; border: none; width: 40px; height: 40px; border-radius: 50%; cursor: pointer; font-size: 24px; line-height: 1;">×</button>
+</div>
+<!-- ============================================================ -->
+<!-- MODAL: NHẬP YÊU CẦU CHỈNH SỬA (Admin dùng) -->
+<!-- ============================================================ -->
+<div class="modal fade" id="modal-edit-requirements" tabindex="-1" aria-hidden="true">
+<div class="modal-dialog modal-dialog-centered">
+  <div class="modal-content">
+    <div class="modal-header bg-warning">
+      <h5 class="modal-title">
+        <i class='bx bx-edit'></i> Yêu cầu chỉnh sửa hồ sơ
+      </h5>
+      <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+    </div>
+    <div class="modal-body">
+      <div class="mb-3">
+        <label class="form-label fw-bold">
+          Nội dung cần chỉnh sửa: <span class="text-danger">*</span>
+        </label>
+        <textarea 
+          class="form-control" 
+          id="edit-requirements-text" 
+          rows="5"
+          placeholder="Ví dụ:
+- Số điện thoại không đúng định dạng
+- Thiếu thông tin khoa/phòng
+- Ngày sinh không hợp lệ
+- Vui lòng bổ sung giấy chứng nhận..."
+        ></textarea>
+        <small class="text-muted">
+          Mô tả chi tiết những thông tin cần sửa để người dùng biết cách chỉnh sửa.
+        </small>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+        Hủy
+      </button>
+      <button type="button" class="btn btn-warning" onclick="submitEditRequirements()">
+        <i class='bx bx-send'></i> Gửi yêu cầu
+      </button>
+    </div>
+  </div>
+</div>
+</div>
+<!-- Thêm dòng này TRƯỚC script.js -->
+<script src="auth-helpers.js"></script>
+<script src="utils/query-cache.js"></script>
+<script src="utils/batch-fetch.js"></script>
+<script src="utils/dom-render.js"></script>
+<script src="utils/error-handler.js"></script>
+<script src="utils/debounce.js"></script>
+<script src="script.js"></script>
+</body>
+</html>
