@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Thông báo hệ thống - RRT HCDC</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:'Lexend',system-ui,sans-serif;background:#006a75;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;color:#1f2937}
+    .card{background:#fff;border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.15);max-width:520px;width:100%;overflow:hidden;animation:slideUp .4s ease; text-align: center;}
+    @keyframes slideUp{from{opacity:0;transform:translateY(30px)}to{opacity:1;transform:translateY(0)}}
+    .header{background:#fd7e14;padding:24px;color:#fff}
+    .header h1{font-size:18px;font-weight:600;letter-spacing:1px;text-transform:uppercase}
+    .body{padding:32px}
+    #icon{font-size:64px;margin-bottom:16px;}
+    #badge{display:inline-block;padding:6px 16px;border-radius:20px;font-size:14px;font-weight:600;margin-bottom:16px}
+    #msg{background:#f3f4f6;padding:16px;border-radius:8px;font-size:15px;color:#374151;line-height:1.6;margin-bottom:24px;text-align: left; border-left: 4px solid #9ca3af;}
+    .footer{background:#f9fafb;padding:16px 24px;border-top:1px solid #e5e7eb;font-size:12px;color:#6b7280}
+    .btn{display:inline-block;padding:12px 24px;background:#fd7e14;color:#fff;text-decoration:none;border-radius:8px;font-weight:500;font-size:14px;transition:background .2s}
+    .btn:hover{background:#0284c7}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="header"><h1>HỆ THỐNG RRT - HCDC</h1></div>
+    <div class="body">
+      <div id="icon">⏳</div>
+      <div id="badge" style="background:#e5e7eb; color:#374151;">ĐANG XỬ LÝ...</div>
+      <div id="msg">Đang đồng bộ dữ liệu với máy chủ, vui lòng đợi trong giây lát...</div>
+      <a href="https://hcdc-ap.github.io/RRT/" class="btn">🏠 Về Trang chủ</a>
+    </div>
+    <div class="footer">
+      <p><strong>Trung tâm Kiểm soát Bệnh tật Thành phố Hồ Chí Minh</strong></p>
+      <p>Địa chỉ: 366A Âu Dương Lân, Phường Chánh Hưng, TP. Hồ Chí Minh, Việt Nam</p>
+      <p>Điện thoại: 0909 408 895</p>
+    </div>
+  </div>
+
+  <script>
+    // Tự động bắt thông số từ thanh địa chỉ để hiển thị
+    document.addEventListener("DOMContentLoaded", () => {
+      const params = new URLSearchParams(window.location.search);
+      const isSuccess = params.get('status') === 'true';
+      const msgText = params.get('msg') || "Không có thông báo.";
+      
+      const iconEl = document.getElementById('icon');
+      const badgeEl = document.getElementById('badge');
+      const msgEl = document.getElementById('msg');
+
+      msgEl.innerHTML = msgText;
+
+      if (isSuccess) {
+        iconEl.innerHTML = "✅";
+        badgeEl.innerHTML = "THÀNH CÔNG";
+        badgeEl.style.background = "#dcfce7";
+        badgeEl.style.color = "#16a34a";
+        msgEl.style.borderLeftColor = "#10b981";
+      } else {
+        iconEl.innerHTML = "❌";
+        badgeEl.innerHTML = "LỖI HỆ THỐNG";
+        badgeEl.style.background = "#fee2e2";
+        badgeEl.style.color = "#dc2626";
+        msgEl.style.borderLeftColor = "#ef4444";
+      }
+    });
+  </script>
+</body>
+</html>
