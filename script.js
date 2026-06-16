@@ -8104,20 +8104,26 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   }
 
-  // ==========================================
-  // 3. XỬ LÝ SỰ KIỆN SUBMIT FORM RRT (ĐÃ FIX - CHUẨN XÁC)
+// ==========================================
+  // 3. XỬ LÝ SỰ KIỆN SUBMIT FORM RRT (HOÀN CHỈNH & BỌC THÉP)
   // ==========================================
   if (reportForm) {
     reportForm.addEventListener('submit', async function (e) {
       e.preventDefault();
 
-      if (isSubmitting) return; // Chống click nhiều lần
-      isSubmitting = true;
+      if (window.isSubmitting) return; // Chống click nhiều lần
+      window.isSubmitting = true;
 
       const submitBtn = reportForm.querySelector('button[type="submit"]');
       if (submitBtn) submitBtn.disabled = true;
 
-      if (typeof showLoadingSpinner === 'function') showLoadingSpinner(true);
+      // Hàm ẩn/hiện loading an toàn (fallback)
+      const toggleLoading = (isLoading) => {
+        if (typeof showLoadingSpinner === 'function') showLoadingSpinner(isLoading);
+        else if (typeof customShowLoading === 'function') customShowLoading(isLoading);
+      };
+
+      toggleLoading(true);
 
       try {
         // =========================================================
@@ -8126,9 +8132,11 @@ document.addEventListener('DOMContentLoaded', function () {
         const {
           data: { user },
           error: userErr,
-        } = await supabaseClient.auth.getUser();
-        if (userErr || !user)
+        } = await window.supabaseClient.auth.getUser();
+        
+        if (userErr || !user) {
           throw new Error('Vui lòng đăng nhập lại để gửi biểu mẫu.');
+        }
 
         // NẾU LÀ ADMIN ĐANG EDIT: Lấy ID của người đang được edit từ biến toàn cục
         // NẾU LÀ USER TỰ TẠO/EDIT: Dùng ID của chính họ
@@ -8150,30 +8158,24 @@ document.addEventListener('DOMContentLoaded', function () {
         });
 
         let autoMaXa = null;
-        if (
-          userLoc.lat &&
-          userLoc.lng &&
-          typeof window.findWardByCoordinates === 'function'
-        ) {
-          if (!window.appState.mapGeoData) {
+        if (userLoc.lat && userLoc.lng && typeof window.findWardByCoordinates === 'function') {
+          if (!window.appState?.mapGeoData) {
             console.warn('⚠️ GeoJSON chưa sẵn sàng, đang tải lại...');
-            await window.loadGeoJSON();
+            if (typeof window.loadGeoJSON === 'function') await window.loadGeoJSON();
           }
-          const wardInfo = window.findWardByCoordinates(
-            userLoc.lat,
-            userLoc.lng
-          );
-          if (wardInfo) {
-            autoMaXa = wardInfo.maXa;
-            console.log(`📍 Tìm thấy mã xã: ${wardInfo.tenXa} (${autoMaXa})`);
+          if (window.appState?.mapGeoData) {
+              const wardInfo = window.findWardByCoordinates(userLoc.lat, userLoc.lng);
+              if (wardInfo) {
+                autoMaXa = wardInfo.maXa;
+                console.log(`📍 Tìm thấy mã xã: ${wardInfo.tenXa} (${autoMaXa})`);
+              }
           }
         }
 
-                // =========================================================
-        // 3. THU THẬP DỮ LIỆU CƠ BẢN (profiles)
         // =========================================================
-        const getVal = (id) =>
-          document.getElementById(id)?.value?.trim() || null;
+        // 3. THU THẬP DỮ LIỆU CƠ BẢN (KHÔNG GÁN ROLE & STATUS Ở ĐÂY)
+        // =========================================================
+        const getVal = (id) => document.getElementById(id)?.value?.trim() || null;
         const finalMaXa = autoMaXa || getVal('wardCode') || getVal('ward');
 
         const profileData = {
@@ -8195,49 +8197,57 @@ document.addEventListener('DOMContentLoaded', function () {
           academic_level: getVal('academicLevel'),
           languages: getVal('language'),
           languages_level: getVal('languageLevel'),
-          role: 'user',
-          approval_status: 'pending', // Luôn đưa về pending khi submit (cần Admin duyệt lại)
           updated_at: new Date().toISOString(),
         };
 
         if (!profileData.full_name) throw new Error('Vui lòng nhập Họ Tên.');
         if (!profileData.email) throw new Error('Vui lòng nhập Email.');
 
+        // =========================================================
+        // 4. XỬ LÝ ROLE VÀ STATUS (TRÁNH ADMIN BỊ HẠ CẤP KHI SỬA FORM)
+        // =========================================================
+        if (!window.isEditMode) {
+          // 4A. Nếu là tạo mới hoàn toàn
+          profileData.role = 'user';
+          profileData.approval_status = 'pending';
+        } else {
+          // 4B. Nếu là đang cập nhật (Edit Mode)
+          const currentUserRole = window.userSession?.role?.toLowerCase() || 'user';
+          const isAdminOrManager = currentUserRole === 'admin' || currentUserRole === 'manager';
+
+          // Nếu người đang bấm nút "Lưu" KHÔNG PHẢI là Admin/Manager (tức là User tự vào sửa hồ sơ của mình)
+          // Thì trạng thái hồ sơ bị đẩy về 'pending' để bắt Admin duyệt lại.
+          if (!isAdminOrManager) {
+            profileData.approval_status = 'pending';
+          }
+          // Tuyệt đối không can thiệp vào cột `role` để giữ nguyên quyền hiện tại trên Database
+        }
+
         // ==========================================
-        // 4. KIỂM TRA EMAIL TRÙNG (AN TOÀN HƠN)
+        // 5. KIỂM TRA EMAIL TRÙNG (AN TOÀN HƠN)
         // ==========================================
         const currentEmail = profileData.email.toLowerCase().trim();
 
-        // Quét DB để xem email này đã tồn tại chưa
-        const { data: existingUser, error: emailCheckErr } =
-          await supabaseClient
-            .from('profiles')
-            .select('id, full_name, email')
-            .eq('email', currentEmail)
-            .maybeSingle();
+        const { data: existingUser, error: emailCheckErr } = await window.supabaseClient
+          .from('profiles')
+          .select('id, full_name, email')
+          .eq('email', currentEmail)
+          .maybeSingle();
 
-        if (emailCheckErr)
-          console.warn('⚠️ Lỗi kiểm tra email:', emailCheckErr.message);
+        if (emailCheckErr) console.warn('⚠️ Lỗi kiểm tra email:', emailCheckErr.message);
 
         // Nếu tìm thấy một người xài email này, VÀ người đó KHÔNG PHẢI LÀ targetProfileId đang sửa
         if (existingUser && existingUser.id !== targetProfileId) {
-          const holderName =
-            existingUser.full_name || existingUser.email || 'ai đó';
-          throw new Error(
-            `Email "${profileData.email}" đã được sử dụng bởi ${holderName}!`
-          );
+          const holderName = existingUser.full_name || existingUser.email || 'ai đó';
+          throw new Error(`Email "${profileData.email}" đã được sử dụng bởi ${holderName}!`);
         }
 
         // =========================================================
-        // 5. THU THẬP KỸ NĂNG (rrt_qualifications)
+        // 6. THU THẬP KỸ NĂNG (rrt_qualifications)
         // =========================================================
         const getSkillData = (skillName) => {
-          const radio = document.querySelector(
-            `input[name="${skillName}"]:checked`
-          );
-          const hasSkill = radio
-            ? radio.value === 'Có' || radio.value === 'Yes'
-            : false;
+          const radio = document.querySelector(`input[name="${skillName}"]:checked`);
+          const hasSkill = radio ? radio.value === 'Có' || radio.value === 'Yes' : false;
           let levelValue = null;
           if (hasSkill) {
             const levelSelect = document.getElementById(`${skillName}_level`);
@@ -8274,29 +8284,25 @@ document.addEventListener('DOMContentLoaded', function () {
         };
 
         // =========================================================
-        // 6. XỬ LÝ FILE ĐÍNH KÈM (Supabase Storage)
+        // 7. XỬ LÝ FILE ĐÍNH KÈM (Supabase Storage)
         // =========================================================
-        const fileInput = document.querySelector(
-          'input[type="file"][name="reportFile"]'
-        );
+        const fileInput = document.querySelector('input[type="file"][name="reportFile"]');
         if (fileInput && fileInput.files.length > 0) {
           const file = fileInput.files[0];
           const MAX_SIZE = 10 * 1024 * 1024; // 10MB
-          if (file.size > MAX_SIZE)
-            throw new Error('File quá lớn. Vui lòng chọn file dưới 10MB.');
+          if (file.size > MAX_SIZE) throw new Error('File quá lớn. Vui lòng chọn file dưới 10MB.');
 
           const fileExt = file.name.split('.').pop();
           const fileName = `profile_${targetProfileId}_${Date.now()}.${fileExt}`;
           const filePath = `resumes/${fileName}`;
 
-          const { error: uploadError } = await supabaseClient.storage
+          const { error: uploadError } = await window.supabaseClient.storage
             .from('documents')
             .upload(filePath, file, { cacheControl: '3600', upsert: false });
 
-          if (uploadError)
-            throw new Error('Lỗi upload file: ' + uploadError.message);
+          if (uploadError) throw new Error('Lỗi upload file: ' + uploadError.message);
 
-          const { data: publicUrlData } = supabaseClient.storage
+          const { data: publicUrlData } = window.supabaseClient.storage
             .from('documents')
             .getPublicUrl(filePath);
 
@@ -8304,58 +8310,63 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         // =========================================================
-        // 7. GỬI DỮ LIỆU LÊN SUPABASE (UPDATE)
+        // 8. GỬI DỮ LIỆU LÊN SUPABASE (UPDATE HOẶC UPSERT)
         // =========================================================
-        // Nếu là edit mode thì update, nếu tạo mới (chưa có) thì nên dùng upsert
         if (window.isEditMode) {
-          const { error: errProfile } = await supabaseClient
+          const { error: errProfile } = await window.supabaseClient
             .from('profiles')
             .update(profileData)
             .eq('id', targetProfileId);
 
-          if (errProfile)
-            throw new Error('Lỗi cập nhật hồ sơ: ' + errProfile.message);
+          if (errProfile) throw new Error('Lỗi cập nhật hồ sơ: ' + errProfile.message);
         } else {
           // Với tài khoản tự cập nhật lần đầu
-          const { error: errProfile } = await supabaseClient
+          const { error: errProfile } = await window.supabaseClient
             .from('profiles')
             .upsert(profileData, { onConflict: 'id' });
 
-          if (errProfile)
-            throw new Error('Lỗi lưu mới hồ sơ: ' + errProfile.message);
+          if (errProfile) throw new Error('Lỗi lưu mới hồ sơ: ' + errProfile.message);
         }
 
-        const { error: errQual } = await supabaseClient
+        // Lưu kỹ năng
+        const { error: errQual } = await window.supabaseClient
           .from('rrt_qualifications')
           .upsert(qualData, { onConflict: 'profile_id' });
 
         if (errQual) throw new Error('Lỗi lưu kỹ năng: ' + errQual.message);
 
         // =========================================================
-        // 8. HOÀN TẤT
+        // 9. HOÀN TẤT
         // =========================================================
-        showToast('✅ Đã lưu hồ sơ RRT thành công!', 'success');
+        if (typeof showToast === 'function') {
+            showToast('✅ Đã lưu hồ sơ RRT thành công!', 'success');
+        }
 
-        if (typeof closeModal === 'function') {
-          closeModal('modal-report-form');
+        // Đóng form
+        if (typeof window.closeModal === 'function') {
+          window.closeModal('modal-report-form');
         } else {
           const modalEl = document.getElementById('modal-report-form');
           if (modalEl && typeof bootstrap !== 'undefined') {
-            const modalInstance = bootstrap.Modal.getInstance(modalEl);
-            if (modalInstance) modalInstance.hide();
+            const modalInstance = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
+            modalInstance.hide();
           }
         }
 
+        // Refresh bảng dữ liệu
         if (typeof window.renderRRTTable === 'function') {
           await window.renderRRTTable();
         }
+
       } catch (err) {
         console.error('❌ Lỗi khi submit Form:', err);
-        showToast(err.message, 'error');
+        if (typeof showToast === 'function') showToast(err.message, 'error');
+        else alert('Lỗi: ' + err.message);
       } finally {
-        isSubmitting = false;
+        // Tắt vòng quay loading
+        window.isSubmitting = false;
         if (submitBtn) submitBtn.disabled = false;
-        if (typeof hideLoadingSpinner === 'function') hideLoadingSpinner();
+        toggleLoading(false);
       }
     });
   }
