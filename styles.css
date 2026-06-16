@@ -907,9 +907,7 @@
   --invalid-color: #d63114;
 }
 #view-login.sunset {
-  --background-image: url(https://github.com/hcdc-ap/images-host/blob/main/images/sunset%20(
-      1
-    ).jpg?raw=true);
+  --background-image: url(https://github.com/hcdc-ap/images-host/blob/main/images/sunset.jpg?raw=true);
   --primary-color: #262523;
   --secondary-color: #b98e66;
   --body-color: #9b4e22;
@@ -920,9 +918,7 @@
   --invalid-color: #f54040;
 }
 #view-login.mountain {
-  --background-image: url(https://github.com/hcdc-ap/images-host/blob/main/images/moutain%20(
-      1
-    ).jpg?raw=true);
+  --background-image: url(https://github.com/hcdc-ap/images-host/blob/main/images/moutain.jpg?raw=true);
   --primary-color: #f2eeeb;
   --secondary-color: #a57c6e;
   --body-color: #08080d;
