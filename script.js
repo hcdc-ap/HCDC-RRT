@@ -8172,12 +8172,12 @@ document.addEventListener('DOMContentLoaded', function () {
         // =========================================================
         // 3. THU THẬP DỮ LIỆU CƠ BẢN (profiles)
         // =========================================================
-        const getVal = (id) =>
-          document.getElementById(id)?.value?.trim() || null;
+        const getVal = (id) => document.getElementById(id)?.value?.trim() || null;
         const finalMaXa = autoMaXa || getVal('wardCode') || getVal('ward');
 
+        // BƯỚC A: Chỉ thu thập các trường thông tin cá nhân (Tuyệt đối không đụng tới Role ở đây)
         const profileData = {
-          id: targetProfileId, // DÙNG ID ĐÃ ĐƯỢC XÁC ĐỊNH Ở BƯỚC 1
+          id: targetProfileId, 
           full_name: getVal('fullName'),
           gender: getVal('gender'),
           dob: getVal('dob'),
@@ -8195,10 +8195,29 @@ document.addEventListener('DOMContentLoaded', function () {
           academic_level: getVal('academicLevel'),
           languages: getVal('language'),
           languages_level: getVal('languageLevel'),
-          role: 'user',
-          approval_status: 'pending', // Luôn đưa về pending khi submit (cần Admin duyệt lại)
           updated_at: new Date().toISOString(),
         };
+
+        // BƯỚC B: XỬ LÝ ROLE VÀ STATUS TÙY THEO NGỮ CẢNH (Tạo mới hay Cập nhật)
+        if (!window.isEditMode) {
+            // Trường hợp 1: Tạo mới hoàn toàn -> Mặc định là user thường và chờ duyệt
+            profileData.role = 'user';
+            profileData.approval_status = 'pending';
+        } else {
+            // Trường hợp 2: Đang cập nhật hồ sơ cũ (Edit)
+            const currentUserRole = window.userSession?.role?.toLowerCase() || 'user';
+            const isAdminOrManager = currentUserRole === 'admin' || currentUserRole === 'manager';
+
+            // Nếu người đang sửa KHÔNG PHẢI là Admin/Manager (tức là User tự sửa hồ sơ của mình)
+            // -> Đẩy trạng thái về pending để Admin duyệt lại nội dung mới.
+            // Nếu Admin/Manager đang sửa (sửa cho mình hoặc sửa hộ người khác) -> Không can thiệp approval_status.
+            if (!isAdminOrManager) {
+                 profileData.approval_status = 'pending';
+            }
+            
+            // TUYỆT ĐỐI KHÔNG gán profileData.role = 'user' ở khối Edit này 
+            // để bảo toàn quyền hiện tại trên CSDL!
+        }
 
         if (!profileData.full_name) throw new Error('Vui lòng nhập Họ Tên.');
         if (!profileData.email) throw new Error('Vui lòng nhập Email.');
