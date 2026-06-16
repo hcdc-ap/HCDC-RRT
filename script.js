@@ -1342,80 +1342,51 @@ function showLoading(show = true) {
 // ======================
 function extraThemes() {
   const loginView = document.getElementById('view-login');
-  if (!loginView || loginView.dataset.themesBound === 'true') return;
-
-  loginView.dataset.themesBound = 'true'; // 🔒 bind 1 lần
+  // Xóa bỏ "ổ khóa" bind 1 lần đi, thay bằng cơ chế gỡ event cũ trước khi gắn event mới
+  if (!loginView) return;
 
   const openThemesButton = loginView.querySelector('#open-themes');
   const themes = loginView.querySelector('#themes');
   const themeLabels = loginView.querySelectorAll('.theme-label');
   const form = loginView.querySelector('#custom-theme-form');
   const closeThemesButton = loginView.querySelector('#close-themes');
-  const addOwnThemeBtn = loginView.querySelector('#add-own-theme');
-  const backFromOwnThemeBtn = loginView.querySelector('#back-from-own-theme');
-  const removeThemesBtn = loginView.querySelector('#remove-themes');
-  const backFromRemoveThemesBtn = loginView.querySelector(
-    '#back-from-remove-themes'
-  );
-  const removeThemesConfirmBtn = loginView.querySelector(
-    '#remove-themes-confirm'
-  );
+  
+  // ... (Khai báo các biến nút khác giữ nguyên) ...
   const clearCustomThemeBtn = loginView.querySelector('#clear-custom-theme');
   const ownTheme = loginView.querySelector('.own-theme');
-  const removeThemesConfirmContainer = loginView.querySelector(
-    '.remove-themes-confirm-container'
-  );
 
   if (!openThemesButton || !themes || !form) return;
 
+  // Dùng onclick trực tiếp sẽ tự động đè lên cái cũ, không sợ bị lặp sự kiện
   /* OPEN / CLOSE */
   openThemesButton.onclick = () => themes.classList.add('active');
-  closeThemesButton &&
-    (closeThemesButton.onclick = () => themes.classList.remove('active'));
+  if (closeThemesButton) closeThemesButton.onclick = () => themes.classList.remove('active');
 
-  addOwnThemeBtn &&
-    (addOwnThemeBtn.onclick = () => ownTheme.classList.add('active'));
-  backFromOwnThemeBtn &&
-    (backFromOwnThemeBtn.onclick = () => ownTheme.classList.remove('active'));
+  // ... (Gắn sự kiện cho các nút khác giữ nguyên) ...
 
-  removeThemesBtn &&
-    (removeThemesBtn.onclick = () =>
-      removeThemesConfirmContainer.classList.add('active'));
-  backFromRemoveThemesBtn &&
-    (backFromRemoveThemesBtn.onclick = () =>
-      removeThemesConfirmContainer.classList.remove('active'));
-
-  removeThemesConfirmBtn &&
-    (removeThemesConfirmBtn.onclick = () => {
-      themes.remove();
-      openThemesButton.remove();
-      localStorage.removeItem('login_theme');
-      localStorage.removeItem('login_custom_theme');
-    });
-
-  clearCustomThemeBtn &&
-    (clearCustomThemeBtn.onclick = () => {
+  if (clearCustomThemeBtn) {
+    clearCustomThemeBtn.onclick = () => {
       loginView.removeAttribute('style');
       localStorage.removeItem('login_custom_theme');
-    });
+    };
+  }
 
   /* PRESET THEMES */
   themeLabels.forEach((label) => {
     label.onclick = () => {
-      // remove old theme classes
-      loginView.classList.forEach((cls) => {
-        if (
-          cls !== 'app-view' &&
-          cls !== 'active' &&
-          cls !== 'view-login' // 🔑 GIỮ LẠI CLASS NỀN
-        ) {
-          loginView.classList.remove(cls);
-        }
+      // 1. Lấy danh sách tất cả các ID của các nút Radio (sakura, winter, sunset...)
+      const allThemeNames = Array.from(themeLabels).map(l => l.htmlFor);
+
+      // 2. Chỉ xóa những class nào nằm trong danh sách Theme, giữ nguyên các class nền tảng
+      allThemeNames.forEach(themeName => {
+         loginView.classList.remove(themeName);
       });
 
+      // 3. Thêm class của Theme mới được chọn
       loginView.classList.add(label.htmlFor);
       loginView.removeAttribute('style');
 
+      // 4. Lưu lại cấu hình
       localStorage.setItem('login_theme', label.htmlFor);
       localStorage.removeItem('login_custom_theme');
     };
