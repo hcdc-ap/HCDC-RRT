@@ -12,6 +12,26 @@
   const SUPABASE_ANON_KEY =
     'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN4empieWdpb3dwc2N5aGlmZnFjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkyMTI4MjEsImV4cCI6MjA5NDc4ODgyMX0.Qfz4b4GBDAQV4aO-ca1WFKUM1lbCWqjhItkm1YCnm1k';
 
+    // ========================================================================
+// BẢO VỆ TOÀN CỤC: TỰ ĐỘNG TẮT LOADING KHI CÓ LỖI CHÍNH MẠNG
+// ========================================================================
+const emergencyStopLoading = () => {
+  if (typeof hideLoadingSpinner === 'function') hideLoadingSpinner();
+  if (typeof customShowLoading === 'function') customShowLoading(false);
+  document.querySelectorAll('.loading, #loading-spinner, .spinner-container').forEach(el => {
+      el.style.display = 'none';
+  });
+};
+
+window.addEventListener('error', function (event) {
+  console.error('🔥 Bắt được lỗi toàn cục (Syntax/Reference):', event.error);
+  emergencyStopLoading();
+});
+
+window.addEventListener('unhandledrejection', function (event) {
+  console.error('🔥 Bắt được lỗi Promise (Network/Supabase):', event.reason);
+  emergencyStopLoading();
+});
   // ✅ Kiểm tra SDK đã load chưa
   if (typeof window.supabase?.createClient !== 'function') {
     console.warn('⏳ Supabase SDK not loaded, waiting...');
@@ -425,9 +445,7 @@ window.enterDashboard = async function () {
 
   // Khai báo các biến an toàn để sử dụng trong Batch Fetch
   const currentUserId = window.userSession?.id;
-  const currentUserRole = (window.userSession?.role || 'user')
-    .toLowerCase()
-    .trim();
+  const currentUserRole = (window.userSession?.role || 'user').toLowerCase().trim();
   const isAdmin = currentUserRole === 'admin';
 
   // ✅ 2. PHÂN QUYỀN UI NGAY LẬP TỨC TRƯỚC KHI TẢI DỮ LIỆU
@@ -456,7 +474,6 @@ window.enterDashboard = async function () {
       deploymentRes,
       notificationsRes,
     ] = await batchFetch([
-      // Profiles - LỌC THEO ROLE
       // Profiles - LỌC THEO ROLE
       () =>
         // ✅ BỌC THÉP CACHE KEY: Đính kèm Role vào tên Cache để không bị xài nhầm
@@ -561,17 +578,39 @@ window.enterDashboard = async function () {
     }
 
     // ✅ 9. START REALTIME SYNC (sau khi load xong)
-    if (
-      window.RealtimeManager &&
-      typeof window.RealtimeManager.start === 'function'
-    ) {
+    if (window.RealtimeManager && typeof window.RealtimeManager.start === 'function') {
       window.RealtimeManager.start();
     }
   } catch (error) {
-    console.error('❌ Dashboard Load Error:', error);
-    if (typeof showToast === 'function') {
-      showToast('Lỗi tải dashboard: ' + error.message, 'error');
+    console.error('❌ Lỗi khởi tạo Dashboard:', error);
+    
+    // -----------------------------------------------------
+    // CƠ CHẾ TỰ PHỤC HỒI: Tự động dọn rác và bắt đăng nhập lại
+    // -----------------------------------------------------
+    // 1. Xóa sạch các bộ nhớ có nguy cơ gây lỗi
+    window.userSession = null;
+    localStorage.removeItem('userSession');
+    
+    if (typeof QueryCache !== 'undefined' && QueryCache.cache) {
+        QueryCache.cache.clear();
     }
+    
+    // 2. Báo lỗi cho người dùng
+    if (typeof showToast === 'function') {
+      showToast('Dữ liệu phiên làm việc bị lỗi. Đang tải lại...', 'error');
+    } else {
+      alert('Dữ liệu phiên làm việc bị lỗi. Đang tải lại...');
+    }
+
+    // 3. Đưa người dùng về nơi an toàn (Trang Đăng nhập)
+    setTimeout(() => {
+        if (typeof window.go === 'function') {
+            window.go('login');
+        } else {
+            window.location.reload(); // Ép F5 bằng code nếu kẹt quá nặng
+        }
+    }, 1500);
+
   } finally {
     if (typeof customShowLoading === 'function') customShowLoading(false);
   }
