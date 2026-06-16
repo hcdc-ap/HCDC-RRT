@@ -130,6 +130,20 @@ window.go = function (view) {
       if (typeof extraThemes === 'function') extraThemes();
       if (typeof restoreLoginTheme === 'function') restoreLoginTheme();
     }, 0);
+  } else if (view === 'datatable') {
+    // ✅ CHỐNG LỖI DATATABLE KHÔNG LOAD DỮ LIỆU KHI BỊ ẨN
+    setTimeout(() => {
+      if (typeof window.renderRRTTable === 'function') {
+        window.renderRRTTable();
+      }
+      // Ép DataTable tính toán lại kích thước hiển thị
+      if (
+        typeof $ !== 'undefined' &&
+        $.fn.DataTable.isDataTable('#rrt-table')
+      ) {
+        $('#rrt-table').DataTable().columns.adjust().draw();
+      }
+    }, 150); // Đợi 150ms cho CSS Transition kịp chạy xong
   }
 };
 // ========================================================================
@@ -221,7 +235,6 @@ window.supabaseClient.auth.onAuthStateChange(async (event, session) => {
       if (typeof window.go === 'function') window.go('login');
     }
   } else if (event === 'SIGNED_OUT') {
-    // Dọn dẹp sạch sẽ nhà cửa khi Đăng xuất
     window.userSession = null;
     window.supabaseSession = null;
     localStorage.removeItem('userSession');
@@ -230,6 +243,12 @@ window.supabaseClient.auth.onAuthStateChange(async (event, session) => {
       window.appState.incidents = [];
       window.appState.appInitialized = false;
     }
+
+    // ✅ DỌN DẸP SẠCH CACHE ĐỂ ĐÓN USER MỚI
+    if (typeof QueryCache !== 'undefined' && QueryCache.cache) {
+      QueryCache.cache.clear();
+    }
+
     if (typeof window.go === 'function') window.go('login');
   }
 });
@@ -438,15 +457,17 @@ window.enterDashboard = async function () {
       notificationsRes,
     ] = await batchFetch([
       // Profiles - LỌC THEO ROLE
+      // Profiles - LỌC THEO ROLE
       () =>
-        QueryCache.fetch('profiles:all', async () => {
+        // ✅ BỌC THÉP CACHE KEY: Đính kèm Role vào tên Cache để không bị xài nhầm
+        QueryCache.fetch(`profiles:${currentUserRole}`, async () => {
           let query = window.supabaseClient
             .from('profiles')
             .select(
               'id, email, full_name, role, team, position, deployment_status, approval_status'
             );
 
-          // ✅ FIX: User thường chỉ lấy profile của chính mình
+          // FIX: User thường chỉ lấy profile của chính mình
           if (!isAdmin && currentUserId) {
             query = query.eq('id', currentUserId);
             console.log('🔐 User mode: Only fetching current user profile');
@@ -743,8 +764,8 @@ document.addEventListener('DOMContentLoaded', function () {
 
     try {
       console.log('🔐 Đang đăng nhập với Supabase...');
+      await window.supabaseClient.auth.signOut();
 
-      // 1. Đăng nhập với Supabase Auth
       const { data: authData, error: authError } =
         await window.supabaseClient.auth.signInWithPassword({
           email: email,
@@ -752,25 +773,25 @@ document.addEventListener('DOMContentLoaded', function () {
         });
 
       if (authError) {
-        throw new Error('Sai email hoặc mật khẩu!');
+        throw new Error(authError.message || 'Sai email hoặc mật khẩu!');
       }
 
-      // 2. Load profile từ DB (dùng helper mới)
-      const profileLoaded = await window.loadUserProfile();
-      if (!profileLoaded) {
-        console.warn('⚠️ Không load được profile, nhưng vẫn cho vào dashboard');
+      // 1. Tải Profile từ DB và lưu vào Session
+      await window.loadUserProfile();
+
+      // ✅ 2. ÉP PHÂN QUYỀN NGAY LẬP TỨC bằng profile vừa tải trước khi mở cửa
+      if (window.userSession && typeof applyRolePermissions === 'function') {
+        applyRolePermissions(window.userSession.role);
       }
 
       // 3. Show success + chuyển trang
       if (typeof showToast === 'function')
         showToast('Đăng nhập thành công!', 'success');
 
-      // Chuyển về dashboard
       if (typeof window.go === 'function') {
         window.go('dashboard');
       }
 
-      // Gọi enterDashboard để load dữ liệu
       if (typeof window.enterDashboard === 'function') {
         await window.enterDashboard();
       }
@@ -1350,7 +1371,7 @@ function extraThemes() {
   const themeLabels = loginView.querySelectorAll('.theme-label');
   const form = loginView.querySelector('#custom-theme-form');
   const closeThemesButton = loginView.querySelector('#close-themes');
-  
+
   // ... (Khai báo các biến nút khác giữ nguyên) ...
   const clearCustomThemeBtn = loginView.querySelector('#clear-custom-theme');
   const ownTheme = loginView.querySelector('.own-theme');
@@ -1360,7 +1381,8 @@ function extraThemes() {
   // Dùng onclick trực tiếp sẽ tự động đè lên cái cũ, không sợ bị lặp sự kiện
   /* OPEN / CLOSE */
   openThemesButton.onclick = () => themes.classList.add('active');
-  if (closeThemesButton) closeThemesButton.onclick = () => themes.classList.remove('active');
+  if (closeThemesButton)
+    closeThemesButton.onclick = () => themes.classList.remove('active');
 
   // ... (Gắn sự kiện cho các nút khác giữ nguyên) ...
 
@@ -1375,11 +1397,11 @@ function extraThemes() {
   themeLabels.forEach((label) => {
     label.onclick = () => {
       // 1. Lấy danh sách tất cả các ID của các nút Radio (sakura, winter, sunset...)
-      const allThemeNames = Array.from(themeLabels).map(l => l.htmlFor);
+      const allThemeNames = Array.from(themeLabels).map((l) => l.htmlFor);
 
       // 2. Chỉ xóa những class nào nằm trong danh sách Theme, giữ nguyên các class nền tảng
-      allThemeNames.forEach(themeName => {
-         loginView.classList.remove(themeName);
+      allThemeNames.forEach((themeName) => {
+        loginView.classList.remove(themeName);
       });
 
       // 3. Thêm class của Theme mới được chọn
@@ -2622,106 +2644,6 @@ document.addEventListener('DOMContentLoaded', function () {
       $('#profileMenu .profile-img').attr('src', session.avatar);
     }
   }
-
-  // ========================================================================
-  // HÀM PHÂN QUYỀN GIAO DIỆN TỔNG HỢP (Người Gác Cổng)
-  // ========================================================================
-  window.applyRolePermissions = function (role) {
-    // Lấy role từ tham số truyền vào, nếu không có thì lấy từ Session, mặc định là 'user'
-    let userRole = role || window.userSession?.role || 'user';
-    userRole = userRole.toLowerCase().trim();
-
-    const isAdmin = userRole === 'admin';
-    const isManager = userRole === 'manager' || isAdmin;
-
-    console.log(
-      `🔐 Đang áp dụng phân quyền toàn cục cho Role: ${userRole.toUpperCase()}`
-    );
-
-    // 1. ẨN/HIỆN MENU SIDEBAR (Hỗ trợ cả jQuery và JS thuần để chống lỗi)
-    if (typeof $ !== 'undefined') {
-      $('#sidebar .side-menu li').each(function () {
-        const allowedRoles = $(this).attr('data-roles');
-        if (allowedRoles) {
-          const rolesArray = allowedRoles
-            .split(',')
-            .map((r) => r.trim().toLowerCase());
-          if (rolesArray.includes(userRole) || isAdmin) {
-            $(this).show();
-          } else {
-            $(this).hide();
-          }
-        } else {
-          $(this).show(); // Menu public mặc định hiện
-        }
-      });
-    } else {
-      // Dự phòng nếu jQuery chưa load
-      document.querySelectorAll('#sidebar .side-menu li').forEach((li) => {
-        const allowedRoles = li.getAttribute('data-roles');
-        if (allowedRoles) {
-          const rolesArray = allowedRoles
-            .split(',')
-            .map((r) => r.trim().toLowerCase());
-          li.style.display =
-            rolesArray.includes(userRole) || isAdmin ? '' : 'none';
-        } else {
-          li.style.display = '';
-        }
-      });
-    }
-
-    // 2. ẨN/HIỆN NÚT CHỨC NĂNG THEO THUỘC TÍNH (data-permission)
-    document.querySelectorAll('[data-permission]').forEach((el) => {
-      const perm = el.getAttribute('data-permission');
-      if (perm === 'admin' && !isAdmin) {
-        el.style.display = 'none';
-      } else if (perm === 'manager' && !isManager) {
-        el.style.display = 'none';
-      } else {
-        el.style.display = ''; // Khôi phục hiển thị nếu có quyền
-      }
-    });
-
-    // 3. ẨN/HIỆN CÁC NÚT ĐẶC BIỆT THEO ID CỤ THỂ (Hard-coded IDs)
-    const adminOnlyIds = [
-      'btn-create-course-trigger',
-      'btn-add-doc',
-      'admin-rotation-controls',
-      'btn-export-members',
-      'btn-export-logistics',
-      'btn-delete-roster',
-      'btn-open-plan-modal',
-      'btn-open-aar-modal',
-      'btn-auto-trigger', // Thêm các nút khác nếu cần
-    ];
-
-    adminOnlyIds.forEach((id) => {
-      const el = document.getElementById(id);
-      if (el) {
-        el.style.display = isAdmin ? '' : 'none';
-      }
-    });
-
-    // 4. THIẾT LẬP CỜ PHÂN QUYỀN TOÀN CỤC CHO CÁC MODULE KHÁC
-    window.appState = window.appState || {};
-    window.appState.permissions = {
-      role: userRole,
-      canAccess: {
-        dashboard: true,
-        datatable: true,
-        roster: isAdmin,
-        emergency: isAdmin,
-        team: isManager,
-        training: isManager,
-        logistics: isAdmin,
-        library: isAdmin,
-        map: true,
-      },
-    };
-
-    console.log('✅ Phân quyền giao diện hoàn tất.');
-  };
 
   // ===============================
   // 3. DASHBOARD INIT
@@ -8055,14 +7977,14 @@ document.addEventListener('DOMContentLoaded', function () {
 
   // ✅ Fix click outside modal
   window.addEventListener('click', function (event) {
-    const modalReportForm = document.getElementById('modal-report-form');
+    const modalReportForm = document.getElementById('modal-rrtForm');
 
     // Check nếu click trúng backdrop (không phải modal content)
     if (event.target === modalReportForm) {
       console.log('🖱️ Click outside modal - closing...');
 
       // Đóng modal với cleanup đầy đủ
-      closeModal('modal-report-form');
+      closeModal('modal-rrtForm');
     }
   });
 
@@ -8104,26 +8026,20 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   }
 
-// ==========================================
-  // 3. XỬ LÝ SỰ KIỆN SUBMIT FORM RRT (HOÀN CHỈNH & BỌC THÉP)
+  // ==========================================
+  // 3. XỬ LÝ SỰ KIỆN SUBMIT FORM RRT (ĐÃ FIX - CHUẨN XÁC)
   // ==========================================
   if (reportForm) {
     reportForm.addEventListener('submit', async function (e) {
       e.preventDefault();
 
-      if (window.isSubmitting) return; // Chống click nhiều lần
-      window.isSubmitting = true;
+      if (isSubmitting) return; // Chống click nhiều lần
+      isSubmitting = true;
 
       const submitBtn = reportForm.querySelector('button[type="submit"]');
       if (submitBtn) submitBtn.disabled = true;
 
-      // Hàm ẩn/hiện loading an toàn (fallback)
-      const toggleLoading = (isLoading) => {
-        if (typeof showLoadingSpinner === 'function') showLoadingSpinner(isLoading);
-        else if (typeof customShowLoading === 'function') customShowLoading(isLoading);
-      };
-
-      toggleLoading(true);
+      if (typeof showLoadingSpinner === 'function') showLoadingSpinner(true);
 
       try {
         // =========================================================
@@ -8132,11 +8048,9 @@ document.addEventListener('DOMContentLoaded', function () {
         const {
           data: { user },
           error: userErr,
-        } = await window.supabaseClient.auth.getUser();
-        
-        if (userErr || !user) {
+        } = await supabaseClient.auth.getUser();
+        if (userErr || !user)
           throw new Error('Vui lòng đăng nhập lại để gửi biểu mẫu.');
-        }
 
         // NẾU LÀ ADMIN ĐANG EDIT: Lấy ID của người đang được edit từ biến toàn cục
         // NẾU LÀ USER TỰ TẠO/EDIT: Dùng ID của chính họ
@@ -8158,24 +8072,30 @@ document.addEventListener('DOMContentLoaded', function () {
         });
 
         let autoMaXa = null;
-        if (userLoc.lat && userLoc.lng && typeof window.findWardByCoordinates === 'function') {
-          if (!window.appState?.mapGeoData) {
+        if (
+          userLoc.lat &&
+          userLoc.lng &&
+          typeof window.findWardByCoordinates === 'function'
+        ) {
+          if (!window.appState.mapGeoData) {
             console.warn('⚠️ GeoJSON chưa sẵn sàng, đang tải lại...');
-            if (typeof window.loadGeoJSON === 'function') await window.loadGeoJSON();
+            await window.loadGeoJSON();
           }
-          if (window.appState?.mapGeoData) {
-              const wardInfo = window.findWardByCoordinates(userLoc.lat, userLoc.lng);
-              if (wardInfo) {
-                autoMaXa = wardInfo.maXa;
-                console.log(`📍 Tìm thấy mã xã: ${wardInfo.tenXa} (${autoMaXa})`);
-              }
+          const wardInfo = window.findWardByCoordinates(
+            userLoc.lat,
+            userLoc.lng
+          );
+          if (wardInfo) {
+            autoMaXa = wardInfo.maXa;
+            console.log(`📍 Tìm thấy mã xã: ${wardInfo.tenXa} (${autoMaXa})`);
           }
         }
 
         // =========================================================
-        // 3. THU THẬP DỮ LIỆU CƠ BẢN (KHÔNG GÁN ROLE & STATUS Ở ĐÂY)
+        // 3. THU THẬP DỮ LIỆU CƠ BẢN (profiles)
         // =========================================================
-        const getVal = (id) => document.getElementById(id)?.value?.trim() || null;
+        const getVal = (id) =>
+          document.getElementById(id)?.value?.trim() || null;
         const finalMaXa = autoMaXa || getVal('wardCode') || getVal('ward');
 
         const profileData = {
@@ -8197,57 +8117,49 @@ document.addEventListener('DOMContentLoaded', function () {
           academic_level: getVal('academicLevel'),
           languages: getVal('language'),
           languages_level: getVal('languageLevel'),
+          // role: 'user', // <-- XÓA DÒNG NÀY ĐI
+          approval_status: 'pending', // Luôn đưa về pending khi submit (cần Admin duyệt lại)
           updated_at: new Date().toISOString(),
         };
 
         if (!profileData.full_name) throw new Error('Vui lòng nhập Họ Tên.');
         if (!profileData.email) throw new Error('Vui lòng nhập Email.');
 
-        // =========================================================
-        // 4. XỬ LÝ ROLE VÀ STATUS (TRÁNH ADMIN BỊ HẠ CẤP KHI SỬA FORM)
-        // =========================================================
-        if (!window.isEditMode) {
-          // 4A. Nếu là tạo mới hoàn toàn
-          profileData.role = 'user';
-          profileData.approval_status = 'pending';
-        } else {
-          // 4B. Nếu là đang cập nhật (Edit Mode)
-          const currentUserRole = window.userSession?.role?.toLowerCase() || 'user';
-          const isAdminOrManager = currentUserRole === 'admin' || currentUserRole === 'manager';
-
-          // Nếu người đang bấm nút "Lưu" KHÔNG PHẢI là Admin/Manager (tức là User tự vào sửa hồ sơ của mình)
-          // Thì trạng thái hồ sơ bị đẩy về 'pending' để bắt Admin duyệt lại.
-          if (!isAdminOrManager) {
-            profileData.approval_status = 'pending';
-          }
-          // Tuyệt đối không can thiệp vào cột `role` để giữ nguyên quyền hiện tại trên Database
-        }
-
         // ==========================================
-        // 5. KIỂM TRA EMAIL TRÙNG (AN TOÀN HƠN)
+        // 4. KIỂM TRA EMAIL TRÙNG (AN TOÀN HƠN)
         // ==========================================
         const currentEmail = profileData.email.toLowerCase().trim();
 
-        const { data: existingUser, error: emailCheckErr } = await window.supabaseClient
-          .from('profiles')
-          .select('id, full_name, email')
-          .eq('email', currentEmail)
-          .maybeSingle();
+        // Quét DB để xem email này đã tồn tại chưa
+        const { data: existingUser, error: emailCheckErr } =
+          await supabaseClient
+            .from('profiles')
+            .select('id, full_name, email')
+            .eq('email', currentEmail)
+            .maybeSingle();
 
-        if (emailCheckErr) console.warn('⚠️ Lỗi kiểm tra email:', emailCheckErr.message);
+        if (emailCheckErr)
+          console.warn('⚠️ Lỗi kiểm tra email:', emailCheckErr.message);
 
         // Nếu tìm thấy một người xài email này, VÀ người đó KHÔNG PHẢI LÀ targetProfileId đang sửa
         if (existingUser && existingUser.id !== targetProfileId) {
-          const holderName = existingUser.full_name || existingUser.email || 'ai đó';
-          throw new Error(`Email "${profileData.email}" đã được sử dụng bởi ${holderName}!`);
+          const holderName =
+            existingUser.full_name || existingUser.email || 'ai đó';
+          throw new Error(
+            `Email "${profileData.email}" đã được sử dụng bởi ${holderName}!`
+          );
         }
 
         // =========================================================
-        // 6. THU THẬP KỸ NĂNG (rrt_qualifications)
+        // 5. THU THẬP KỸ NĂNG (rrt_qualifications)
         // =========================================================
         const getSkillData = (skillName) => {
-          const radio = document.querySelector(`input[name="${skillName}"]:checked`);
-          const hasSkill = radio ? radio.value === 'Có' || radio.value === 'Yes' : false;
+          const radio = document.querySelector(
+            `input[name="${skillName}"]:checked`
+          );
+          const hasSkill = radio
+            ? radio.value === 'Có' || radio.value === 'Yes'
+            : false;
           let levelValue = null;
           if (hasSkill) {
             const levelSelect = document.getElementById(`${skillName}_level`);
@@ -8284,25 +8196,29 @@ document.addEventListener('DOMContentLoaded', function () {
         };
 
         // =========================================================
-        // 7. XỬ LÝ FILE ĐÍNH KÈM (Supabase Storage)
+        // 6. XỬ LÝ FILE ĐÍNH KÈM (Supabase Storage)
         // =========================================================
-        const fileInput = document.querySelector('input[type="file"][name="reportFile"]');
+        const fileInput = document.querySelector(
+          'input[type="file"][name="reportFile"]'
+        );
         if (fileInput && fileInput.files.length > 0) {
           const file = fileInput.files[0];
           const MAX_SIZE = 10 * 1024 * 1024; // 10MB
-          if (file.size > MAX_SIZE) throw new Error('File quá lớn. Vui lòng chọn file dưới 10MB.');
+          if (file.size > MAX_SIZE)
+            throw new Error('File quá lớn. Vui lòng chọn file dưới 10MB.');
 
           const fileExt = file.name.split('.').pop();
           const fileName = `profile_${targetProfileId}_${Date.now()}.${fileExt}`;
           const filePath = `resumes/${fileName}`;
 
-          const { error: uploadError } = await window.supabaseClient.storage
+          const { error: uploadError } = await supabaseClient.storage
             .from('documents')
             .upload(filePath, file, { cacheControl: '3600', upsert: false });
 
-          if (uploadError) throw new Error('Lỗi upload file: ' + uploadError.message);
+          if (uploadError)
+            throw new Error('Lỗi upload file: ' + uploadError.message);
 
-          const { data: publicUrlData } = window.supabaseClient.storage
+          const { data: publicUrlData } = supabaseClient.storage
             .from('documents')
             .getPublicUrl(filePath);
 
@@ -8310,63 +8226,58 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         // =========================================================
-        // 8. GỬI DỮ LIỆU LÊN SUPABASE (UPDATE HOẶC UPSERT)
+        // 7. GỬI DỮ LIỆU LÊN SUPABASE (UPDATE)
         // =========================================================
+        // Nếu là edit mode thì update, nếu tạo mới (chưa có) thì nên dùng upsert
         if (window.isEditMode) {
-          const { error: errProfile } = await window.supabaseClient
+          const { error: errProfile } = await supabaseClient
             .from('profiles')
             .update(profileData)
             .eq('id', targetProfileId);
 
-          if (errProfile) throw new Error('Lỗi cập nhật hồ sơ: ' + errProfile.message);
+          if (errProfile)
+            throw new Error('Lỗi cập nhật hồ sơ: ' + errProfile.message);
         } else {
           // Với tài khoản tự cập nhật lần đầu
-          const { error: errProfile } = await window.supabaseClient
+          const { error: errProfile } = await supabaseClient
             .from('profiles')
             .upsert(profileData, { onConflict: 'id' });
 
-          if (errProfile) throw new Error('Lỗi lưu mới hồ sơ: ' + errProfile.message);
+          if (errProfile)
+            throw new Error('Lỗi lưu mới hồ sơ: ' + errProfile.message);
         }
 
-        // Lưu kỹ năng
-        const { error: errQual } = await window.supabaseClient
+        const { error: errQual } = await supabaseClient
           .from('rrt_qualifications')
           .upsert(qualData, { onConflict: 'profile_id' });
 
         if (errQual) throw new Error('Lỗi lưu kỹ năng: ' + errQual.message);
 
         // =========================================================
-        // 9. HOÀN TẤT
+        // 8. HOÀN TẤT
         // =========================================================
-        if (typeof showToast === 'function') {
-            showToast('✅ Đã lưu hồ sơ RRT thành công!', 'success');
-        }
+        showToast('✅ Đã lưu hồ sơ RRT thành công!', 'success');
 
-        // Đóng form
-        if (typeof window.closeModal === 'function') {
-          window.closeModal('modal-report-form');
+        if (typeof closeModal === 'function') {
+          closeModal('modal-rrtForm');
         } else {
-          const modalEl = document.getElementById('modal-report-form');
+          const modalEl = document.getElementById('modal-rrtForm');
           if (modalEl && typeof bootstrap !== 'undefined') {
-            const modalInstance = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
-            modalInstance.hide();
+            const modalInstance = bootstrap.Modal.getInstance(modalEl);
+            if (modalInstance) modalInstance.hide();
           }
         }
 
-        // Refresh bảng dữ liệu
         if (typeof window.renderRRTTable === 'function') {
           await window.renderRRTTable();
         }
-
       } catch (err) {
         console.error('❌ Lỗi khi submit Form:', err);
-        if (typeof showToast === 'function') showToast(err.message, 'error');
-        else alert('Lỗi: ' + err.message);
+        showToast(err.message, 'error');
       } finally {
-        // Tắt vòng quay loading
-        window.isSubmitting = false;
+        isSubmitting = false;
         if (submitBtn) submitBtn.disabled = false;
-        toggleLoading(false);
+        if (typeof hideLoadingSpinner === 'function') hideLoadingSpinner();
       }
     });
   }
@@ -17958,4 +17869,104 @@ window.approveReport = async function (profileId, userEmail) {
   } finally {
     if (typeof hideLoadingSpinner === 'function') hideLoadingSpinner();
   }
+};
+// ========================================================================
+// HÀM PHÂN QUYỀN GIAO DIỆN TỔNG HỢP (Người Gác Cổng)
+// Đặt ở ngoài cùng của file script.js
+// ========================================================================
+window.applyRolePermissions = function (role) {
+  // Lấy role từ tham số truyền vào, nếu không có thì lấy từ Session, mặc định là 'user'
+  let userRole = role || window.userSession?.role || 'user';
+  userRole = userRole.toLowerCase().trim();
+
+  const isAdmin = userRole === 'admin';
+  const isManager = userRole === 'manager' || isAdmin;
+
+  console.log(
+    `🔐 Đang áp dụng phân quyền toàn cục cho Role: ${userRole.toUpperCase()}`
+  );
+
+  // 1. ẨN/HIỆN MENU SIDEBAR (Hỗ trợ cả jQuery và JS thuần để chống lỗi)
+  if (typeof $ !== 'undefined') {
+    $('#sidebar .side-menu li').each(function () {
+      const allowedRoles = $(this).attr('data-roles');
+      if (allowedRoles) {
+        const rolesArray = allowedRoles
+          .split(',')
+          .map((r) => r.trim().toLowerCase());
+        if (rolesArray.includes(userRole) || isAdmin) {
+          $(this).show();
+        } else {
+          $(this).hide();
+        }
+      } else {
+        $(this).show(); // Menu public mặc định hiện
+      }
+    });
+  } else {
+    // Dự phòng nếu jQuery chưa load
+    document.querySelectorAll('#sidebar .side-menu li').forEach((li) => {
+      const allowedRoles = li.getAttribute('data-roles');
+      if (allowedRoles) {
+        const rolesArray = allowedRoles
+          .split(',')
+          .map((r) => r.trim().toLowerCase());
+        li.style.display =
+          rolesArray.includes(userRole) || isAdmin ? '' : 'none';
+      } else {
+        li.style.display = '';
+      }
+    });
+  }
+
+  // 2. ẨN/HIỆN NÚT CHỨC NĂNG THEO THUỘC TÍNH (data-permission)
+  document.querySelectorAll('[data-permission]').forEach((el) => {
+    const perm = el.getAttribute('data-permission');
+    if (perm === 'admin' && !isAdmin) {
+      el.style.display = 'none';
+    } else if (perm === 'manager' && !isManager) {
+      el.style.display = 'none';
+    } else {
+      el.style.display = ''; // Khôi phục hiển thị nếu có quyền
+    }
+  });
+
+  // 3. ẨN/HIỆN CÁC NÚT ĐẶC BIỆT THEO ID CỤ THỂ
+  const adminOnlyIds = [
+    'btn-create-course-trigger',
+    'btn-add-doc',
+    'admin-rotation-controls',
+    'btn-export-members',
+    'btn-export-logistics',
+    'btn-delete-roster',
+    'btn-open-plan-modal',
+    'btn-open-aar-modal',
+    'btn-auto-trigger',
+  ];
+
+  adminOnlyIds.forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) {
+      el.style.display = isAdmin ? '' : 'none';
+    }
+  });
+
+  // 4. THIẾT LẬP CỜ PHÂN QUYỀN TOÀN CỤC CHO CÁC MODULE KHÁC
+  window.appState = window.appState || {};
+  window.appState.permissions = {
+    role: userRole,
+    canAccess: {
+      dashboard: true,
+      datatable: true,
+      roster: isAdmin,
+      emergency: isAdmin,
+      team: isManager,
+      training: isManager,
+      logistics: isAdmin,
+      library: isAdmin,
+      map: true,
+    },
+  };
+
+  console.log('✅ Phân quyền giao diện hoàn tất.');
 };
