@@ -3697,11 +3697,11 @@ document.addEventListener('DOMContentLoaded', function () {
 
           let data = [];
 
-          // 2. Xử lý riêng cho bảng profiles (cần join với rrt_qualifications)
+          // 2. Xử lý riêng cho bảng profiles (cần join phức tạp)
           if (tableName === 'profiles') {
             // Fetch profiles
             const { data: profilesData, error: profilesErr } =
-              await supabaseClient
+              await window.supabaseClient
                 .from('profiles')
                 .select('*')
                 .order('full_name', { ascending: true });
@@ -3714,98 +3714,160 @@ document.addEventListener('DOMContentLoaded', function () {
               return;
             }
 
-            // Fetch rrt_qualifications
-            const { data: qualsData, error: qualsErr } = await supabaseClient
-              .from('rrt_qualifications')
-              .select('profile_id, skills')
-              .in(
-                'profile_id',
-                profilesData.map((p) => p.id)
-              );
+            const profileIds = profilesData.map((p) => p.id);
+
+            // ==========================================
+            // [A] FETCH RRT QUALIFICATIONS (KỸ NĂNG)
+            // ==========================================
+            const { data: qualsData, error: qualsErr } =
+              await window.supabaseClient
+                .from('rrt_qualifications')
+                .select('profile_id, skills')
+                .in('profile_id', profileIds);
 
             if (qualsErr)
               console.warn('⚠️ Warning fetching qualifications:', qualsErr);
 
-            // Create map: profile_id → skills
             const skillsMap = {};
             (qualsData || []).forEach((q) => {
               skillsMap[q.profile_id] = q.skills || {};
             });
 
-            // Merge profiles với skills
+            // ==========================================
+            // [B] FETCH TRAINING HISTORY (ĐÀO TẠO)
+            // ==========================================
+            const trainingMap = {};
+            const { data: trainRecords } = await window.supabaseClient
+              .from('training_records')
+              .select('user_id, course_id, result')
+              .in('user_id', profileIds);
+
+            if (trainRecords && trainRecords.length > 0) {
+              const courseIds = [
+                ...new Set(
+                  trainRecords.map((r) => r.course_id).filter(Boolean)
+                ),
+              ];
+              const { data: courses } = await window.supabaseClient
+                .from('training_courses')
+                .select('id, course_name')
+                .in('id', courseIds);
+
+              const coursesMap = {};
+              (courses || []).forEach(
+                (c) => (coursesMap[c.id] = c.course_name)
+              );
+
+              // Gom nhóm theo user
+              trainRecords.forEach((record) => {
+                if (!trainingMap[record.user_id])
+                  trainingMap[record.user_id] = [];
+                const courseName =
+                  coursesMap[record.course_id] || 'Khóa học ẩn';
+                const result =
+                  record.result === 'pass'
+                    ? 'Đạt'
+                    : record.result === 'fail'
+                    ? 'Chưa đạt'
+                    : 'Đang xử lý';
+                trainingMap[record.user_id].push(`[${result}] ${courseName}`);
+              });
+            }
+
+            // ==========================================
+            // [C] FETCH DEPLOYMENT HISTORY (THỰC CHIẾN)
+            // ==========================================
+            const expMap = {};
+            const { data: expRecords } = await window.supabaseClient
+              .from('deployment_history')
+              .select('user_id, incident_id, action_type')
+              .in('user_id', profileIds);
+
+            if (expRecords && expRecords.length > 0) {
+              const incidentIds = [
+                ...new Set(
+                  expRecords.map((r) => r.incident_id).filter(Boolean)
+                ),
+              ];
+              const { data: incidents } = await window.supabaseClient
+                .from('incidents')
+                .select('id, event_name')
+                .in('id', incidentIds);
+
+              const incidentsMap = {};
+              (incidents || []).forEach(
+                (i) => (incidentsMap[i.id] = i.event_name)
+              );
+
+              // Gom nhóm theo user
+              expRecords.forEach((record) => {
+                if (!expMap[record.user_id]) expMap[record.user_id] = [];
+                const eventName =
+                  incidentsMap[record.incident_id] || 'Sự kiện ẩn';
+                const role = record.action_type || 'Thành viên';
+                expMap[record.user_id].push(`${eventName} (${role})`);
+              });
+            }
+
+            // ==========================================
+            // [D] MERGE TẤT CẢ VÀO 1 DÒNG DUY NHẤT
+            // ==========================================
             data = profilesData.map((profile) => {
               const skills = skillsMap[profile.id] || {};
+              const trainHistoryStr = trainingMap[profile.id]
+                ? trainingMap[profile.id].join(' | ')
+                : '';
+              const expHistoryStr = expMap[profile.id]
+                ? expMap[profile.id].join(' | ')
+                : '';
 
               // Bung JSONB skills ra thành các cột flat
               const flattenedSkills = {
-                // Emergency Response
                 skill_ungpho_has: skills.emergency_response?.has_skill || false,
                 skill_ungpho_level: skills.emergency_response?.level || '',
-
-                // Risk Communication
                 skill_ruiro_has: skills.risk_communication?.has_skill || false,
                 skill_ruiro_level: skills.risk_communication?.level || '',
-
-                // Psycho-Social
                 skill_tamly_has: skills.psycho_social?.has_skill || false,
                 skill_tamly_level: skills.psycho_social?.level || '',
-
-                // Data Management
                 skill_dulieu_has: skills.data_management?.has_skill || false,
                 skill_dulieu_level: skills.data_management?.level || '',
-
-                // Epidemiology
                 skill_dichte_has: skills.epidemiology?.has_skill || false,
                 skill_dichte_level: skills.epidemiology?.level || '',
-
-                // Infection Control
                 skill_nhiemtrung_has:
                   skills.infection_control?.has_skill || false,
                 skill_nhiemtrung_level: skills.infection_control?.level || '',
-
-                // Laboratory
                 skill_thinghiem_has: skills.lab?.has_skill || false,
                 skill_thinghiem_level: skills.lab?.level || '',
-
-                // Logistics
                 skill_haucan_has: skills.logistics?.has_skill || false,
                 skill_haucan_level: skills.logistics?.level || '',
-
-                // Operation & Materials
                 skill_vanhanh_has:
                   skills.operation_materials?.has_skill || false,
                 skill_vanhanh_level: skills.operation_materials?.level || '',
-
-                // Case Management
                 skill_cabenh_has: skills.case_management?.has_skill || false,
                 skill_cabenh_level: skills.case_management?.level || '',
-
-                // Food Management
                 skill_dinhduong_has: skills.food_management?.has_skill || false,
                 skill_dinhduong_level: skills.food_management?.level || '',
-
-                // WASH Management
                 skill_nuoc_has: skills.wash_management?.has_skill || false,
                 skill_nuoc_level: skills.wash_management?.level || '',
-                // Hazardous materials Management
                 skill_nguyhiem_has:
                   skills.hazardous_management?.has_skill || false,
                 skill_nguyhiem_level: skills.hazardous_management?.level || '',
-                // Securities Management
                 skill_anninh_has:
                   skills.security_management?.has_skill || false,
                 skill_anninh_level: skills.security_management?.level || '',
               };
 
-              // Merge profile + flattened skills
+              // Merge profile + skills + history columns
               return {
                 ...profile,
                 ...flattenedSkills,
+                'Lịch sử Đào tạo & Chứng chỉ': trainHistoryStr,
+                'Kinh nghiệm Thực chiến': expHistoryStr,
               };
             });
           } else {
             // 3. Fetch bình thường cho các bảng khác
-            const { data: normalData, error } = await supabaseClient
+            const { data: normalData, error } = await window.supabaseClient
               .from(tableName)
               .select('*');
 
@@ -7536,9 +7598,7 @@ document.addEventListener('DOMContentLoaded', function () {
   // ==========================================
   // HÀM MỞ VÀ ĐIỀN DỮ LIỆU VÀO FORM (TỐI ƯU & BỌC THÉP)
   // ==========================================
-  // ==============================================================
-  // HÀM HỖ TRỢ: TẢI VÀ ĐỔ DỮ LIỆU LỊCH SỬ (ĐỂ NGOÀI CHO GỌN)
-  // ==============================================================
+
   async function fetchAndRenderProfileHistory(userId) {
     if (!userId) {
       console.warn('Không có userId, bỏ qua fetch lịch sử.');
