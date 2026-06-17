@@ -361,10 +361,10 @@
   <div id="view-dashboard" class="app-view">
       <!-- SIDEBAR -->
   <section id="sidebar">
-    <a href="#" class="brand">
-      <i class='bx bxs-hot bx-lg'></i>
-      <span class="text">Phạm Anh</span>
-    </a>
+  <a href="#" class="brand">
+  <i class='bx bxs-hot bx-lg'></i>
+  <span class="text" style="font-size:13px;"  id="display-user-fullname">AP</span>
+</a>
 
     <ul class="side-menu top">
     <li class="active" id="menu-dashboard">
@@ -415,7 +415,7 @@
     <ul class="side-menu bottom">
 
       <li>
-        <a href="#" onclick="window.logout()" class="logout">
+      <a href="#" onclick="window.logout()" class="logout">
           <i class='bx bx-power-off bx-sm bx-burst-hover'></i>
           <span class="text">Đăng xuất</span>
         </a>
@@ -3325,7 +3325,7 @@
   <div id="modal-change-password" class="modal fade" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog">
     <div class="modal-content">
-      <form id="form-change-password">
+    <form id="form-change-password" onsubmit="event.preventDefault();">
         <input type="text" id="lib-user-hidden" name="username" style="display:none;" autocomplete="username">
         <div class="modal-header">
           <h5 class="modal-title"><i class='bx bx-key'></i> Đổi mật khẩu</h5>
@@ -3362,10 +3362,10 @@
         </div>
       </div>
 
-        <div class="modal-footer">
-          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Hủy</button>
-          <button type="submit" class="btn btn-primary">XÁC NHẬN</button>
-        </div>
+      <div class="modal-footer">
+      <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Hủy</button>
+      <button type="button" class="btn btn-primary" onclick="window.submitChangePassword()">XÁC NHẬN</button>
+    </div>
       </form>
     </div>
   </div>
