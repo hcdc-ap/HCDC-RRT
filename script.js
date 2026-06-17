@@ -11,27 +11,115 @@
   const SUPABASE_URL = 'https://sxzjbygiowpscyhiffqc.supabase.co';
   const SUPABASE_ANON_KEY =
     'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN4empieWdpb3dwc2N5aGlmZnFjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkyMTI4MjEsImV4cCI6MjA5NDc4ODgyMX0.Qfz4b4GBDAQV4aO-ca1WFKUM1lbCWqjhItkm1YCnm1k';
+  // Biến toàn cục để lưu trữ tất cả dữ liệu từ server
+  // Thêm đoạn này vào đầu script.js, ngay sau khi supabaseClient xong (nếu có) hoặc gần đầu file
+  if (typeof window.appState === 'undefined') {
+    window.appState = {
+      userSession: null,
+      appInitialized: false,
+      isDataLoaded: false,
+      loadingActive: false,
+      metrics: null,
+      reports: [],
+      teamData: [],
+      notifications: { reports: [], unreadCount: 0 },
+      trackingRosters: { reports: [] },
+      trackingIncidents: [],
+      logistics: { items: [], logs: [], activeIncidents: [] },
+      map: null,
+      mapInitialized: false,
+      geojsonBaseLayer: null,
+      choroplethLayer: null,
+      markersLayerGroup: null,
+      mapGeoData: null,
+      mapCompanyData: [],
+      filteredData: [],
+      drawnItems: null, // (MỚI) Lưu các hình vẽ thêm vào
+      selectedRangeChecker: null, // Lưu trạng thái lọc theo màu legend
+    };
+    console.log('[APP INIT] window.appState initialized with defaults.');
+  } else {
+    console.log('[APP INIT] window.appState already exists.');
+  }
+  // ========================================================================
+  // BẢO VỆ TOÀN CỤC: TỰ ĐỘNG TẮT LOADING KHI CÓ LỖI CHÍNH MẠNG
+  // ========================================================================
+  // ========================================================================
+  // HỆ THỐNG AUTO-LOGIN & KIỂM TRA SESSION KHI VỪA VÀO TRANG (F5)
+  // ========================================================================
+  document.addEventListener('DOMContentLoaded', async function () {
+    // Chỉ chạy chức năng này nếu đã khai báo Supabase thành công
+    if (window.supabaseClient) {
+      console.log('🔄 Đang kiểm tra vé vào cổng (Session)...');
 
-    // ========================================================================
-// BẢO VỆ TOÀN CỤC: TỰ ĐỘNG TẮT LOADING KHI CÓ LỖI CHÍNH MẠNG
-// ========================================================================
-const emergencyStopLoading = () => {
-  if (typeof hideLoadingSpinner === 'function') hideLoadingSpinner();
-  if (typeof customShowLoading === 'function') customShowLoading(false);
-  document.querySelectorAll('.loading, #loading-spinner, .spinner-container').forEach(el => {
-      el.style.display = 'none';
+      // 1. Thò tay vào túi quần (localStorage) lấy Session
+      const {
+        data: { session },
+        error,
+      } = await window.supabaseClient.auth.getSession();
+
+      if (session && !error) {
+        console.log('✅ Tìm thấy vé! Tự động đưa vào Dashboard...');
+        // Ép hệ thống chạy thẳng hàm mở Dashboard
+        if (typeof window.enterDashboard === 'function') {
+          window.enterDashboard();
+        }
+      } else {
+        console.log('⚠️ Không có vé hoặc vé hết hạn. Ở lại trang Login.');
+        // Đảm bảo mở đúng giao diện Login (Thay 'view-login' bằng id của bạn nếu cần)
+        if (typeof window.go === 'function') {
+          window.go('login'); // Nhớ dùng đúng cái ID mà lúc nãy bạn vừa sửa cho hết trắng màn hình nhé
+        }
+      }
+
+      // 2. Lắng nghe mọi động tĩnh (Phòng trường hợp Token hết hạn giữa chừng)
+      window.supabaseClient.auth.onAuthStateChange((event, currentSession) => {
+        if (event === 'SIGNED_OUT' || event === 'TOKEN_REFRESHED_FAILED') {
+          console.log('🚪 Đã đăng xuất hoặc Token hỏng, quay về Login.');
+          window.userSession = null;
+          if (typeof window.go === 'function') {
+            window.go('login'); // Về lại form đăng nhập
+          }
+        }
+      });
+    }
   });
-};
+  const emergencyStopLoading = () => {
+    if (typeof hideLoadingSpinner === 'function') hideLoadingSpinner();
+    if (typeof customShowLoading === 'function') customShowLoading(false);
+    // ✅ FIX: thêm #global-loading-overlay và #global-loading-spinner vào danh sách.
+    // Đây là 2 overlay trắng toàn màn hình ("Đang tải dữ liệu...") nhưng KHÔNG có
+    // bất kỳ đoạn JS nào trong file này từng ẩn chúng đi -> khi có lỗi xảy ra giữa
+    // lúc khởi động, mọi spinner khác được dọn sạch nhưng 2 overlay này bị bỏ quên,
+    // đứng che kín màn hình mãi (đây chính là hiện tượng "trắng bóc" sau khi F5).
+    document
+      .querySelectorAll(
+        '.loading, #loading-spinner, .spinner-container, #global-loading-overlay, #global-loading-spinner'
+      )
+      .forEach((el) => {
+        el.style.display = 'none';
+      });
+  };
 
-window.addEventListener('error', function (event) {
-  console.error('🔥 Bắt được lỗi toàn cục (Syntax/Reference):', event.error);
-  emergencyStopLoading();
-});
+  // ✅ FIX: Lưới an toàn cuối cùng - dù mọi thứ khác có lỗi gì cũng không bắt được,
+  // sau 12 giây overlay loading toàn cục PHẢI biến mất, không được đứng mãi.
+  setTimeout(() => {
+    const overlay = document.getElementById('global-loading-overlay');
+    if (overlay && overlay.style.display !== 'none') {
+      console.warn('⏱️ Timeout an toàn: tự ẩn global-loading-overlay sau 12s');
+      overlay.style.display = 'none';
+    }
+  }, 12000);
 
-window.addEventListener('unhandledrejection', function (event) {
-  console.error('🔥 Bắt được lỗi Promise (Network/Supabase):', event.reason);
-  emergencyStopLoading();
-});
+  window.addEventListener('error', function (event) {
+    console.error('🔥 Bắt được lỗi toàn cục (Syntax/Reference):', event.error);
+    emergencyStopLoading();
+  });
+
+  window.addEventListener('unhandledrejection', function (event) {
+    console.error('🔥 Bắt được lỗi Promise (Network/Supabase):', event.reason);
+    emergencyStopLoading();
+  });
   // ✅ Kiểm tra SDK đã load chưa
   if (typeof window.supabase?.createClient !== 'function') {
     console.warn('⏳ Supabase SDK not loaded, waiting...');
@@ -141,6 +229,13 @@ const webAppUrl = '<?!= getWebAppUrl() ?>'; // (Ghi chú: dòng này của GAS, 
      SPA ROUTER
   ========================= */
 window.go = function (view) {
+  // ✅ FIX: Ngay khi đã quyết định được view nào sẽ hiển thị (login hay dashboard),
+  // ẩn luôn overlay "Đang tải dữ liệu..." ban đầu. Việc tải dữ liệu CHI TIẾT bên
+  // trong dashboard (nếu có) sẽ dùng spinner riêng của customShowLoading(),
+  // không liên quan tới overlay này nữa.
+  const globalOverlay = document.getElementById('global-loading-overlay');
+  if (globalOverlay) globalOverlay.style.display = 'none';
+
   $('.app-view').removeClass('active');
   $('#view-' + view).addClass('active');
 
@@ -169,109 +264,81 @@ window.go = function (view) {
 // ========================================================================
 // 3. LẮNG NGHE TRẠNG THÁI ĐĂNG NHẬP (AUTH LISTENER)
 // ========================================================================
-window.supabaseClient.auth.onAuthStateChange(async (event, session) => {
-  console.log(`🛡️ Auth state changed: ${event}`);
+document.addEventListener('supabase:ready', function ({ detail }) {
+  const client = detail.client;
 
-  if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN') {
-    if (session) {
-      window.supabaseSession = session;
+  client.auth.onAuthStateChange(async (event, session) => {
+    console.log(`🛡️ Auth state changed: ${event}`, session);
 
-      // Nếu bộ nhớ đệm chưa có Role (người dùng mới đăng nhập ở máy khác)
-      if (!window.userSession || !window.userSession?.role) {
-        try {
-          // ✅ Fetch profile với đầy đủ fields cần thiết
-          const { data: profile, error: profileErr } =
-            await window.supabaseClient
-              .from('profiles')
-              .select(
-                'id, email, full_name, role, team, position, deployment_status, approval_status'
-              )
-              .eq('id', session.user.id)
-              .maybeSingle(); // ✅ Dùng maybeSingle() để tránh lỗi nếu không tìm thấy
+    if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN') {
+      if (session) {
+        console.log('🔐 Session detected, initializing user context...');
+        window.supabaseSession = session;
 
-          if (profileErr) {
-            console.warn('⚠️ Không lấy được profile:', profileErr.message);
-            // Vẫn tạo session cơ bản để app không crash
-          }
+        // GỌI loadUserProfile để đảm bảo có profile
+        const profileLoaded = await window.loadUserProfile();
 
-          // ✅ Tạo session với fallback an toàn
-          window.userSession = {
-            id: session.user.id,
-            email: session.user.email,
-            // ✅ FIX: Default role là 'User' (viết hoa) theo schema
-            role: profile?.role || 'user',
-            full_name:
-              profile?.full_name ||
-              session.user.email?.split('@')[0] ||
-              'Thành viên',
-            team: profile?.team || '',
-            position: profile?.position || '',
-            deployment_status: profile?.deployment_status || 'Sẵn sàng',
-            approval_status: profile?.approval_status || 'pending',
-          };
-
-          // ✅ Lưu session (có thể cân nhắc không lưu sensitive data)
-          localStorage.setItem(
-            'userSession',
-            JSON.stringify({
-              id: window.userSession.id,
-              email: window.userSession.email,
-              role: window.userSession.role,
-              full_name: window.userSession.full_name,
-            })
-          );
-
-          console.log('✅ Session initialized:', {
-            email: window.userSession.email,
-            role: window.userSession.role,
-          });
-
-          // ✅ Áp dụng phân quyền
+        if (profileLoaded) {
+          console.log('✅ User profile loaded, applying permissions...');
+          // Áp dụng phân quyền ngay lập tức
           if (typeof applyRolePermissions === 'function') {
             applyRolePermissions(window.userSession.role);
           }
-        } catch (err) {
-          console.error('❌ Lỗi khởi tạo session:', err);
-
-          // Fallback: tạo session tối thiểu để app vẫn chạy
-          window.userSession = {
-            id: session.user.id,
-            email: session.user.email,
-            role: 'user', // Default theo schema
-            full_name: session.user.email?.split('@')[0] || 'Thành viên',
-          };
-
-          if (typeof applyRolePermissions === 'function') {
-            applyRolePermissions('user');
-          }
+          // GỌI HÀM ĐỂ XỬ LÝ VIỆC ĐIỀU HƯỚNG SAU KHI CÓ SESSION
+          // Điều này tách rời logic điều hướng khỏi onAuthStateChange
+          window.handleSuccessfulAuth();
+        } else {
+          console.error(
+            '❌ Profile could not be loaded after successful sign-in.'
+          );
+          // Có thể cần logout nếu profile không tồn tại
+          // await window.supabaseClient.auth.signOut();
+          // window.go('login');
         }
+      } else {
+        console.log('🔒 No session found in INITIAL_SESSION/SIGNED_IN.');
+        // Nếu không có session, có thể cần điều hướng về login
+        // Tuy nhiên, thường INITIAL_SESSION không có session là bình thường nếu chưa đăng nhập trước đó.
+        // Logic điều hướng về login nên được xử lý riêng nếu cần.
+      }
+    } else if (event === 'SIGNED_OUT') {
+      console.log('🚪 User signed out, cleaning up...');
+      window.userSession = null;
+      window.supabaseSession = null;
+      localStorage.removeItem('userSession');
+      // Reset app state
+      if (window.appState) {
+        window.appState.users = [];
+        window.appState.incidents = [];
+        window.appState.appInitialized = false; // Quan trọng: Reset flag
+        window.appState.isDataLoaded = false;
+        // Reset các state khác nếu cần
       }
 
-      // Cho phép vào nhà
-      if (typeof window.go === 'function') window.go('dashboard');
-      if (typeof window.enterDashboard === 'function') window.enterDashboard();
-    } else {
-      console.warn('🔒 Không tìm thấy phiên đăng nhập. Đá văng về Login.');
+      // DỌN DẸP SẠCH CACHE ĐỂ ĐÓN USER MỚI
+      if (typeof QueryCache !== 'undefined' && QueryCache.cache) {
+        QueryCache.cache.clear();
+      }
+
+      // Điều hướng về login
       if (typeof window.go === 'function') window.go('login');
     }
-  } else if (event === 'SIGNED_OUT') {
-    window.userSession = null;
-    window.supabaseSession = null;
-    localStorage.removeItem('userSession');
-    if (window.appState) {
-      window.appState.users = [];
-      window.appState.incidents = [];
-      window.appState.appInitialized = false;
-    }
-
-    // ✅ DỌN DẸP SẠCH CACHE ĐỂ ĐÓN USER MỚI
-    if (typeof QueryCache !== 'undefined' && QueryCache.cache) {
-      QueryCache.cache.clear();
-    }
-
-    if (typeof window.go === 'function') window.go('login');
+  });
+}); // ← Đóng document.addEventListener
+// --- BƯỚC 3: Thêm hàm handleSuccessfulAuth ---
+// Hàm này xử lý điều hướng và khởi tạo app sau khi xác thực thành công
+window.handleSuccessfulAuth = function () {
+  console.log('🚀 Handling successful authentication...');
+  if (typeof window.go === 'function') {
+    console.log('   -> Navigating to dashboard...');
+    window.go('dashboard');
   }
-});
+  if (typeof window.enterDashboard === 'function') {
+    console.log('   -> Entering dashboard...');
+    window.enterDashboard(); // Gọi không await để không block event handler
+  }
+};
+// --- KẾT THÚC handleSuccessfulAuth ---
 // ========================================================================
 // REALTIME MANAGER - QUẢN LÝ KẾT NỐI REALTIME
 // ========================================================================
@@ -429,6 +496,9 @@ window.filterDataByRole = function (dataArray) {
 // ========================================================================
 // ENTER DASHBOARD - BỌC THÉP VÀ CHUẨN HÓA PHÂN QUYỀN
 // ========================================================================
+// ========================================================================
+// ENTER DASHBOARD - BỌC THÉP VÀ CHUẨN HÓA PHÂN QUYỀN
+// ========================================================================
 window.enterDashboard = async function () {
   console.log('➡️ enterDashboard called');
 
@@ -445,14 +515,21 @@ window.enterDashboard = async function () {
 
   // Khai báo các biến an toàn để sử dụng trong Batch Fetch
   const currentUserId = window.userSession?.id;
-  const currentUserRole = (window.userSession?.role || 'user').toLowerCase().trim();
+  const currentUserRole = (window.userSession?.role || 'user')
+    .toLowerCase()
+    .trim();
   const isAdmin = currentUserRole === 'admin';
 
   // ✅ 2. PHÂN QUYỀN UI NGAY LẬP TỨC TRƯỚC KHI TẢI DỮ LIỆU
   if (typeof window.applyRolePermissions === 'function') {
     window.applyRolePermissions(currentUserRole);
   }
-
+  // 🔥 THÊM ĐOẠN NÀY VÀO: ĐỔI TÊN NGƯỜI DÙNG TRÊN MENU 🔥
+  const userNameSpan = document.getElementById('display-user-fullname');
+  if (userNameSpan && window.userSession?.full_name) {
+    // Bắn tên từ Database vào thẻ HTML
+    userNameSpan.textContent = window.userSession.full_name;
+  }
   // ✅ 3. Tránh load nhiều lần
   if (window.appState?.appInitialized) {
     console.log('⏭️ Dashboard already initialized');
@@ -476,7 +553,6 @@ window.enterDashboard = async function () {
     ] = await batchFetch([
       // Profiles - LỌC THEO ROLE
       () =>
-        // ✅ BỌC THÉP CACHE KEY: Đính kèm Role vào tên Cache để không bị xài nhầm
         QueryCache.fetch(`profiles:${currentUserRole}`, async () => {
           let query = window.supabaseClient
             .from('profiles')
@@ -487,11 +563,7 @@ window.enterDashboard = async function () {
           // FIX: User thường chỉ lấy profile của chính mình
           if (!isAdmin && currentUserId) {
             query = query.eq('id', currentUserId);
-            console.log('🔐 User mode: Only fetching current user profile');
-          } else {
-            console.log('👑 Admin mode: Fetching all profiles');
           }
-
           const { data, error } = await query;
           if (error) throw error;
           return data;
@@ -556,20 +628,12 @@ window.enterDashboard = async function () {
     window.appState.deployment_history = deploymentRes || [];
     window.appState.notifications_list = notificationsRes || [];
 
-    console.log('✅ Dashboard data loaded:', {
-      profiles: window.appState.users?.length || 0,
-      incidents: window.appState.incidents?.length || 0,
-      training: window.appState.training_courses?.length || 0,
-      deployments: window.appState.deployment_history?.length || 0,
-      notifications: window.appState.notifications_list?.length || 0,
-    });
-
     // ✅ 7. Gọi callback nếu có
     if (typeof window.onInitialDataSuccess === 'function') {
       window.onInitialDataSuccess(window.appState);
     }
 
-    // ✅ 8. Render các component chính
+    // ✅ 8. Render các component chính và MỞ TAB MẶC ĐỊNH
     if (typeof window.renderDashboard === 'function') {
       window.renderDashboard();
     }
@@ -577,40 +641,43 @@ window.enterDashboard = async function () {
       window.renderRRTTable();
     }
 
+    // 🔥 ĐOẠN CODE CHỐNG TRẮNG MÀN HÌNH (ĐẶT ĐÚNG CHỖ RỒI NHÉ) 🔥
+    setTimeout(() => {
+      // Chắc chắn rằng giao diện tổng Dashboard đã được bật
+      if (typeof window.go === 'function') {
+        window.go('dashboard');
+      }
+
+      // Tìm đúng cái nút Menu RRT trong file HTML và bấm mở nội dung
+      const defaultMenu = document.getElementById('menu-dashboard');
+      if (defaultMenu) {
+        defaultMenu.click();
+      } else {
+        console.warn('⚠️ Không tìm thấy nút #menu-rrt trong HTML');
+      }
+    }, 150);
+
     // ✅ 9. START REALTIME SYNC (sau khi load xong)
-    if (window.RealtimeManager && typeof window.RealtimeManager.start === 'function') {
+    if (
+      window.RealtimeManager &&
+      typeof window.RealtimeManager.start === 'function'
+    ) {
       window.RealtimeManager.start();
     }
   } catch (error) {
-    console.error('❌ Lỗi khởi tạo Dashboard:', error);
-    
     // -----------------------------------------------------
-    // CƠ CHẾ TỰ PHỤC HỒI: Tự động dọn rác và bắt đăng nhập lại
+    // XỬ LÝ LỖI (ĐÃ TẮT TÍNH NĂNG VĂNG RA LOGIN)
     // -----------------------------------------------------
-    // 1. Xóa sạch các bộ nhớ có nguy cơ gây lỗi
-    window.userSession = null;
-    localStorage.removeItem('userSession');
-    
-    if (typeof QueryCache !== 'undefined' && QueryCache.cache) {
-        QueryCache.cache.clear();
-    }
-    
-    // 2. Báo lỗi cho người dùng
+    console.error('❌ Lỗi khởi tạo Dashboard (Đã tắt auto-kick):', error);
+
     if (typeof showToast === 'function') {
-      showToast('Dữ liệu phiên làm việc bị lỗi. Đang tải lại...', 'error');
+      showToast(
+        'Có lỗi khi vẽ dữ liệu! Vui lòng nhấn F12 để kiểm tra.',
+        'error'
+      );
     } else {
-      alert('Dữ liệu phiên làm việc bị lỗi. Đang tải lại...');
+      alert('Có lỗi khi vẽ dữ liệu! Vui lòng nhấn F12 để kiểm tra.');
     }
-
-    // 3. Đưa người dùng về nơi an toàn (Trang Đăng nhập)
-    setTimeout(() => {
-        if (typeof window.go === 'function') {
-            window.go('login');
-        } else {
-            window.location.reload(); // Ép F5 bằng code nếu kẹt quá nặng
-        }
-    }, 1500);
-
   } finally {
     if (typeof customShowLoading === 'function') customShowLoading(false);
   }
@@ -684,54 +751,24 @@ window.resetAppState = function () {
 // ========================================================================
 // APP BOOTSTRAP - KHỞI ĐỘNG ỨNG DỤNG
 // ========================================================================
-document.addEventListener('DOMContentLoaded', async () => {
+document.addEventListener('DOMContentLoaded', () => {
   console.log('🚀 App starting...');
 
-  const sessionStr = localStorage.getItem('userSession');
-
-  if (sessionStr) {
-    try {
-      window.userSession = JSON.parse(sessionStr);
-
-      // 1. Chuyển view
-      if (typeof window.go === 'function') {
-        window.go('dashboard');
-      }
-
-      // 2. Gọi lifecycle
-      if (typeof window.enterDashboard === 'function') {
-        await window.enterDashboard();
-      }
-
-      // 3. Verify session server-side
-      const { data, error } = await window.supabaseClient.auth.getSession();
-
-      if (error || !data.session) {
-        console.warn('⚠️ Phiên đăng nhập đã hết hạn trên máy chủ.');
-        if (typeof window.logout === 'function') {
-          window.logout();
-        }
-        if (typeof showToast === 'function') {
-          showToast(
-            'Phiên đăng nhập không hợp lệ, vui lòng đăng nhập lại',
-            'error'
-          );
-        }
-      }
-    } catch (e) {
-      console.error('❌ Error restoring session:', e);
-      if (typeof window.logout === 'function') {
-        window.logout();
-      }
-    }
-  } else {
-    // No session - go to login
-    if (typeof window.go === 'function') {
-      window.go('login');
-    }
-    if (typeof checkInstallGuide === 'function') {
-      checkInstallGuide();
-    }
+  // ✅ FIX: KHÔNG tự gọi window.go('dashboard') + enterDashboard() ở đây nữa.
+  // Trước đây có 3 nơi cùng làm việc này mỗi khi F5 (ở đây, ở onAuthStateChange,
+  // và ở $(document).ready phía dưới) -> chạy đua nhau, tải dữ liệu trùng lặp,
+  // và là nguyên nhân chính gây kẹt màn hình trắng "Đang tải dữ liệu...".
+  //
+  // window.supabaseClient.auth.onAuthStateChange (sự kiện INITIAL_SESSION) giờ là
+  // nơi DUY NHẤT quyết định vào dashboard hay về login, vì nó hỏi trực tiếp
+  // Supabase - đáng tin cậy hơn cache 'userSession' trong localStorage (có thể cũ
+  // hoặc sai). Ở đây chỉ giữ lại phần hiện hướng dẫn cài đặt PWA khi chưa từng
+  // đăng nhập trên máy này.
+  if (
+    !localStorage.getItem('userSession') &&
+    typeof checkInstallGuide === 'function'
+  ) {
+    checkInstallGuide();
   }
 });
 /* =========================
@@ -1698,30 +1735,7 @@ function restoreLoginTheme() {
     loginView.setAttribute('style', custom);
   }
 }
-// Biến toàn cục để lưu trữ tất cả dữ liệu từ server
-window.appState = {
-  userSession: null,
-  appInitialized: false,
-  isDataLoaded: false,
-  loadingActive: false,
-  metrics: null,
-  reports: [],
-  teamData: [],
-  notifications: { reports: [], unreadCount: 0 },
-  trackingRosters: { reports: [] },
-  trackingIncidents: [],
-  logistics: { items: [], logs: [], activeIncidents: [] },
-  map: null,
-  mapInitialized: false,
-  geojsonBaseLayer: null,
-  choroplethLayer: null,
-  markersLayerGroup: null,
-  mapGeoData: null,
-  mapCompanyData: [],
-  filteredData: [],
-  drawnItems: null, // (MỚI) Lưu các hình vẽ thêm vào
-  selectedRangeChecker: null, // Lưu trạng thái lọc theo màu legend
-};
+
 let dashboardPoller = null; // Sẽ giữ ID của bộ đếm thời gian
 const POLLING_INTERVAL = 30000; // 30000ms = 30 giây
 // Sửa đổi hàm DOMContentLoaded
@@ -1916,35 +1930,36 @@ document.addEventListener('DOMContentLoaded', function () {
 
     try {
       // 2. Đổi mật khẩu qua Supabase Auth
-      // Lưu ý: Supabase tự động xác thực phiên đăng nhập hiện tại.
-      // Nếu muốn xác thực mật khẩu cũ trước khi đổi, ta có thể đăng nhập lại:
       const email = window.userSession?.email;
-      if (!email) throw new Error('Không tìm thấy session!');
+      if (!email) throw new Error('Không tìm thấy phiên đăng nhập!');
 
       // Bước A: Xác thực mật khẩu cũ
       const { error: signInError } =
-        await supabaseClient.auth.signInWithPassword({
+        await window.supabaseClient.auth.signInWithPassword({
           email: email,
           password: oldPass,
         });
       if (signInError) throw new Error('Mật khẩu cũ không chính xác!');
 
       // Bước B: Cập nhật mật khẩu mới
-      const { error: updateError } = await supabaseClient.auth.updateUser({
-        password: newPass,
-      });
+      const { error: updateError } =
+        await window.supabaseClient.auth.updateUser({
+          password: newPass,
+        });
       if (updateError) throw updateError;
 
       // 3. THÀNH CÔNG
-      showToast('Mật khẩu đã đổi! Đang đăng xuất sau 2 giây...', 'success');
+      if (typeof showToast === 'function') {
+        showToast('Mật khẩu đã đổi! Đang đăng xuất sau 2 giây...', 'success');
+      }
 
-      // Đóng Modal
-      if (typeof window.closeModal === 'function') {
-        window.closeModal('modal-change-password');
-      } else {
-        const modalEl = document.getElementById('modal-change-password');
-        const modalInstance = bootstrap.Modal.getInstance(modalEl);
-        if (modalInstance) modalInstance.hide();
+      // Đóng Modal an toàn tuyệt đối bằng Bootstrap (Tránh lỗi null style)
+      const modalEl = document.getElementById('modal-change-password');
+      if (modalEl) {
+        // Lấy instance hiện tại hoặc tạo mới nếu chưa có
+        const modalInstance =
+          bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
+        modalInstance.hide();
       }
 
       const form = document.getElementById('form-change-password');
@@ -1952,15 +1967,28 @@ document.addEventListener('DOMContentLoaded', function () {
 
       // Logout sau khi đổi thành công
       setTimeout(async function () {
-        if (typeof logout === 'function') {
-          await logout();
+        if (typeof window.logout === 'function') {
+          await window.logout();
         } else {
           window.location.reload();
         }
       }, 2500);
     } catch (err) {
-      console.error('Lỗi đổi mật khẩu:', err);
-      showToast('Lỗi: ' + err.message, 'error');
+      console.error('❌ Lỗi đổi mật khẩu:', err);
+
+      // Phiên dịch lỗi của Supabase ra tiếng Việt cho dễ hiểu
+      let errorMsg = err.message;
+      if (errorMsg.includes('different from the old password')) {
+        errorMsg = 'Mật khẩu mới không được giống với mật khẩu cũ!';
+      } else if (errorMsg.includes('least 6 characters')) {
+        errorMsg = 'Mật khẩu mới phải có ít nhất 6 ký tự!';
+      }
+
+      if (typeof showToast === 'function') {
+        showToast(errorMsg, 'error');
+      } else {
+        alert(errorMsg);
+      }
     } finally {
       if (typeof hideLoadingSpinner === 'function') hideLoadingSpinner();
     }
@@ -2758,39 +2786,35 @@ document.addEventListener('DOMContentLoaded', function () {
   };
 
   // ===============================
-  // 4. APP STARTUP
+  // 4. APP STARTUP (CHỈ KHỞI TẠO UI - KHÔNG TẢI DỮ LIỆU DASHBOARD)
   // ===============================
-  $(document).ready(function () {
-    console.log('📄 DOM ready');
+  // ✅ FIX: Đã bỏ mọi lệnh gọi window.initDashboard()/enterDashboard() ở khu vực
+  // này. Trước khi sửa, có 2 nơi NGAY TẠI ĐÂY cùng gọi initDashboard() (1 lần qua
+  // $(document).ready với setTimeout 100ms, 1 lần qua khối "Fallback" với
+  // setTimeout 50ms) - và vì document.readyState gần như LUÔN LÀ 'interactive'
+  // ngay khi DOMContentLoaded bắn ra, khối fallback bên dưới thực chất chạy ở
+  // MỌI LẦN tải trang, không phải chỉ khi cần "dự phòng". Cộng thêm luồng tải
+  // dashboard từ onAuthStateChange, dữ liệu bị tải 2-3 lần cùng lúc -> đụng nhau,
+  // lỗi, kẹt màn hình trắng. Giờ chỉ còn duy nhất onAuthStateChange phụ trách
+  // tải dashboard; ở đây chỉ lo phần UI tĩnh (sidebar, dropdown, theme...).
+  function startAppUI() {
+    if (!window.__uiState) window.__uiState = {};
+    if (window.__uiState.appStartCalled) return;
+    window.__uiState.appStartCalled = true;
 
-    // Remove loading class
+    console.log('📄 DOM ready - init UI only');
     document.body.classList.remove('loading');
-
-    // Init UI immediately
     initUIComponents();
+  }
 
-    // Init dashboard after short delay
-    setTimeout(() => {
-      if (typeof window.initDashboard === 'function') {
-        window
-          .initDashboard()
-          .catch((err) => console.error('Init failed:', err));
-      }
-    }, 100);
-  });
+  $(document).ready(startAppUI);
 
-  // Fallback: If DOM already loaded
+  // Dự phòng thật sự: chỉ chạy nếu vì lý do gì đó $(document).ready chưa kịp bắn
   if (
     document.readyState === 'complete' ||
     document.readyState === 'interactive'
   ) {
-    console.log('⚡ DOM already ready, running init...');
-    setTimeout(() => {
-      initUIComponents();
-      if (typeof window.initDashboard === 'function') {
-        window.initDashboard();
-      }
-    }, 50);
+    setTimeout(startAppUI, 50);
   }
   // ======================
   // QUẢN LÝ DASHBOARD (ADMIN & USER)
@@ -2853,7 +2877,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
         // ✅ 2. Cập nhật bảng báo cáo gần đây (5 người mới nhất)
         if (typeof updateRecentReportsTable === 'function') {
-          updateRecentReportsTable(safeProfiles.slice(0, 5));
+          updateRecentReportsTable(safeProfiles.slice(0, 10));
         }
 
         // ✅ 3. Cập nhật todo list
@@ -3198,7 +3222,14 @@ document.addEventListener('DOMContentLoaded', function () {
         .from('deployment_history')
         .select('*');
 
+      // ✅ FIX: GỘP vào appState hiện có bằng spread {...window.appState, ...},
+      // KHÔNG ghi đè nguyên cả object như trước. Trước đây dòng này thay thế
+      // toàn bộ window.appState chỉ bằng {users, training, deployment_history},
+      // xóa mất cờ appInitialized cùng các dữ liệu khác (incidents, map,
+      // notifications...) -> khiến các nơi khác nghĩ dashboard "chưa init" và
+      // tải lại từ đầu, góp phần gây race condition khi F5.
       window.appState = {
+        ...window.appState,
         users: users || [],
         training: window.appState?.training || { courses: [], records: [] },
         deployment_history: deployments || [],
@@ -4499,77 +4530,142 @@ document.addEventListener('DOMContentLoaded', function () {
       tbody.appendChild(row);
     });
   }
-  window.openEditModal = function (reportId) {
-    // Lưu ID hồ sơ vào biến toàn cục
-    window.tempEditProfileId = reportId;
-
-    // Xóa trắng ô nhập liệu cũ
-    if (typeof $ !== 'undefined') {
-      $('#edit-requirements-text').val('');
-      $('#modal-edit-requirements').modal('show');
-    }
-  };
   function updateTodoList(todos) {
-    const list = document.getElementById('todo-list');
-    list.innerHTML = '';
+    const listContainer = document.getElementById('todo-list');
+    listContainer.innerHTML = '';
 
     if (!todos || todos.length === 0) {
-      list.innerHTML = `<li class="not-completed"><p>Không có tác vụ nào</p></li>`;
+      listContainer.style.display = 'block';
+      listContainer.innerHTML = `<li class="not-completed" style="list-style:none;"><p>Không có tác vụ nào</p></li>`;
       return;
     }
 
-    const groupMap = { pending: [], edit: [], other: [] };
+    // CHIA CỘT BẰNG CSS GRID
+    listContainer.style.display = 'grid';
+    listContainer.style.gridTemplateColumns =
+      'repeat(auto-fit, minmax(250px, 1fr))';
+    listContainer.style.gap = '20px';
+    listContainer.style.padding = '0';
 
-    todos.forEach((item) => {
-      // Hỗ trợ cả 2 định dạng: status (cũ) và approval_status (mới)
-      const status = item.approval_status || item.status || 'pending';
+    // GOM NHÓM DỮ LIỆU
+    const groups = todos.reduce(
+      (acc, item) => {
+        const status = item.approval_status || item.status || 'pending';
+        const text = item.text || `Hồ sơ: ${item.full_name || 'Không tên'}`;
+        const isDone = item.done || status === 'approved';
+        const task = { text, done: isDone };
 
-      // Tự động tạo câu thông báo dựa trên tên nhân sự
-      const text = item.text || `Hồ sơ: ${item.full_name || 'Không tên'}`;
-      const isDone = item.done || status === 'approved';
+        if (status === 'pending') acc.pending.push(task);
+        else if (status === 'edit') acc.edit.push(task);
+        else acc.other.push(task);
 
-      if (status === 'pending')
-        groupMap.pending.push({ text: text, done: isDone });
-      else if (status === 'edit')
-        groupMap.edit.push({ text: text, done: isDone });
-      else groupMap.other.push({ text: text, done: isDone });
+        return acc;
+      },
+      { pending: [], edit: [], other: [] }
+    );
+
+    const columnsConfig = [
+      {
+        id: 'pending',
+        title: '💡 Đang chờ phê duyệt',
+        data: groups.pending,
+        className: 'status-pending',
+      },
+      {
+        id: 'edit',
+        title: '🪔 Yêu cầu sửa đổi',
+        data: groups.edit,
+        className: 'status-edit',
+      },
+      { id: 'other', title: '✅ Đã xử lý', data: groups.other, className: '' },
+    ];
+
+    // RENDER CÁC CỘT
+    columnsConfig.forEach((col) => {
+      if (col.data.length === 0) return;
+
+      // Khối bao bọc toàn bộ cột
+      const colDiv = document.createElement('div');
+      colDiv.className = 'todo-column';
+      colDiv.style.background = 'var(--light)';
+      colDiv.style.padding = '15px';
+      colDiv.style.borderRadius = '12px';
+      colDiv.style.listStyle = 'none';
+
+      // ---------------------------------------------------------
+      // 1. TẠO THANH TIÊU ĐỀ CÓ THỂ CLICK ĐỂ THU GỌN
+      // ---------------------------------------------------------
+      const headerWrapper = document.createElement('div');
+      headerWrapper.style.display = 'flex';
+      headerWrapper.style.justifyContent = 'space-between';
+      headerWrapper.style.alignItems = 'center';
+      headerWrapper.style.cursor = 'pointer'; // Hiển thị hình bàn tay khi hover
+      headerWrapper.style.marginBottom = '15px';
+      headerWrapper.style.userSelect = 'none'; // Chống bôi đen chữ khi click liên tục
+
+      const headerTitle = document.createElement('h6');
+      headerTitle.style.margin = '0';
+      headerTitle.innerHTML = `<strong>${col.title}</strong> <span style="opacity: 0.6; font-size: 0.9em;">(${col.data.length})</span>`;
+
+      // Thêm icon mũi tên (Sử dụng thư viện Boxicons của bạn)
+      const toggleIcon = document.createElement('i');
+      toggleIcon.className = 'bx bx-chevron-down';
+      toggleIcon.style.fontSize = '24px';
+      toggleIcon.style.transition = 'transform 0.3s ease'; // Hiệu ứng xoay mượt mà
+
+      headerWrapper.appendChild(headerTitle);
+      headerWrapper.appendChild(toggleIcon);
+      colDiv.appendChild(headerWrapper);
+
+      // ---------------------------------------------------------
+      // 2. TẠO HỘP CHỨA TÁC VỤ VÀ ĐỔ DỮ LIỆU VÀO
+      // ---------------------------------------------------------
+      const tasksWrapper = document.createElement('div');
+
+      col.data.forEach((todo) => {
+        const taskCard = document.createElement('div');
+
+        const taskClass =
+          col.id === 'other'
+            ? todo.done
+              ? 'completed'
+              : 'not-completed'
+            : `not-completed ${col.className}`;
+
+        taskCard.className = `task-card ${taskClass}`;
+        taskCard.style.padding = '12px';
+        taskCard.style.marginBottom = '10px';
+        taskCard.style.backgroundColor = '#fff'; // Đổi nền thẻ thành trắng để nổi bật trên nền xám
+        taskCard.style.borderRadius = '8px';
+        taskCard.style.borderLeft = '4px solid var(--blue)';
+        taskCard.style.boxShadow = '0 2px 4px rgba(0,0,0,0.05)';
+
+        taskCard.innerHTML = `<p style="margin:0; font-size: 14px; font-weight: 500;">${todo.text}</p>`;
+        tasksWrapper.appendChild(taskCard);
+      });
+
+      colDiv.appendChild(tasksWrapper);
+
+      // ---------------------------------------------------------
+      // 3. GẮN SỰ KIỆN CLICK ĐỂ ẨN/HIỆN
+      // ---------------------------------------------------------
+      let isCollapsed = false;
+      headerWrapper.addEventListener('click', () => {
+        isCollapsed = !isCollapsed;
+        if (isCollapsed) {
+          tasksWrapper.style.display = 'none'; // Giấu các thẻ đi
+          toggleIcon.style.transform = 'rotate(-90deg)'; // Xoay mũi tên hướng sang phải
+        } else {
+          tasksWrapper.style.display = 'block'; // Hiện lại các thẻ
+          toggleIcon.style.transform = 'rotate(0deg)'; // Xoay mũi tên cắm xuống
+        }
+      });
+
+      listContainer.appendChild(colDiv);
+      if (col.id === 'other') {
+        headerWrapper.click();
+      }
     });
-
-    if (groupMap.pending.length) {
-      const header = document.createElement('li');
-      header.innerHTML = `<strong>💡 Đang chờ phê duyệt</strong>`;
-      list.appendChild(header);
-      groupMap.pending.forEach((todo) => {
-        const li = document.createElement('li');
-        li.className = 'not-completed status-pending';
-        li.innerHTML = `<p>${todo.text}</p><i class='bx bx-dots-vertical-rounded'></i>`;
-        list.appendChild(li);
-      });
-    }
-
-    if (groupMap.edit.length) {
-      const header = document.createElement('li');
-      header.innerHTML = `<strong>🪔 Yêu cầu sửa đổi</strong>`;
-      list.appendChild(header);
-      groupMap.edit.forEach((todo) => {
-        const li = document.createElement('li');
-        li.className = 'not-completed status-edit';
-        li.innerHTML = `<p>${todo.text}</p><i class='bx bx-dots-vertical-rounded'></i>`;
-        list.appendChild(li);
-      });
-    }
-
-    if (groupMap.other.length) {
-      const header = document.createElement('li');
-      header.innerHTML = `<strong>Đã xử lý</strong>`;
-      list.appendChild(header);
-      groupMap.other.forEach((todo) => {
-        const li = document.createElement('li');
-        li.className = todo.done ? 'completed' : 'not-completed';
-        li.innerHTML = `<p>${todo.text}</p><i class='bx bx-dots-vertical-rounded'></i>`;
-        list.appendChild(li);
-      });
-    }
   }
 
   // Example function to get CSS class for status badges
