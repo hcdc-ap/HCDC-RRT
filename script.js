@@ -6816,20 +6816,64 @@ document.addEventListener('DOMContentLoaded', function () {
                 </div>
             `;
       }
+// ============================================================
       // 2. LOGIC PHẢN HỒI (DÀNH CHO NGƯỜI DÙNG)
-      // 2. LOGIC PHẢN HỒI (DÀNH CHO NGƯỜI DÙNG)
+      // ============================================================
       else if (isActive && isActivated) {
-        const isInvited =
-          invitedStr.includes(myEmail) || invitedStr.includes(myUser);
-        let isConfirmed =
-          confirmedStr.includes(myEmail) || confirmedStr.includes(myUser);
-        let isDeclined =
-          declinedStr.includes(myEmail) || declinedStr.includes(myUser);
+        // Lấy thông tin user hiện tại (đảm bảo không bị lỗi null/undefined)
+        const myEmail = String(window.userSession?.email || '').toLowerCase().trim();
+        const myUser = String(window.userSession?.username || '').toLowerCase().trim();
+        const myFullName = String(window.userSession?.full_name || '').toLowerCase().trim();
 
-        if (isInvited && !isConfirmed && !isDeclined) {
+        // 🛡️ HÀM BẢO VỆ: Tuyệt đối không so sánh nếu từ khóa bị rỗng
+        const checkIncludes = (listStr, keyword) => {
+          if (!keyword) return false;
+          return listStr.includes(keyword);
+        };
+
+        // Kiểm tra 3 danh sách (Sử dụng hàm bảo vệ)
+        const isInvited =
+          checkIncludes(invitedStr, myEmail) || 
+          checkIncludes(invitedStr, myUser) || 
+          checkIncludes(invitedStr, myFullName);
+
+        const isConfirmed =
+          checkIncludes(confirmedStr, myEmail) || 
+          checkIncludes(confirmedStr, myUser) || 
+          checkIncludes(confirmedStr, myFullName);
+
+        const isDeclined =
+          checkIncludes(declinedStr, myEmail) || 
+          checkIncludes(declinedStr, myUser) || 
+          checkIncludes(declinedStr, myFullName);
+
+        // 🔥 THỨ TỰ ƯU TIÊN HIỂN THỊ GIAO DIỆN 🔥
+        if (isConfirmed) {
+          // Ưu tiên 1: Đã xác nhận -> Tắt thông báo
+          actionBar.style.display = 'none';
+        } 
+        else if (isDeclined) {
+          // Ưu tiên 2: Đã từ chối -> Hiện bảng xám
           actionBar.style.display = 'flex';
-          actionBar.className =
-            'alert alert-warning shadow-sm mb-3 justify-content-between align-items-center';
+          actionBar.className = 'alert alert-secondary shadow-sm mb-3 justify-content-between align-items-center';
+          actionBar.innerHTML = `
+          <div>
+            <h5 style="margin:0; color:#666; font-size:16px;">
+              <i class='bx bx-x-circle'></i> BẠN ĐÃ TỪ CHỐI
+            </h5>
+            <p style="margin:0; font-size:13px; color:#666;">
+              Hệ thống đã ghi nhận phản hồi của bạn.
+            </p>
+          </div>
+          <div>
+             <button class="btn btn-outline-primary btn-sm" onclick="submitIncidentResponse('confirm')">Tham gia lại</button>
+          </div>
+          `;
+        } 
+        else if (isInvited) {
+          // Ưu tiên 3: Được mời nhưng chưa phản hồi gì -> Hiện bảng vàng
+          actionBar.style.display = 'flex';
+          actionBar.className = 'alert alert-warning shadow-sm mb-3 justify-content-between align-items-center';
           actionBar.innerHTML = `
           <div>
             <h5 style="margin:0; color:#856404; font-size:16px;">
@@ -6847,28 +6891,14 @@ document.addEventListener('DOMContentLoaded', function () {
               <i class='bx bx-x'></i> TỪ CHỐI
             </button>
           </div>
-      `;
-        } else if (isDeclined) {
-          actionBar.style.display = 'flex';
-          actionBar.className =
-            'alert alert-secondary shadow-sm mb-3 justify-content-between align-items-center';
-          actionBar.innerHTML = `
-          <div>
-            <h5 style="margin:0; color:#666; font-size:16px;">
-              <i class='bx bx-x-circle'></i> BẠN ĐÃ TỪ CHỐI
-            </h5>
-            <p style="margin:0; font-size:13px; color:#666;">
-              Hệ thống đã ghi nhận phản hồi của bạn.
-            </p>
-          </div>
-          <div>
-             <button class="btn btn-outline-primary btn-sm" onclick="submitIncidentResponse('confirm')">Tham gia lại</button>
-          </div>
-      `;
-        } else {
+          `;
+        } 
+        else {
+          // Không thuộc đối tượng nào -> Ẩn
           actionBar.style.display = 'none';
         }
       } else {
+        // Sự kiện đã kết thúc hoặc chưa kích hoạt -> Ẩn
         actionBar.style.display = 'none';
       }
     }
@@ -12317,16 +12347,19 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   };
 
-  window.submitIncidentResponse = async function (actionType) {
+window.submitIncidentResponse = async function (actionType) {
     if (!window.selectedIncidentId) return;
-    const myEmail = String(window.userSession?.email || '')
-      .toLowerCase()
-      .trim();
+    
+    // Lấy thông tin user
+    const myEmail = String(window.userSession?.email || '').toLowerCase().trim();
+    const myUserId = window.userSession?.id; // Lấy thêm ID để lưu lịch sử
+    
     if (!myEmail)
       return showToast('Lỗi: Không tìm thấy email của bạn', 'error');
 
     showLoadingSpinner();
     try {
+      // 1. Kéo dữ liệu sự kiện hiện tại về
       const { data: inc, error: fetchErr } = await window.supabaseClient
         .from('incidents')
         .select('members, declined_members')
@@ -12343,6 +12376,7 @@ document.addEventListener('DOMContentLoaded', function () {
         .map((e) => e.trim().toLowerCase())
         .filter(Boolean);
 
+      // 2. Logic thêm/bớt danh sách
       if (actionType === 'confirm') {
         if (!confirmedArr.includes(myEmail)) confirmedArr.push(myEmail);
         declinedArr = declinedArr.filter((e) => e !== myEmail);
@@ -12351,6 +12385,7 @@ document.addEventListener('DOMContentLoaded', function () {
         confirmedArr = confirmedArr.filter((e) => e !== myEmail);
       }
 
+      // 3. Cập nhật vào bảng incidents
       const { error: updateErr } = await window.supabaseClient
         .from('incidents')
         .update({
@@ -12361,6 +12396,27 @@ document.addEventListener('DOMContentLoaded', function () {
         .eq('id', window.selectedIncidentId);
 
       if (updateErr) throw updateErr;
+
+      // ==============================================================
+      // 🔥 BƯỚC MỚI: GHI NHẬT KÝ VÀO BẢNG DEPLOYMENT_HISTORY 🔥
+      // ==============================================================
+      if (myUserId) {
+          const actionText = actionType === 'confirm' ? 'Thành viên' : 'Đã từ chối';
+          
+          // Dùng upsert (hoặc insert) để ghi lại hành động của nhân sự
+          const { error: historyErr } = await window.supabaseClient
+            .from('deployment_history')
+            .upsert({
+                incident_id: window.selectedIncidentId,
+                user_id: myUserId,
+                action_type: actionText,
+                // created_at sẽ tự động lấy thời gian hiện tại
+            }, { onConflict: 'incident_id, user_id' }); // Tránh tạo ra nhiều dòng nếu user bấm đổi ý liên tục
+            
+          if (historyErr) console.warn("Lỗi lưu lịch sử thực chiến:", historyErr);
+      }
+      // ==============================================================
+
       showToast(
         actionType === 'confirm'
           ? 'Đã xác nhận tham gia!'
@@ -12368,11 +12424,13 @@ document.addEventListener('DOMContentLoaded', function () {
         'success'
       );
 
+      // 4. Làm mới giao diện
       const { data: updatedInc } = await window.supabaseClient
         .from('incidents')
         .select('*')
         .eq('id', window.selectedIncidentId)
         .single();
+        
       if (updatedInc) {
         const newIncString = encodeURIComponent(JSON.stringify(updatedInc));
         window.currentDossierString = newIncString;
@@ -12387,6 +12445,7 @@ document.addEventListener('DOMContentLoaded', function () {
       }
       if (typeof window.renderTrackingPage === 'function')
         window.renderTrackingPage(true);
+        
     } catch (error) {
       showToast('Lỗi hệ thống: ' + error.message, 'error');
     } finally {
