@@ -12163,66 +12163,92 @@ window.loadUserNotifications = async function () {
     }
   };
 
-  window.loadRosterData = async function () {
-    try {
-      if (typeof waitForSupabaseReady === 'function')
-        await waitForSupabaseReady();
-      let combinedData = [];
+// PATCH 15 (v3): Hiển thị TẤT CẢ incident đang active trên lịch,
+// không phụ thuộc trạng thái của từng activity con bên trong
+window.loadRosterData = async function () {
+  try {
+    let combinedData = [];
 
-      const { data: rosters, error: rosterErr } = await window.supabaseClient
-        .from('roster_schedules')
-        .select('*')
-        .order('duty_date', { ascending: false });
-      if (rosterErr) throw rosterErr;
+    // 1. Lịch trực định kỳ (giữ nguyên)
+    const { data: rosters, error: rosterErr } = await window.supabaseClient
+      .from('roster_schedules')
+      .select('*')
+      .order('duty_date', { ascending: false });
+    if (rosterErr) throw rosterErr;
 
-      if (rosters) {
-        const formattedRosters = rosters.map((r) => ({
-          id: r.id,
-          duty_date: r.duty_date,
-          team_name: r.team_name,
-          status: r.status,
-          note: r.note || '',
-          shift_type: r.shift_type || 'roster',
-        }));
-        combinedData = [...combinedData, ...formattedRosters];
-      }
-
-      try {
-        const { data: activities, error: activityErr } =
-          await window.supabaseClient
-            .from('incident_activities')
-            .select('id, task_group, deadline, status')
-            .in('status', ['active', 'pending']);
-        if (activityErr) throw activityErr;
-
-        if (activities) {
-          const formattedIncidents = activities.map((a) => {
-            let validDate = new Date().toISOString().split('T')[0];
-            if (a.deadline) validDate = String(a.deadline).split('T')[0];
-            return {
-              id: a.id,
-              duty_date: validDate,
-              team_name: a.task_group || 'Chưa rõ',
-              status: a.status,
-              note: 'Điều động khẩn cấp',
-              shift_type: 'incident',
-            };
-          });
-          combinedData = [...combinedData, ...formattedIncidents];
-        }
-      } catch (actErr) {
-        console.warn('⚠️ Bỏ qua dữ liệu Sự cố:', actErr.message);
-      }
-
-      window.appState = window.appState || {};
-      window.appState.roster_schedules = combinedData;
-      console.log(`✅ Đã tải thành công dữ liệu lịch.`);
-      return window.appState.roster_schedules;
-    } catch (err) {
-      console.error('❌ loadRosterData error:', err);
-      return [];
+    if (rosters) {
+      combinedData = rosters.map((r) => ({
+        id: r.id,
+        duty_date: r.duty_date,
+        team_name: r.team_name,
+        status: r.status,
+        note: r.note || '',
+        shift_type: r.shift_type || 'roster',
+      }));
     }
-  };
+
+    // 2. Sự cố khẩn cấp — LẤY THEO incident.status, KHÔNG theo activity
+    try {
+      const { data: incidents, error: incErr } = await window.supabaseClient
+        .from('incidents')
+        .select('id, event_name, status, activation_time')
+        .eq('status', 'active'); // ← Chỉ cần incident còn active
+      if (incErr) throw incErr;
+
+      if (incidents && incidents.length > 0) {
+        const incidentIds = incidents.map((i) => i.id);
+
+        // Lấy thêm activities để biết % hoàn thành (hiển thị phụ, không dùng để filter)
+        const { data: activities } = await window.supabaseClient
+          .from('incident_activities')
+          .select('incident_id, status')
+          .in('incident_id', incidentIds);
+
+        const progressMap = {};
+        (activities || []).forEach((a) => {
+          if (!progressMap[a.incident_id]) {
+            progressMap[a.incident_id] = { total: 0, done: 0 };
+          }
+          progressMap[a.incident_id].total++;
+          if (a.status === 'completed') progressMap[a.incident_id].done++;
+        });
+
+        const formattedIncidents = incidents
+          .map((inc) => {
+            if (!inc.activation_time) return null; // Không có ngày thật → bỏ
+
+            const validDate = String(inc.activation_time).split('T')[0];
+            const prog = progressMap[inc.id];
+            const progressText = prog
+              ? ` (${prog.done}/${prog.total} HĐ xong)`
+              : '';
+
+            return {
+              id: inc.id,
+              duty_date: validDate,
+              team_name: inc.event_name || 'Sự cố',
+              status: inc.status, // Luôn là 'active' vì đã filter ở query
+              note: 'Điều động khẩn cấp' + progressText,
+              shift_type: 'incident',
+              incident_id: inc.id,
+            };
+          })
+          .filter(Boolean);
+
+        combinedData = [...combinedData, ...formattedIncidents];
+      }
+    } catch (e) {
+      console.warn('⚠️ Bỏ qua dữ liệu Sự cố:', e.message);
+    }
+
+    window.appState = window.appState || {};
+    window.appState.roster_schedules = combinedData;
+    return combinedData;
+  } catch (err) {
+    console.error('❌ loadRosterData error:', err);
+    return [];
+  }
+};
 
   async function waitForSupabaseReady(timeout = 10000) {
     if (window.supabaseClient?.auth) return true;
