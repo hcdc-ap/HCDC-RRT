@@ -7231,86 +7231,65 @@ document.addEventListener('DOMContentLoaded', function () {
     el.classList.add('badge-changed');
     setTimeout(() => el.classList.remove('badge-changed'), 600);
   }
-  // ==========================================
-  // HÀM TẢI THÔNG BÁO (SUPABASE VERSION)
-  // ==========================================
-  window.loadUserNotifications = async function () {
-    if (!window.userSession || !window.userSession.email) return;
+// PATCH 13: loadUserNotifications – chỉ hiện thông báo CHƯA đọc
+window.loadUserNotifications = async function () {
+  if (!window.userSession?.email) return;
 
-    try {
-      // 1. Truy vấn thông báo từ Supabase
-      const { data: notifications, error } = await supabaseClient
-        .from('notifications')
-        .select('*')
-        .eq('user_email', window.userSession.email) // Lọc theo email user
-        .order('created_at', { ascending: false }) // Mới nhất lên đầu
-        .limit(10);
+  const list = document.getElementById('notification-list');
+  const numEl = document.querySelector('.notification .num');
 
-      if (error) throw error;
+  try {
+    const { data: notifications, error } = await window.supabaseClient
+      .from('notifications')
+      .select('*')
+      .eq('user_email', window.userSession.email)
+      .eq('is_read', false)          // ← THÊM DÒNG NÀY
+      .order('created_at', { ascending: false })
+      .limit(10);
 
-      const list = document.getElementById('notification-list');
-      if (!list) return;
+    if (error) throw error;
 
-      list.innerHTML = '';
+    if (numEl) numEl.textContent = notifications?.length || 0;
+    if (!list) return;
+    list.innerHTML = '';
 
-      // 2. Xử lý trường hợp không có dữ liệu
-      if (!notifications || notifications.length === 0) {
-        list.innerHTML = '<li class="p-3 text-muted">No new notifications</li>';
-        document.querySelector('.notification .num').textContent = '0';
-        return;
-      }
-
-      let unreadCount = 0;
-
-      // 3. Render danh sách
-      notifications.forEach((n) => {
-        const isRead = n.is_read === true;
-        const li = document.createElement('li');
-
-        // Format thời gian
-        const dateStr = n.created_at
-          ? new Date(n.created_at).toLocaleDateString('vi-VN', {
-              day: '2-digit',
-              month: '2-digit',
-              year: 'numeric',
-              hour: '2-digit',
-              minute: '2-digit',
-            })
-          : '';
-
-        li.innerHTML = `
-        <div class="p-2 border-bottom">
-          <div style="font-size:0.9em; font-weight:bold;">${window.escapeHtml(
-            n.message
-          )}</div>
-          <div style="font-size:0.7em; color:gray;" class="mb-1">${dateStr}</div>
-          ${
-            isRead
-              ? `<button class="btn btn-sm btn-success" disabled style="pointer-events:none;opacity:0.8;">
-                 <i class='bx bxs-envelope-open'></i> Đã đọc
-               </button>`
-              : `<button class="btn btn-sm btn-outline-danger" onclick="markNotificationAsRead('${n.id}', this)">
-                 <i class='bx bxs-envelope'></i> Chưa đọc
-               </button>`
-          }
-        </div>
-      `;
-
-        if (!isRead) unreadCount++;
-        list.appendChild(li);
-      });
-
-      // 4. Cập nhật số lượng trên bell icon
-      const numEl = document.querySelector('.notification .num');
-      if (numEl) numEl.textContent = unreadCount;
-
-      const menu = document.getElementById('notificationMenu');
-      if (menu) menu.style.display = 'block';
-    } catch (err) {
-      console.error('Lỗi tải thông báo:', err);
-      showToast('Không thể tải thông báo: ' + err.message, 'error');
+    if (!notifications || notifications.length === 0) {
+      list.innerHTML =
+        '<li class="p-3 text-muted text-center">Không có thông báo mới.</li>';
+      return;
     }
-  };
+
+    notifications.forEach((n) => {
+      const dateStr = n.created_at
+        ? new Date(n.created_at).toLocaleString('vi-VN', {
+            day: '2-digit', month: '2-digit', year: 'numeric',
+            hour: '2-digit', minute: '2-digit',
+          })
+        : '';
+
+      const li = document.createElement('li');
+      li.innerHTML = `
+        <div class="p-2 border-bottom">
+          <div style="font-size:.9em;font-weight:bold;">
+            ${window.escapeHtml?.(n.message) || n.message}
+          </div>
+          <div style="font-size:.7em;color:gray;" class="mb-1">${dateStr}</div>
+          <button class="btn btn-sm btn-outline-danger"
+                  onclick="window.markNotificationAsRead('${n.id}',this)">
+            <i class='bx bxs-envelope'></i> Đánh dấu đã đọc
+          </button>
+        </div>`;
+      list.appendChild(li);
+    });
+
+    // Hiện dropdown
+    const menu = document.getElementById('notificationMenu');
+    if (menu) menu.style.display = 'block';
+
+  } catch (err) {
+    console.error('[loadUserNotifications] Lỗi:', err);
+  }
+};
   // Sự kiện mở/đóng menu chuông notification
   document
     .getElementById('notificationIcon')
