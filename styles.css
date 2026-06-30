@@ -1145,23 +1145,26 @@ body.dark {
   display: flex;
   justify-content: center;
 }
+/* 4. Bottom menu (logout) luôn ở cuối, không absolute nữa */
 #sidebar .side-menu.bottom {
-  margin-top: flex; /* Đẩy xuống đáy khi dùng flex, hoặc giữ nguyên nếu không dùng */
+  flex-shrink: 0;             /* ← không co lại */
+  margin-top: 0;
+  padding-bottom: 8px;
+  background: var(--light);
+  border-top: 1px solid rgba(0,0,0,0.06);
 }
+
+/* 5. Xóa absolute positioning cũ của bottom items */
 #sidebar .side-menu.bottom li:nth-last-of-type(-n + 2) {
-  position: absolute;
-  bottom: 2px; /* Dời lên 1 chút tránh sát mép */
-  left: 0;
-  right: 0;
-  justify-content: center;
-  background: var(
-    --light
-  ); /* ✅ Nền trùng sidebar để che nội dung cuộn phía sau */
-  padding: 0 5px;
-  z-index: 10;
+  position: relative;         /* ← đổi từ absolute sang relative */
+  bottom: unset;
+  left: unset;
+  right: unset;
+  background: transparent;
+  z-index: auto;
 }
 #sidebar .side-menu.bottom li:nth-last-of-type(2) {
-  bottom: 40px;
+  bottom: unset;              /* ← bỏ offset cũ */
 }
 
 /* =================================================================== */
@@ -4265,3 +4268,19 @@ html {
   border-radius: var(--bs-modal-border-radius);
   outline: 0;
 }
+/* Sidebar scroll khi quá nhiều item */
+#sidebar .side-menu.top {
+  overflow-y: auto;
+  overflow-x: hidden;
+  max-height: calc(100vh - 120px); /* trừ phần logo và nút logout */
+}
+
+#sidebar .side-menu.top::-webkit-scrollbar {
+  width: 4px;
+}
+
+#sidebar .side-menu.top::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.2);
+  border-radius: 4px;
+}
+`
