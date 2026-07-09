@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Xác nhận phản hồi - RRT HCDC</title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:'Lexend',system-ui,sans-serif;background:#006a75;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;color:#1f2937}
+    .card{background:#fff;border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.15);max-width:520px;width:100%;overflow:hidden;animation:slideUp .4s ease;text-align:center}
+    @keyframes slideUp{from{opacity:0;transform:translateY(30px)}to{opacity:1;transform:translateY(0)}}
+    .header{background:#fd7e14;padding:24px;color:#fff}
+    .header h1{font-size:18px;font-weight:600;letter-spacing:1px;text-transform:uppercase}
+    .body{padding:32px}
+    #icon{font-size:56px;margin-bottom:14px}
+    #title{font-size:18px;color:#1f2937;margin-bottom:10px}
+    #desc{background:#f3f4f6;padding:14px;border-radius:8px;font-size:15px;color:#374151;line-height:1.6;margin-bottom:24px;border-left:4px solid #9ca3af;text-align:left}
+    .btn{display:inline-block;padding:14px 28px;color:#fff;border:none;border-radius:8px;font-weight:600;font-size:16px;cursor:pointer;width:100%}
+    .home{display:inline-block;margin-top:16px;color:#6b7280;font-size:14px;text-decoration:none}
+    .footer{background:#f9fafb;padding:16px 24px;border-top:1px solid #e5e7eb;font-size:12px;color:#6b7280}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="header"><h1>HỆ THỐNG RRT - HCDC</h1></div>
+    <div class="body">
+      <div id="icon">🛡️</div>
+      <h2 id="title">Đang kiểm tra liên kết...</h2>
+      <div id="desc">Vui lòng đợi trong giây lát.</div>
+      <form id="confirmForm" method="POST" action="" style="display:none;">
+        <button type="submit" id="actionBtn" class="btn">XÁC NHẬN</button>
+      </form>
+      <a class="home" href="https://hcdc-ap.github.io/HCDC-RRT/">Hủy, về Trang chủ</a>
+    </div>
+    <div class="footer">
+      <p><strong>Trung tâm Kiểm soát Bệnh tật Thành phố Hồ Chí Minh</strong></p>
+      <p>Phản hồi của bạn chỉ được ghi nhận sau khi bấm nút xác nhận phía trên.</p>
+    </div>
+  </div>
+
+  <script>
+    // ⚙️ Địa chỉ Edge Function xử lý phản hồi
+    const FUNC_URL = "https://sxzjbygiowpscyhiffqc.supabase.co/functions/v1/handle-email-callback";
+
+    const ACTIONS = {
+      confirm: { icon: "✅", title: "Xác nhận tham gia nhiệm vụ",
+                 desc: "Bấm nút bên dưới để ghi nhận bạn <b>XÁC NHẬN THAM GIA</b> nhiệm vụ được điều động. Phản hồi sẽ được đồng bộ ngay vào hệ thống RRT-HCDC.",
+                 btn: "✅ TÔI XÁC NHẬN THAM GIA", color: "#16a34a" },
+      decline: { icon: "🙏", title: "Báo không thể tham gia",
+                 desc: "Bấm nút bên dưới để ghi nhận bạn <b>KHÔNG THỂ THAM GIA</b> nhiệm vụ này. Ban chỉ huy sẽ điều phối nhân sự thay thế.",
+                 btn: "❌ TÔI KHÔNG THỂ THAM GIA", color: "#dc2626" },
+      read:    { icon: "👁️", title: "Xác nhận đã đọc thông báo",
+                 desc: "Bấm nút bên dưới để xác nhận bạn <b>ĐÃ ĐỌC</b> thông báo từ hệ thống.",
+                 btn: "👁️ TÔI ĐÃ ĐỌC THÔNG BÁO", color: "#0ea5e9" },
+    };
+
+    document.addEventListener("DOMContentLoaded", () => {
+      const p = new URLSearchParams(window.location.search);
+      const id = p.get("id") || "";
+      const token = p.get("token") || "";
+      const action = p.get("action") || "";
+
+      const iconEl = document.getElementById("icon");
+      const titleEl = document.getElementById("title");
+      const descEl = document.getElementById("desc");
+      const form = document.getElementById("confirmForm");
+      const btn = document.getElementById("actionBtn");
+
+      if (!id || !token || !ACTIONS[action]) {
+        iconEl.textContent = "❌";
+        titleEl.textContent = "Liên kết không hợp lệ";
+        descEl.innerHTML = "Đường dẫn thiếu thông tin hoặc thuộc phiên bản email cũ. Vui lòng phản hồi qua Telegram hoặc ứng dụng RRT.";
+        return;
+      }
+
+      const a = ACTIONS[action];
+      iconEl.textContent = a.icon;
+      titleEl.textContent = a.title;
+      descEl.innerHTML = a.desc;
+      btn.textContent = a.btn;
+      btn.style.background = a.color;
+
+      // Form POST = điều hướng trình duyệt thuần túy -> không dính CORS,
+      // máy quét email không tự bấm được
+      form.action = FUNC_URL +
+        "?id=" + encodeURIComponent(id) +
+        "&token=" + encodeURIComponent(token) +
+        "&action=" + encodeURIComponent(action);
+      form.style.display = "block";
+
+      // Chống bấm đúp phía trình duyệt
+      form.addEventListener("submit", () => {
+        btn.disabled = true;
+        btn.textContent = "⏳ Đang ghi nhận...";
+      });
+    });
+  </script>
+</body>
+</html>
