@@ -4283,4 +4283,104 @@ html {
   background: rgba(255,255,255,0.2);
   border-radius: 4px;
 }
-`
+/* ===== MAP CONTROLS GRID — CÂN ĐỐI & CHUYÊN NGHIỆP ===== */
+.map-controls-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1rem;
+  padding: 1rem;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.75rem; /* mềm hơn 0.5rem */
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.04);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+@media (min-width: 768px) {
+  .map-controls-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+/* Mỗi cột — đảm bảo chiều cao cố định và căn giữa nội dung */
+.map-controls-grid > div {
+  display: flex;
+  flex-direction: column;
+  min-height: 64px; /* Đủ cho label + input/select + padding */
+}
+
+/* Label chung */
+.map-controls-grid label {
+  display: block;
+  margin-bottom: 0.375rem; /* 6px */
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #4b5563;
+  line-height: 1.4;
+}
+
+/* Input & Select — đồng bộ tuyệt đối */
+.map-controls-grid input,
+.map-controls-grid select {
+  width: 100%;
+  padding: 0.5rem 0.75rem; /* 8px 12px */
+  font-size: 0.875rem;
+  line-height: 1.5;
+  color: #1f2937;
+  background-color: #ffffff;
+  border: 1px solid #d1d5db;
+  border-radius: 0.5rem;
+  transition: all 0.2s ease-in-out;
+}
+
+.map-controls-grid input:focus,
+.map-controls-grid select:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+}
+
+/* Select đặc biệt: loại bỏ arrow mặc định để đồng bộ với input */
+.map-controls-grid select {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='%236b7280' viewBox='0 0 16 16'%3E%3Cpath d='M7.247 11.14 2.451 5.658C1.885 5.013 2.384 4 3.274 4h9.898a1 1 0 0 1 .707.293l4.747 5.484C18.384 10.013 17.885 11 17.001 11h-9.75zm1.008-3.5a1 1 0 0 1 1.008 1.008v3.5a1 1 0 0 1-1.008 1.008H7.247a1 1 0 0 1-1.008-1.008v-3.5a1 1 0 0 1 1.008-1.008h1.008z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.75rem center;
+  background-size: 16px 16px;
+}
+
+/* Checkbox + label — căn giữa theo chiều dọc */
+.map-controls-grid .toggle-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  height: 100%;
+  padding-top: 0.25rem; /* điều chỉnh nếu cần */
+}
+
+.map-controls-grid input[type="checkbox"] {
+  flex-shrink: 0;
+  width: 1.25rem;
+  height: 1.25rem;
+  border: 2px solid #d1d5db;
+  border-radius: 0.375rem;
+  background-color: #ffffff;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.map-controls-grid input[type="checkbox"]:checked {
+  background-color: #3b82f6;
+  border-color: #3b82f6;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='white' width='12' height='12'%3E%3Cpath fill-rule='evenodd' d='M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z' clip-rule='evenodd'/%3E%3C/svg%3E");
+  background-size: 70% 70%;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+.map-controls-grid input[type="checkbox"]:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.3);
+}
