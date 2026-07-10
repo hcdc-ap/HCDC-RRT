@@ -597,7 +597,7 @@ window.enterDashboard = async function () {
         QueryCache.fetch('deployments:recent', async () => {
           const { data, error } = await window.supabaseClient
             .from('deployment_history')
-            .select('id, incident_id, user_id, action_type, created_at')
+            .select('id, incident_id, user_id, action_type, confirmed_at, created_at')
             .order('created_at', { ascending: false })
             .limit(50);
           if (error) throw error;
@@ -3243,196 +3243,245 @@ document.addEventListener('DOMContentLoaded', function () {
       console.error('Lỗi load data:', err);
     }
   };
-  function renderCompetencyChart(filteredMembers) {
-    // ✅ FIX: Lấy đúng filteredMembers
-    if (!filteredMembers || !Array.isArray(filteredMembers)) {
-      filteredMembers = window.appState?.users || [];
-    }
+  async function renderCompetencyChart(filteredMembers) {
+    console.group("🔍 renderCompetencyChartDebug - BẮT ĐẦU"); // Mở nhóm log
 
-    // ✅ FIX: Lấy đúng path của training records và deployment history
+    // 1. LẤY DỮ LIỆU ĐẦU VÀO
+    console.log("1. Dữ liệu đầu vào:");
+    console.log("   - filteredMembers:", filteredMembers);
+    console.log("   - window.appState.training?.records:", window.appState?.training?.records);
+    console.log("   - window.appState.deployment_history:", window.appState?.deployment_history);
+
+    if (!filteredMembers || !Array.isArray(filteredMembers)) {
+        console.warn("   - filteredMembers không hợp lệ, dùng mặc định window.appState.users");
+        filteredMembers = window.appState?.users || [];
+    }
+    console.log("   - filteredMembers sau khi xác định:", filteredMembers);
+
     const trainingRecords = window.appState?.training?.records || [];
     const deploymentHistory = window.appState?.deployment_history || [];
 
+    console.log("   - Số lượng filteredMembers:", filteredMembers.length);
+    console.log("   - Số lượng trainingRecords:", trainingRecords.length);
+    console.log("   - Số lượng deploymentHistory:", deploymentHistory.length);
+
+    // 2. KHỞI TẠO CẤU TRÚC TEAM
+    console.log("\n2. Khởi tạo cấu trúc teams từ filteredMembers:");
     const teams = {};
-
-    // Khởi tạo teams từ filteredMembers
-    filteredMembers.forEach((m) => {
-      const teamName = m.team || 'No team';
-      if (!teams[teamName]) {
-        teams[teamName] = { trained: 0, combat: 0, total: 0 };
-      }
-      teams[teamName].total++;
+    filteredMembers.forEach((m, index) => {
+        const teamName = m.team || 'No team';
+        if (!teams[teamName]) {
+            console.log(`   - Tạo team mới: "${teamName}"`);
+            teams[teamName] = { trained: 0, combat: 0, total: 0 };
+        }
+        teams[teamName].total++;
+        // Log chi tiết nếu cần thiết
+        // console.log(`   - Thành viên ${index} (${m.fullName || m.email}) -> team "${teamName}", total = ${teams[teamName].total}`);
     });
+    console.log("   - Cấu trúc teams sau khi khởi tạo:", teams);
 
-    // ✅ FIX: Đếm số lượng training đã pass theo user
+    // 3. XỬ LÝ TRAINING RECORDS
+    console.log("\n3. Xử lý trainingRecords:");
     if (trainingRecords.length > 0) {
-      const trainedByUser = {};
+        const trainedByUser = {};
+        console.log("   - Bắt đầu duyệt trainingRecords...");
+        trainingRecords.forEach((r, index) => {
+            if (r.result === 'pass') {
+                const userId = r.profile_id || r.user_id;
+                if (userId) {
+                    trainedByUser[userId] = (trainedByUser[userId] || 0) + 1;
+                    console.log(`   - Training record ${index}: userId="${userId}", result=pass -> trainedByUser["${userId}"] = ${trainedByUser[userId]}`);
+                } else {
+                    console.warn(`   - Training record ${index}: Thiếu profile_id và user_id, bỏ qua.`);
+                }
+            } else {
+                 console.log(`   - Training record ${index}: result="${r.result}", bỏ qua.`);
+            }
+        });
 
-      trainingRecords.forEach((r) => {
-        if (r.result === 'pass') {
-          // ✅ Dùng profile_id hoặc user_id
-          const userId = r.profile_id || r.user_id;
-          if (userId) {
-            trainedByUser[userId] = (trainedByUser[userId] || 0) + 1;
-          }
-        }
-      });
-
-      // ✅ Gán vào team dựa trên member
-      filteredMembers.forEach((m) => {
-        const userId = m.id;
-        const teamName = m.team || 'No team';
-        if (teams[teamName] && trainedByUser[userId]) {
-          teams[teamName].trained += trainedByUser[userId];
-        }
-      });
+        console.log("   - Cập nhật số lượng trained vào teams từ filteredMembers:");
+        filteredMembers.forEach((m) => {
+            const userId = m.id;
+            const teamName = m.team || 'No team';
+            if (teams[teamName] && trainedByUser[userId]) {
+                teams[teamName].trained += trainedByUser[userId];
+                console.log(`   - Team "${teamName}", userId="${userId}" -> trained += ${trainedByUser[userId]} (total now: ${teams[teamName].trained})`);
+            } else {
+                 // Có thể log nếu không match, nhưng có thể nhiều
+                 // console.log(`   - Team "${teamName}", userId="${userId}" -> không có training match hoặc trainedByUser[userId]=${trainedByUser[userId]}`);
+            }
+        });
+    } else {
+        console.log("   - Danh sách trainingRecords rỗng, bỏ qua.");
     }
 
-    // ✅ FIX: Đếm số lần deployment (thực chiến) - chỉ tính incident_id hợp lệ
+    // 4. XỬ LÝ DEPLOYMENT HISTORY
+    console.log("\n4. Xử lý deploymentHistory:");
     if (deploymentHistory.length > 0) {
-      const deployedByUser = {};
+        const deployedByUser = {};
+        console.log("   - Bắt đầu duyệt deploymentHistory...");
+        deploymentHistory.forEach((h, index) => {
+            const isValidForCombat = (
+                (h.action_type === 'deployed' || h.action_type === 'replaced') &&
+                h.confirmed_at &&
+                h.incident_id
+            );
+            const userId = h.profile_id || h.user_id;
 
-      deploymentHistory.forEach((h) => {
-        // ✅ Chỉ tính các action hợp lệ và có incident_id
-        if (
-          (h.action_type === 'deployed' || h.action_type === 'replaced') &&
-          h.incident_id
-        ) {
-          const userId = h.profile_id || h.user_id;
-          if (userId) {
-            deployedByUser[userId] = (deployedByUser[userId] || 0) + 1;
-          }
-        }
-      });
+            if (isValidForCombat) {
+                if (userId) {
+                    deployedByUser[userId] = (deployedByUser[userId] || 0) + 1;
+                    console.log(`   - Deployment record ${index}: userId="${userId}", valid -> deployedByUser["${userId}"] = ${deployedByUser[userId]}`);
+                } else {
+                    console.warn(`   - Deployment record ${index}: Hợp lệ nhưng thiếu profile_id và user_id, bỏ qua.`, h);
+                }
+            } else {
+                console.log(`   - Deployment record ${index}: Không hợp lệ (action_type:${h.action_type}, confirmed_at:${!!h.confirmed_at}, incident_id:${!!h.incident_id}), bỏ qua.`, h);
+            }
+        });
 
-      // ✅ Gán vào team
-      filteredMembers.forEach((m) => {
-        const userId = m.id;
-        const teamName = m.team || 'No team';
-        if (teams[teamName] && deployedByUser[userId]) {
-          teams[teamName].combat += deployedByUser[userId];
-        }
-      });
+        console.log("   - Cập nhật số lượng combat vào teams từ filteredMembers:");
+        filteredMembers.forEach((m) => {
+            const userId = m.id;
+            const teamName = m.team || 'No team';
+            if (teams[teamName] && deployedByUser[userId]) {
+                teams[teamName].combat += deployedByUser[userId];
+                console.log(`   - Team "${teamName}", userId="${userId}" -> combat += ${deployedByUser[userId]} (total now: ${teams[teamName].combat})`);
+            } else {
+                 // Có thể log nếu không match, nhưng có thể nhiều
+                 // console.log(`   - Team "${teamName}", userId="${userId}" -> không có deployment match hoặc deployedByUser[userId]=${deployedByUser[userId]}`);
+            }
+        });
+    } else {
+        console.log("   - Danh sách deploymentHistory rỗng, bỏ qua.");
     }
 
-    // Tính average per team
+    // 5. TÍNH TRUNG BÌNH
+    console.log("\n5. Tính trung bình theo team:");
     const categories = Object.keys(teams).sort();
     const dataTrained = [];
     const dataCombat = [];
 
     categories.forEach((team) => {
-      const stat = teams[team];
-      const avgTrained =
-        stat.total > 0 ? parseFloat((stat.trained / stat.total).toFixed(1)) : 0;
-      const avgCombat =
-        stat.total > 0 ? parseFloat((stat.combat / stat.total).toFixed(1)) : 0;
-      dataTrained.push(avgTrained);
-      dataCombat.push(avgCombat);
+        const stat = teams[team];
+        const avgTrained = stat.total > 0 ? parseFloat((stat.trained / stat.total).toFixed(1)) : 0;
+        const avgCombat = stat.total > 0 ? parseFloat((stat.combat / stat.total).toFixed(1)) : 0;
+        dataTrained.push(avgTrained);
+        dataCombat.push(avgCombat);
+        console.log(`   - Team "${team}": total=${stat.total}, trained=${stat.trained}, combat=${stat.combat} -> avgTrained=${avgTrained}, avgCombat=${avgCombat}`);
     });
 
-    // Render chart hoặc message
-    const hasData =
-      dataTrained.some((v) => v > 0) || dataCombat.some((v) => v > 0);
-    const chartContainer = document.getElementById('competencyChartAP');
+    // 6. KIỂM TRA CÓ DỮ LIỆU HIỂN THỊ KHÔNG
+    const hasData = dataTrained.some(v => v > 0) || dataCombat.some(v => v > 0);
+    console.log("\n6. Kiểm tra dữ liệu để hiển thị:");
+    console.log("   - dataTrained:", dataTrained);
+    console.log("   - dataCombat:", dataCombat);
+    console.log("   - hasData (dữ liệu > 0):", hasData);
 
+    // 7. RENDER
+    const chartContainer = document.getElementById('competencyChartAP');
     if (!chartContainer) {
-      console.warn('⚠️ Chart container #competencyChartAP not found');
-      return;
+        console.error("❌ Container #competencyChartAP không tìm thấy!");
+        console.groupEnd(); // Đóng nhóm log
+        return;
     }
 
     if (!hasData) {
-      chartContainer.innerHTML =
-        '<p class="text-center text-muted" style="padding: 50px 20px;">' +
-        '📊 <strong>Chưa có dữ liệu năng lực.</strong><br><br>' +
-        '<small>Hệ thống cần có:<br>' +
-        '• Dữ liệu tham gia đào tạo, tập huấn<br>' +
-        '• Dữ liệu tham gia sự kiện kích hoạt khẩn cấp</small>' +
-        '</p>';
-      return;
+        console.log("   - Không có dữ liệu, hiển thị thông báo trống.");
+        chartContainer.innerHTML = `
+            <p class="text-center text-muted" style="padding: 50px 20px;">
+                📊 <strong>Chưa có dữ liệu năng lực.</strong><br><br>
+                <small>Hệ thống cần có:<br>
+                • Dữ liệu tham gia đào tạo, tập huấn<br>
+                • Dữ liệu tham gia sự kiện kích hoạt khẩn cấp</small>
+            </p>`;
+        console.groupEnd(); // Đóng nhóm log
+        return;
     }
 
-    // ✅ Vẽ biểu đồ Highcharts
+    console.log("   - Có dữ liệu, chuẩn bị vẽ biểu đồ.");
     if (typeof Highcharts === 'undefined') {
-      console.error('❌ Highcharts not loaded');
-      chartContainer.innerHTML =
-        '<p class="text-danger">Thư viện biểu đồ chưa được tải.</p>';
-      return;
+        console.error('❌ Thư viện Highcharts chưa được tải!');
+        chartContainer.innerHTML = '<p class="text-danger">Thư viện biểu đồ chưa được tải.</p>';
+        console.groupEnd(); // Đóng nhóm log
+        return;
     }
 
+    console.log("   - Gọi Highcharts.chart...");
     Highcharts.chart('competencyChartAP', {
-      chart: {
-        type: 'column',
-        backgroundColor: 'transparent',
-        style: { fontFamily: "'Ubuntu', sans-serif" },
-      },
-      title: {
-        text: 'Năng lực Trung bình theo Đội (Đào tạo vs Thực chiến)',
-        style: { fontSize: '16px', fontWeight: 'bold' },
-      },
-      subtitle: { text: 'Chỉ số trung bình trên mỗi thành viên' },
-      xAxis: {
-        categories: categories,
-        crosshair: true,
-        labels: { style: { fontSize: '12px' } },
-      },
-      yAxis: {
-        min: 0,
-        title: { text: 'Số lượng (Avg)', style: { color: '#666' } },
-        labels: { style: { fontSize: '11px' } },
-      },
-      tooltip: {
-        shared: true,
-        headerFormat: '<b>{point.x}</b><br/>',
-        pointFormat: '{series.name}: <b>{point.y}</b>{point.suffix}',
-      },
-      legend: {
-        layout: 'horizontal',
-        align: 'center',
-        verticalAlign: 'bottom',
-        x: 0,
-        y: 0,
-        floating: false,
-        backgroundColor: 'rgba(255,255,255,0.9)',
-        itemStyle: { fontSize: '12px' },
-      },
-      plotOptions: {
-        column: {
-          borderRadius: 6,
-          dataLabels: {
-            enabled: true,
-            style: { fontSize: '11px', fontWeight: 'bold' },
-          },
-          pointPadding: 0.2,
-          groupPadding: 0.1,
+        chart: {
+            type: 'column',
+            backgroundColor: 'transparent',
+            style: { fontFamily: "'Ubuntu', sans-serif" },
         },
-      },
-      series: [
-        {
-          name: '📚 Đào tạo (chứng chỉ/người)',
-          data: dataTrained.map((v, i) => ({
-            y: v,
-            suffix: ' khóa',
-          })),
-          color: 'rgba(54, 162, 235, 0.85)',
+        title: {
+            text: 'Năng lực Trung bình theo Đội (Đào tạo vs Thực chiến)',
+            style: { fontSize: '16px', fontWeight: 'bold' },
         },
-        {
-          name: '⚡ Thực chiến (lần tham gia/người)',
-          data: dataCombat.map((v, i) => ({
-            y: v,
-            suffix: ' lần',
-          })),
-          color: 'rgba(255, 99, 132, 0.85)',
+        subtitle: { text: 'Chỉ số trung bình trên mỗi thành viên' },
+        xAxis: {
+            categories: categories,
+            crosshair: true,
+            labels: { style: { fontSize: '12px' } },
         },
-      ],
-      credits: { enabled: false },
+        yAxis: {
+            min: 0,
+            title: { text: 'Số lượng (Avg)', style: { color: '#666' } },
+            labels: { style: { fontSize: '11px' } },
+        },
+        tooltip: {
+            shared: true,
+            headerFormat: '<b>{point.x}</b><br/>',
+            pointFormat: '{series.name}: <b>{point.y}</b>{point.suffix}',
+        },
+        legend: {
+            layout: 'horizontal',
+            align: 'center',
+            verticalAlign: 'bottom',
+            x: 0,
+            y: 0,
+            floating: false,
+            backgroundColor: 'rgba(255,255,255,0.9)',
+            itemStyle: { fontSize: '12px' },
+        },
+        plotOptions: {
+            column: {
+                borderRadius: 6,
+                dataLabels: {
+                    enabled: true,
+                    style: { fontSize: '11px', fontWeight: 'bold' },
+                },
+                pointPadding: 0.2,
+                groupPadding: 0.1,
+            },
+        },
+        series: [
+            {
+                name: '📚 Đào tạo (chứng chỉ/người)',
+                data: dataTrained.map((v, i) => ({
+                    y: v,
+                    suffix: ' khóa',
+                })),
+                color: 'rgba(54, 162, 235, 0.85)',
+            },
+            {
+                name: '⚡ Thực chiến (lần tham gia/người)',
+                data: dataCombat.map((v, i) => ({
+                    y: v,
+                    suffix: ' lần',
+                })),
+                color: 'rgba(255, 99, 132, 0.85)',
+            },
+        ],
+        credits: { enabled: false },
     });
 
-    console.log('✅ Competency chart rendered:', {
-      teams: categories,
-      dataTrained,
-      dataCombat,
-    });
-  }
+    console.log('✅ Competency chart đã được render thành công.');
+    console.groupEnd(); // Đóng nhóm log
+}
+
+// Gọi hàm mới để kiểm tra
+// renderCompetencyChartDebug(window.appState?.users);
 
   window.updateKpiCards = async function () {
     try {
@@ -3680,247 +3729,262 @@ document.addEventListener('DOMContentLoaded', function () {
   // TÍNH NĂNG XUẤT EXCEL TỪ SUPABASE (THAY THẾ GAS)
   // ==========================================
   // Sử dụng thư viện SheetJS (XLSX) đã nhúng ở index.html
-  async function setupExportButton(btnSelector, tableName, fileNamePrefix) {
-    $(btnSelector)
-      .off('click')
-      .on('click', async function () {
-        const btn = $(this);
-        const originalText = btn.html();
+// ============================================================================
+// setupExportButton v2 — THAY TRỌN HÀM CŨ
+// Bổ sung cho export RRT-ers (tableName === 'profiles') 4 cột mới:
+//   - nang_luc_dao_tao      : số khóa đào tạo đạt (result = 'pass')
+//   - chi_tiet_dao_tao      : tên các khóa đã đạt
+//   - kinh_nghiem_thuc_chien: số SỰ KIỆN đã tham gia thực chiến
+//                             (deployed/replaced VÀ có confirmed_at — đúng
+//                              quy tắc đã thống nhất: từ chối/chờ không tính)
+//   - chi_tiet_thuc_chien   : tên các sự kiện đã tham gia
+// ============================================================================
+async function setupExportButton(btnSelector, tableName, fileNamePrefix) {
+  $(btnSelector)
+    .off('click')
+    .on('click', async function () {
+      const btn = $(this);
+      const originalText = btn.html();
+      try {
+        // 1. Hiệu ứng Loading
+        btn
+          .prop('disabled', true)
+          .html('<i class="bx bx-loader-alt bx-spin"></i> Đang tải...');
+        if (typeof showToast === 'function')
+          showToast(`Đang truy xuất dữ liệu từ ${tableName}...`, 'info');
 
-        try {
-          // 1. Hiệu ứng Loading
-          btn
-            .prop('disabled', true)
-            .html('<i class="bx bx-loader-alt bx-spin"></i> Đang tải...');
-          if (typeof showToast === 'function')
-            showToast(`Đang truy xuất dữ liệu từ ${tableName}...`, 'info');
+        let data = [];
 
-          let data = [];
+        // 2. Xử lý riêng cho bảng profiles (join kỹ năng + đào tạo + thực chiến)
+        if (tableName === 'profiles') {
+          // 2a. Fetch profiles
+          const { data: profilesData, error: profilesErr } =
+            await supabaseClient
+              .from('profiles')
+              .select('*')
+              .order('full_name', { ascending: true });
+          if (profilesErr) throw profilesErr;
+          if (!profilesData || profilesData.length === 0) {
+            if (typeof showToast === 'function')
+              showToast('Không có dữ liệu để xuất!', 'warning');
+            btn.prop('disabled', false).html(originalText);
+            return;
+          }
+          const profileIds = profilesData.map((p) => p.id);
 
-          // 2. Xử lý riêng cho bảng profiles (cần join phức tạp)
-          if (tableName === 'profiles') {
-            // Fetch profiles
-            const { data: profilesData, error: profilesErr } =
-              await window.supabaseClient
-                .from('profiles')
-                .select('*')
-                .order('full_name', { ascending: true });
+          // 2b. Fetch rrt_qualifications (kỹ năng khai báo)
+          const { data: qualsData, error: qualsErr } = await supabaseClient
+            .from('rrt_qualifications')
+            .select('profile_id, skills')
+            .in('profile_id', profileIds);
+          if (qualsErr)
+            console.warn('⚠️ Warning fetching qualifications:', qualsErr);
+          const skillsMap = {};
+          (qualsData || []).forEach((q) => {
+            skillsMap[q.profile_id] = q.skills || {};
+          });
 
-            if (profilesErr) throw profilesErr;
-            if (!profilesData || profilesData.length === 0) {
-              if (typeof showToast === 'function')
-                showToast('Không có dữ liệu để xuất!', 'warning');
-              btn.prop('disabled', false).html(originalText);
-              return;
-            }
-
-            const profileIds = profilesData.map((p) => p.id);
-
-            // ==========================================
-            // [A] FETCH RRT QUALIFICATIONS (KỸ NĂNG)
-            // ==========================================
-            const { data: qualsData, error: qualsErr } =
-              await window.supabaseClient
-                .from('rrt_qualifications')
-                .select('profile_id, skills')
-                .in('profile_id', profileIds);
-
-            if (qualsErr)
-              console.warn('⚠️ Warning fetching qualifications:', qualsErr);
-
-            const skillsMap = {};
-            (qualsData || []).forEach((q) => {
-              skillsMap[q.profile_id] = q.skills || {};
-            });
-
-            // ==========================================
-            // [B] FETCH TRAINING HISTORY (ĐÀO TẠO)
-            // ==========================================
-            const trainingMap = {};
-            const { data: trainRecords } = await window.supabaseClient
+          // 2c. NĂNG LỰC ĐÀO TẠO: đếm khóa result='pass' theo người
+          const trainCountMap = {}; // user_id -> số khóa pass
+          const trainDetailMap = {}; // user_id -> [tên khóa]
+          try {
+            const { data: trainRecs, error: trainErr } = await supabaseClient
               .from('training_records')
-              .select('user_id, course_id, result')
-              .in('user_id', profileIds);
+              .select('profile_id, user_id, result, course_id');
+            if (trainErr) throw trainErr;
 
-            if (trainRecords && trainRecords.length > 0) {
-              const courseIds = [
-                ...new Set(
-                  trainRecords.map((r) => r.course_id).filter(Boolean)
-                ),
-              ];
-              const { data: courses } = await window.supabaseClient
+            // Lấy tên khóa học để ghi cột chi tiết
+            const courseIds = [
+              ...new Set(
+                (trainRecs || []).map((r) => r.course_id).filter(Boolean)
+              ),
+            ];
+            const courseNameMap = {};
+            if (courseIds.length > 0) {
+              const { data: courses } = await supabaseClient
                 .from('training_courses')
                 .select('id, course_name')
                 .in('id', courseIds);
-
-              const coursesMap = {};
-              (courses || []).forEach(
-                (c) => (coursesMap[c.id] = c.course_name)
-              );
-
-              // Gom nhóm theo user
-              trainRecords.forEach((record) => {
-                if (!trainingMap[record.user_id])
-                  trainingMap[record.user_id] = [];
-                const courseName =
-                  coursesMap[record.course_id] || 'Khóa học ẩn';
-                const result =
-                  record.result === 'pass'
-                    ? 'Đạt'
-                    : record.result === 'fail'
-                    ? 'Chưa đạt'
-                    : 'Đang xử lý';
-                trainingMap[record.user_id].push(`[${result}] ${courseName}`);
+              (courses || []).forEach((c) => {
+                courseNameMap[c.id] = c.course_name || '';
               });
             }
 
-            // ==========================================
-            // [C] FETCH DEPLOYMENT HISTORY (THỰC CHIẾN)
-            // ==========================================
-            const expMap = {};
-            const { data: expRecords } = await window.supabaseClient
-              .from('deployment_history')
-              .select('user_id, incident_id, action_type')
-              .in('user_id', profileIds);
+            (trainRecs || []).forEach((r) => {
+              if (String(r.result || '').toLowerCase() !== 'pass') return;
+              const uid = r.profile_id || r.user_id;
+              if (!uid) return;
+              trainCountMap[uid] = (trainCountMap[uid] || 0) + 1;
+              if (!trainDetailMap[uid]) trainDetailMap[uid] = [];
+              trainDetailMap[uid].push(
+                courseNameMap[r.course_id] || 'Khóa học'
+              );
+            });
+          } catch (e) {
+            console.warn('⚠️ Không tải được dữ liệu đào tạo:', e);
+          }
 
-            if (expRecords && expRecords.length > 0) {
-              const incidentIds = [
-                ...new Set(
-                  expRecords.map((r) => r.incident_id).filter(Boolean)
-                ),
-              ];
-              const { data: incidents } = await window.supabaseClient
+          // 2d. KINH NGHIỆM THỰC CHIẾN: deployed/replaced + confirmed_at,
+          //     đếm theo SỰ KIỆN duy nhất (không đếm trùng 1 vụ nhiều dòng)
+          const combatSetMap = {}; // user_id -> Set(incident_id)
+          const combatDetailMap = {}; // user_id -> [tên sự kiện]
+          try {
+            const { data: deps, error: depErr } = await supabaseClient
+              .from('deployment_history')
+              .select('user_id, incident_id, action_type, confirmed_at');
+            if (depErr) throw depErr;
+
+            const validDeps = (deps || []).filter(
+              (h) =>
+                (h.action_type === 'deployed' ||
+                  h.action_type === 'replaced') &&
+                h.confirmed_at &&
+                h.incident_id &&
+                h.user_id
+            );
+
+            // Lấy tên sự kiện cho cột chi tiết
+            const incIds = [
+              ...new Set(validDeps.map((h) => h.incident_id)),
+            ];
+            const incNameMap = {};
+            if (incIds.length > 0) {
+              const { data: incs } = await supabaseClient
                 .from('incidents')
                 .select('id, event_name')
-                .in('id', incidentIds);
-
-              const incidentsMap = {};
-              (incidents || []).forEach(
-                (i) => (incidentsMap[i.id] = i.event_name)
-              );
-
-              // Gom nhóm theo user
-              expRecords.forEach((record) => {
-                if (!expMap[record.user_id]) expMap[record.user_id] = [];
-                const eventName =
-                  incidentsMap[record.incident_id] || 'Sự kiện ẩn';
-                const role = record.action_type || 'Thành viên';
-                expMap[record.user_id].push(`${eventName} (${role})`);
+                .in('id', incIds);
+              (incs || []).forEach((i) => {
+                incNameMap[String(i.id)] =
+                  i.event_name || `#${String(i.id).substring(0, 5)}`;
               });
             }
 
-            // ==========================================
-            // [D] MERGE TẤT CẢ VÀO 1 DÒNG DUY NHẤT
-            // ==========================================
-            data = profilesData.map((profile) => {
-              const skills = skillsMap[profile.id] || {};
-              const trainHistoryStr = trainingMap[profile.id]
-                ? trainingMap[profile.id].join(' | ')
-                : '';
-              const expHistoryStr = expMap[profile.id]
-                ? expMap[profile.id].join(' | ')
-                : '';
-
-              // Bung JSONB skills ra thành các cột flat
-              const flattenedSkills = {
-                skill_ungpho_has: skills.emergency_response?.has_skill || false,
-                skill_ungpho_level: skills.emergency_response?.level || '',
-                skill_ruiro_has: skills.risk_communication?.has_skill || false,
-                skill_ruiro_level: skills.risk_communication?.level || '',
-                skill_tamly_has: skills.psycho_social?.has_skill || false,
-                skill_tamly_level: skills.psycho_social?.level || '',
-                skill_dulieu_has: skills.data_management?.has_skill || false,
-                skill_dulieu_level: skills.data_management?.level || '',
-                skill_dichte_has: skills.epidemiology?.has_skill || false,
-                skill_dichte_level: skills.epidemiology?.level || '',
-                skill_nhiemtrung_has:
-                  skills.infection_control?.has_skill || false,
-                skill_nhiemtrung_level: skills.infection_control?.level || '',
-                skill_thinghiem_has: skills.lab?.has_skill || false,
-                skill_thinghiem_level: skills.lab?.level || '',
-                skill_haucan_has: skills.logistics?.has_skill || false,
-                skill_haucan_level: skills.logistics?.level || '',
-                skill_vanhanh_has:
-                  skills.operation_materials?.has_skill || false,
-                skill_vanhanh_level: skills.operation_materials?.level || '',
-                skill_cabenh_has: skills.case_management?.has_skill || false,
-                skill_cabenh_level: skills.case_management?.level || '',
-                skill_dinhduong_has: skills.food_management?.has_skill || false,
-                skill_dinhduong_level: skills.food_management?.level || '',
-                skill_nuoc_has: skills.wash_management?.has_skill || false,
-                skill_nuoc_level: skills.wash_management?.level || '',
-                skill_nguyhiem_has:
-                  skills.hazardous_management?.has_skill || false,
-                skill_nguyhiem_level: skills.hazardous_management?.level || '',
-                skill_anninh_has:
-                  skills.security_management?.has_skill || false,
-                skill_anninh_level: skills.security_management?.level || '',
-              };
-
-              // Merge profile + skills + history columns
-              return {
-                ...profile,
-                ...flattenedSkills,
-                'Lịch sử Đào tạo & Chứng chỉ': trainHistoryStr,
-                'Kinh nghiệm Thực chiến': expHistoryStr,
-              };
+            validDeps.forEach((h) => {
+              if (!combatSetMap[h.user_id])
+                combatSetMap[h.user_id] = new Set();
+              // Set tự khử trùng: 1 sự kiện chỉ tính 1 lần/người
+              if (!combatSetMap[h.user_id].has(h.incident_id)) {
+                combatSetMap[h.user_id].add(h.incident_id);
+                if (!combatDetailMap[h.user_id])
+                  combatDetailMap[h.user_id] = [];
+                const label =
+                  h.action_type === 'replaced'
+                    ? ' (được thay thế)'
+                    : '';
+                combatDetailMap[h.user_id].push(
+                  (incNameMap[String(h.incident_id)] || 'Sự kiện') + label
+                );
+              }
             });
-          } else {
-            // 3. Fetch bình thường cho các bảng khác
-            const { data: normalData, error } = await window.supabaseClient
-              .from(tableName)
-              .select('*');
-
-            if (error) throw error;
-            data = normalData || [];
+          } catch (e) {
+            console.warn('⚠️ Không tải được dữ liệu thực chiến:', e);
           }
 
-          if (data.length === 0) {
-            if (typeof showToast === 'function')
-              showToast('Không có dữ liệu để xuất!', 'warning');
-            return;
-          }
+          // 2e. Merge profiles + skills + đào tạo + thực chiến
+          data = profilesData.map((profile) => {
+            const skills = skillsMap[profile.id] || {};
+            const flattenedSkills = {
+              skill_ungpho_has: skills.emergency_response?.has_skill || false,
+              skill_ungpho_level: skills.emergency_response?.level || '',
+              skill_ruiro_has: skills.risk_communication?.has_skill || false,
+              skill_ruiro_level: skills.risk_communication?.level || '',
+              skill_tamly_has: skills.psycho_social?.has_skill || false,
+              skill_tamly_level: skills.psycho_social?.level || '',
+              skill_dulieu_has: skills.data_management?.has_skill || false,
+              skill_dulieu_level: skills.data_management?.level || '',
+              skill_dichte_has: skills.epidemiology?.has_skill || false,
+              skill_dichte_level: skills.epidemiology?.level || '',
+              skill_nhiemtrung_has:
+                skills.infection_control?.has_skill || false,
+              skill_nhiemtrung_level: skills.infection_control?.level || '',
+              skill_thinghiem_has: skills.lab?.has_skill || false,
+              skill_thinghiem_level: skills.lab?.level || '',
+              skill_haucan_has: skills.logistics?.has_skill || false,
+              skill_haucan_level: skills.logistics?.level || '',
+              skill_vanhanh_has:
+                skills.operation_materials?.has_skill || false,
+              skill_vanhanh_level: skills.operation_materials?.level || '',
+              skill_cabenh_has: skills.case_management?.has_skill || false,
+              skill_cabenh_level: skills.case_management?.level || '',
+              skill_dinhduong_has: skills.food_management?.has_skill || false,
+              skill_dinhduong_level: skills.food_management?.level || '',
+              skill_nuoc_has: skills.wash_management?.has_skill || false,
+              skill_nuoc_level: skills.wash_management?.level || '',
+              skill_nguyhiem_has:
+                skills.hazardous_management?.has_skill || false,
+              skill_nguyhiem_level: skills.hazardous_management?.level || '',
+              skill_anninh_has:
+                skills.security_management?.has_skill || false,
+              skill_anninh_level: skills.security_management?.level || '',
+            };
 
-          // 4. Dùng SheetJS tạo file Excel
-          if (typeof XLSX === 'undefined') {
-            throw new Error(
-              'Không tìm thấy thư viện SheetJS. Hãy kiểm tra thẻ <script> ở index.html'
-            );
-          }
-
-          const worksheet = XLSX.utils.json_to_sheet(data);
-
-          // Auto-size columns
-          const colWidths = Object.keys(data[0] || {}).map((key) => ({
-            wch:
-              Math.max(
-                key.length,
-                ...data.map((row) => String(row[key] || '').length)
-              ) + 2,
-          }));
-          worksheet['!cols'] = colWidths;
-
-          const workbook = XLSX.utils.book_new();
-          XLSX.utils.book_append_sheet(workbook, worksheet, 'Data');
-
-          // 5. Tải file về máy
-          const fileName = `${fileNamePrefix}_${new Date()
-            .toISOString()
-            .slice(0, 10)}.xlsx`;
-          XLSX.writeFile(workbook, fileName);
-
-          if (typeof showToast === 'function')
-            showToast(`✅ Đã xuất ${data.length} dòng thành công!`, 'success');
-        } catch (err) {
-          console.error('Lỗi xuất file:', err);
-          if (typeof showToast === 'function')
-            showToast('Lỗi: ' + err.message, 'error');
-        } finally {
-          // 6. Trả lại nút ban đầu
-          btn.prop('disabled', false).html(originalText);
+            return {
+              ...profile,
+              ...flattenedSkills,
+              // === 4 CỘT MỚI ===
+              nang_luc_dao_tao: trainCountMap[profile.id] || 0,
+              chi_tiet_dao_tao: (trainDetailMap[profile.id] || []).join(
+                '; '
+              ),
+              kinh_nghiem_thuc_chien: combatSetMap[profile.id]
+                ? combatSetMap[profile.id].size
+                : 0,
+              chi_tiet_thuc_chien: (
+                combatDetailMap[profile.id] || []
+              ).join('; '),
+            };
+          });
+        } else {
+          // 3. Fetch bình thường cho các bảng khác
+          const { data: normalData, error } = await supabaseClient
+            .from(tableName)
+            .select('*');
+          if (error) throw error;
+          data = normalData || [];
         }
-      });
-  }
+
+        if (data.length === 0) {
+          if (typeof showToast === 'function')
+            showToast('Không có dữ liệu để xuất!', 'warning');
+          return;
+        }
+
+        // 4. Dùng SheetJS tạo file Excel
+        if (typeof XLSX === 'undefined') {
+          throw new Error(
+            'Không tìm thấy thư viện SheetJS. Hãy kiểm tra thẻ <script> ở index.html'
+          );
+        }
+        const worksheet = XLSX.utils.json_to_sheet(data);
+        const colWidths = Object.keys(data[0] || {}).map((key) => ({
+          wch:
+            Math.max(
+              key.length,
+              ...data.map((row) => String(row[key] || '').length)
+            ) + 2,
+        }));
+        worksheet['!cols'] = colWidths;
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, 'Data');
+
+        // 5. Tải file về máy
+        const fileName = `${fileNamePrefix}_${new Date()
+          .toISOString()
+          .slice(0, 10)}.xlsx`;
+        XLSX.writeFile(workbook, fileName);
+
+        if (typeof showToast === 'function')
+          showToast(`✅ Đã xuất ${data.length} dòng thành công!`, 'success');
+      } catch (err) {
+        console.error('Lỗi xuất file:', err);
+        if (typeof showToast === 'function')
+          showToast('Lỗi: ' + err.message, 'error');
+      } finally {
+        // 6. Trả lại nút ban đầu
+        btn.prop('disabled', false).html(originalText);
+      }
+    });
+}
 
   // Kích hoạt nút bấm Export khi tải xong trang
   $(document).ready(function () {
@@ -5032,19 +5096,14 @@ document.addEventListener('DOMContentLoaded', function () {
             className: 'text-center',
           },
         ],
-        dom: '<"dataTables_top d-flex justify-content-between align-items-center mb-3"Bf>rt<"dataTables_bottom d-flex justify-content-between mt-3"ip>',
+        dom: '<"dataTables_top"Blf>rt<"dataTables_bottom"ip>',
         buttons: [
-          { extend: 'copy', className: 'btn btn-sm btn-outline-secondary' },
-          {
-            extend: 'excel',
-            className: 'btn btn-sm btn-outline-success',
-            text: '<i class="bx bx-spreadsheet"></i> Excel',
-          },
-          {
-            extend: 'print',
-            className: 'btn btn-sm btn-outline-info',
-            text: '<i class="bx bx-printer"></i> In',
-          },
+          'copy',
+          'csv',
+          'excel',
+          'pdf',
+          'print',
+          { extend: 'colvis', text: 'Columns' },
         ],
         language: {
           search: 'Tìm kiếm:',
@@ -5420,6 +5479,17 @@ document.addEventListener('DOMContentLoaded', function () {
           'print',
           { extend: 'colvis', text: 'Columns' },
         ],
+        language: {
+          search: 'Tìm kiếm:',
+          lengthMenu: 'Hiển thị _MENU_ dòng',
+          info: 'Hiển thị _START_ đến _END_ của _TOTAL_ hồ sơ',
+          paginate: {
+            first: 'Đầu',
+            last: 'Cuối',
+            next: 'Sau',
+            previous: 'Trước',
+          },
+        },
       });
 
       console.log('✅ Bảng DataTable đã vẽ thành công!');
@@ -6229,6 +6299,17 @@ document.addEventListener('DOMContentLoaded', function () {
           'print',
           { extend: 'colvis', text: 'Columns' },
         ],
+        language: {
+          search: 'Tìm kiếm:',
+          lengthMenu: 'Hiển thị _MENU_ dòng',
+          info: 'Hiển thị _START_ đến _END_ của _TOTAL_ hồ sơ',
+          paginate: {
+            first: 'Đầu',
+            last: 'Cuối',
+            next: 'Sau',
+            previous: 'Trước',
+          },
+        },
       });
     } catch (error) {
       console.error('Error rendering schedule table:', error);
@@ -6340,6 +6421,17 @@ document.addEventListener('DOMContentLoaded', function () {
           'print',
           { extend: 'colvis', text: 'Columns' },
         ],
+        language: {
+          search: 'Tìm kiếm:',
+          lengthMenu: 'Hiển thị _MENU_ dòng',
+          info: 'Hiển thị _START_ đến _END_ của _TOTAL_ hồ sơ',
+          paginate: {
+            first: 'Đầu',
+            last: 'Cuối',
+            next: 'Sau',
+            previous: 'Trước',
+          },
+        },
       });
     } catch (error) {
       console.error('Error loading incidents table:', error);
@@ -6416,7 +6508,17 @@ document.addEventListener('DOMContentLoaded', function () {
       const timestamp = inc.created_at
         ? new Date(inc.created_at).toLocaleString('vi-VN')
         : 'N/A';
-      const confirmations = inc.confirmations || 0;
+      // 3 trạng thái phản hồi: ✅ xác nhận · ❌ từ chối · ⏳ chờ
+      const countList = (s) =>
+        String(s || '')
+          .split(';')
+          .filter((x) => x.trim()).length;
+      const confirmedCount = countList(inc.members);
+      const declinedCount = countList(inc.declined_members);
+      const invitedCount = countList(inc.initial_selected_members);
+      const respondedCount = confirmedCount + declinedCount;
+      // Chờ = tổng được mời - đã phản hồi (không âm, phòng dữ liệu cũ thiếu cột)
+      const pendingCount = Math.max(0, invitedCount - respondedCount);
 
       // Bộ lọc search
       if (
@@ -6464,7 +6566,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 </div>
                 
                 <div style="margin-top: 15px; display: flex; justify-content: space-between; align-items: end; border-top: 1px solid #eee; padding-top: 10px;">
-                     <div style="font-size: 12px; color: #888;">
+                     <div style="font-size: 10px; color: #888;">
                         <span style="font-family: monospace;">#${id.substring(
                           0,
                           8
@@ -6473,7 +6575,14 @@ document.addEventListener('DOMContentLoaded', function () {
                           adminName
                         )}</b>
                      </div>
-                     <small><strong>${confirmations}</strong> phản hồi</small>
+                     <small style="text-align:right; line-height:1.6; font-size: 12px;">
+                        <strong>${respondedCount}</strong>${
+          invitedCount > 0 ? `/${invitedCount}` : ''
+        } phản hồi<br>
+                        <span style="color:#16a34a;" title="Xác nhận tham gia">✅ ${confirmedCount}</span> ·
+                        <span style="color:#dc2626;" title="Từ chối">❌ ${declinedCount}</span> ·
+                        <span style="color:#d97706;" title="Chưa phản hồi">⏳ ${pendingCount}</span>
+                     </small>
                 </div>
             </div>
         `
@@ -6534,9 +6643,18 @@ document.addEventListener('DOMContentLoaded', function () {
         inc.event_name || 'Chưa có tiêu đề';
     if (document.getElementById('dossier-id'))
       document.getElementById('dossier-id').textContent = '#' + (inc.id || '');
-    if (document.getElementById('dossier-time'))
-      document.getElementById('dossier-time').textContent =
-        inc.created_at || '';
+    if (document.getElementById('dossier-time')) {
+      // Đổi ISO UTC thô -> giờ Việt Nam dễ đọc (dd/mm/yyyy, hh:mm:ss)
+      let timeText = 'Chưa cập nhật';
+      const rawTime = inc.activation_time || inc.created_at;
+      if (rawTime) {
+        const d = new Date(rawTime);
+        timeText = isNaN(d.getTime())
+          ? String(rawTime)
+          : d.toLocaleString('vi-VN', { hour12: false });
+      }
+      document.getElementById('dossier-time').textContent = timeText;
+    }
     if (document.getElementById('dossier-location'))
       document.getElementById('dossier-location').textContent =
         inc.location_text || '';
@@ -6816,14 +6934,20 @@ document.addEventListener('DOMContentLoaded', function () {
                 </div>
             `;
       }
-// ============================================================
+      // ============================================================
       // 2. LOGIC PHẢN HỒI (DÀNH CHO NGƯỜI DÙNG)
       // ============================================================
       else if (isActive && isActivated) {
         // Lấy thông tin user hiện tại (đảm bảo không bị lỗi null/undefined)
-        const myEmail = String(window.userSession?.email || '').toLowerCase().trim();
-        const myUser = String(window.userSession?.username || '').toLowerCase().trim();
-        const myFullName = String(window.userSession?.full_name || '').toLowerCase().trim();
+        const myEmail = String(window.userSession?.email || '')
+          .toLowerCase()
+          .trim();
+        const myUser = String(window.userSession?.username || '')
+          .toLowerCase()
+          .trim();
+        const myFullName = String(window.userSession?.full_name || '')
+          .toLowerCase()
+          .trim();
 
         // 🛡️ HÀM BẢO VỆ: Tuyệt đối không so sánh nếu từ khóa bị rỗng
         const checkIncludes = (listStr, keyword) => {
@@ -6833,29 +6957,29 @@ document.addEventListener('DOMContentLoaded', function () {
 
         // Kiểm tra 3 danh sách (Sử dụng hàm bảo vệ)
         const isInvited =
-          checkIncludes(invitedStr, myEmail) || 
-          checkIncludes(invitedStr, myUser) || 
+          checkIncludes(invitedStr, myEmail) ||
+          checkIncludes(invitedStr, myUser) ||
           checkIncludes(invitedStr, myFullName);
 
         const isConfirmed =
-          checkIncludes(confirmedStr, myEmail) || 
-          checkIncludes(confirmedStr, myUser) || 
+          checkIncludes(confirmedStr, myEmail) ||
+          checkIncludes(confirmedStr, myUser) ||
           checkIncludes(confirmedStr, myFullName);
 
         const isDeclined =
-          checkIncludes(declinedStr, myEmail) || 
-          checkIncludes(declinedStr, myUser) || 
+          checkIncludes(declinedStr, myEmail) ||
+          checkIncludes(declinedStr, myUser) ||
           checkIncludes(declinedStr, myFullName);
 
         // 🔥 THỨ TỰ ƯU TIÊN HIỂN THỊ GIAO DIỆN 🔥
         if (isConfirmed) {
           // Ưu tiên 1: Đã xác nhận -> Tắt thông báo
           actionBar.style.display = 'none';
-        } 
-        else if (isDeclined) {
+        } else if (isDeclined) {
           // Ưu tiên 2: Đã từ chối -> Hiện bảng xám
           actionBar.style.display = 'flex';
-          actionBar.className = 'alert alert-secondary shadow-sm mb-3 justify-content-between align-items-center';
+          actionBar.className =
+            'alert alert-secondary shadow-sm mb-3 justify-content-between align-items-center';
           actionBar.innerHTML = `
           <div>
             <h5 style="margin:0; color:#666; font-size:16px;">
@@ -6869,11 +6993,11 @@ document.addEventListener('DOMContentLoaded', function () {
              <button class="btn btn-outline-primary btn-sm" onclick="submitIncidentResponse('confirm')">Tham gia lại</button>
           </div>
           `;
-        } 
-        else if (isInvited) {
+        } else if (isInvited) {
           // Ưu tiên 3: Được mời nhưng chưa phản hồi gì -> Hiện bảng vàng
           actionBar.style.display = 'flex';
-          actionBar.className = 'alert alert-warning shadow-sm mb-3 justify-content-between align-items-center';
+          actionBar.className =
+            'alert alert-warning shadow-sm mb-3 justify-content-between align-items-center';
           actionBar.innerHTML = `
           <div>
             <h5 style="margin:0; color:#856404; font-size:16px;">
@@ -6892,8 +7016,7 @@ document.addEventListener('DOMContentLoaded', function () {
             </button>
           </div>
           `;
-        } 
-        else {
+        } else {
           // Không thuộc đối tượng nào -> Ẩn
           actionBar.style.display = 'none';
         }
@@ -7231,44 +7354,50 @@ document.addEventListener('DOMContentLoaded', function () {
     el.classList.add('badge-changed');
     setTimeout(() => el.classList.remove('badge-changed'), 600);
   }
-// PATCH 13: loadUserNotifications – chỉ hiện thông báo CHƯA đọc
-window.loadUserNotifications = async function () {
-  if (!window.userSession?.email) return;
+  // ==========================================
+  // HÀM TẢI THÔNG BÁO (SUPABASE VERSION)
+  // ==========================================
+  // PATCH 13: loadUserNotifications – chỉ hiện thông báo CHƯA đọc
+  window.loadUserNotifications = async function () {
+    if (!window.userSession?.email) return;
 
-  const list = document.getElementById('notification-list');
-  const numEl = document.querySelector('.notification .num');
+    const list = document.getElementById('notification-list');
+    const numEl = document.querySelector('.notification .num');
 
-  try {
-    const { data: notifications, error } = await window.supabaseClient
-      .from('notifications')
-      .select('*')
-      .eq('user_email', window.userSession.email)
-      .eq('is_read', false)          // ← THÊM DÒNG NÀY
-      .order('created_at', { ascending: false })
-      .limit(10);
+    try {
+      const { data: notifications, error } = await window.supabaseClient
+        .from('notifications')
+        .select('*')
+        .eq('user_email', window.userSession.email)
+        .eq('is_read', false) // ← THÊM DÒNG NÀY
+        .order('created_at', { ascending: false })
+        .limit(10);
 
-    if (error) throw error;
+      if (error) throw error;
 
-    if (numEl) numEl.textContent = notifications?.length || 0;
-    if (!list) return;
-    list.innerHTML = '';
+      if (numEl) numEl.textContent = notifications?.length || 0;
+      if (!list) return;
+      list.innerHTML = '';
 
-    if (!notifications || notifications.length === 0) {
-      list.innerHTML =
-        '<li class="p-3 text-muted text-center">Không có thông báo mới.</li>';
-      return;
-    }
+      if (!notifications || notifications.length === 0) {
+        list.innerHTML =
+          '<li class="p-3 text-muted text-center">Không có thông báo mới.</li>';
+        return;
+      }
 
-    notifications.forEach((n) => {
-      const dateStr = n.created_at
-        ? new Date(n.created_at).toLocaleString('vi-VN', {
-            day: '2-digit', month: '2-digit', year: 'numeric',
-            hour: '2-digit', minute: '2-digit',
-          })
-        : '';
+      notifications.forEach((n) => {
+        const dateStr = n.created_at
+          ? new Date(n.created_at).toLocaleString('vi-VN', {
+              day: '2-digit',
+              month: '2-digit',
+              year: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit',
+            })
+          : '';
 
-      const li = document.createElement('li');
-      li.innerHTML = `
+        const li = document.createElement('li');
+        li.innerHTML = `
         <div class="p-2 border-bottom">
           <div style="font-size:.9em;font-weight:bold;">
             ${window.escapeHtml?.(n.message) || n.message}
@@ -7279,17 +7408,16 @@ window.loadUserNotifications = async function () {
             <i class='bx bxs-envelope'></i> Đánh dấu đã đọc
           </button>
         </div>`;
-      list.appendChild(li);
-    });
+        list.appendChild(li);
+      });
 
-    // Hiện dropdown
-    const menu = document.getElementById('notificationMenu');
-    if (menu) menu.style.display = 'block';
-
-  } catch (err) {
-    console.error('[loadUserNotifications] Lỗi:', err);
-  }
-};
+      // Hiện dropdown
+      const menu = document.getElementById('notificationMenu');
+      if (menu) menu.style.display = 'block';
+    } catch (err) {
+      console.error('[loadUserNotifications] Lỗi:', err);
+    }
+  };
   // Sự kiện mở/đóng menu chuông notification
   document
     .getElementById('notificationIcon')
@@ -7607,7 +7735,9 @@ window.loadUserNotifications = async function () {
   // ==========================================
   // HÀM MỞ VÀ ĐIỀN DỮ LIỆU VÀO FORM (TỐI ƯU & BỌC THÉP)
   // ==========================================
-
+  // ==============================================================
+  // HÀM HỖ TRỢ: TẢI VÀ ĐỔ DỮ LIỆU LỊCH SỬ (ĐỂ NGOÀI CHO GỌN)
+  // ==============================================================
   async function fetchAndRenderProfileHistory(userId) {
     if (!userId) {
       console.warn('Không có userId, bỏ qua fetch lịch sử.');
@@ -7747,17 +7877,48 @@ window.loadUserNotifications = async function () {
               ? String(h.incident_id).substring(0, 8)
               : 'N/A';
 
-            const role = h.action_type || 'Thành viên';
+              const ACTION_UI = {
+                deployed: { label: 'Tham gia', cls: 'bg-success' },
+                replaced: { label: 'Được thay thế', cls: 'bg-secondary' },
+                declined: { label: 'Đã từ chối', cls: 'bg-danger' },
+              };
+              const aUI = ACTION_UI[h.action_type] || {
+                label: h.action_type || 'Khác',
+                cls: 'bg-light text-dark border',
+              };
+              const role = aUI.label;
+              const isParticipated =
+                (h.action_type === 'deployed' || h.action_type === 'replaced') &&
+                h.confirmed_at;
+  
+              let actionBadge;
+              if (h.action_type === 'declined') {
+                actionBadge = '<span class="badge bg-danger">❌ Từ chối</span>';
+              } else if (!isParticipated) {
+                actionBadge = '<span class="badge bg-warning text-dark">⏳ Chờ xác nhận</span>';
+              } else if (incidentStatus === 'active') {
+                actionBadge = '<span class="badge bg-success">🔥 Đang tham gia</span>';
+              } else {
+                actionBadge = '<span class="badge bg-primary">🏁 Hoàn thành</span>';
+              }
             const notes = h.reason || '';
             const startDate = h.created_at
               ? new Date(h.created_at).toLocaleDateString('vi-VN')
               : 'N/A';
 
             const incidentStatus = (incInfo.status || '').toLowerCase();
-            const actionBadge =
-              incidentStatus === 'active'
-                ? '<span class="badge bg-success">🔥 Đang tham gia</span>'
-                : '<span class="badge bg-primary">🏁 Hoàn thành</span>';
+ 
+
+
+            if (h.action_type === 'declined') {
+              actionBadge = '<span class="badge bg-danger">❌ Từ chối</span>';
+            } else if (!isParticipated) {
+              actionBadge = '<span class="badge bg-warning text-dark">⏳ Chờ xác nhận</span>';
+            } else if (incidentStatus === 'active') {
+              actionBadge = '<span class="badge bg-success">🔥 Đang tham gia</span>';
+            } else {
+              actionBadge = '<span class="badge bg-primary">🏁 Hoàn thành</span>';
+            }
 
             expBody.insertAdjacentHTML(
               'beforeend',
@@ -8799,44 +8960,68 @@ window.loadUserNotifications = async function () {
 
     const table = $('#memberListTable').DataTable({
       responsive: true,
-      lengthMenu: [
-        [10, 25, 50, -1],
-        [10, 25, 50, 'All'],
+      dom: '<"dataTables_top"Blf>rt<"dataTables_bottom"ip>',
+      buttons: [
+        'copy',
+        'csv',
+        'excel',
+        'pdf',
+        'print',
+        { extend: 'colvis', text: 'Columns' },
       ],
-      dom: 'frtip',
+      language: {
+        search: 'Tìm kiếm:',
+        lengthMenu: 'Hiển thị _MENU_ dòng',
+        info: 'Hiển thị _START_ đến _END_ của _TOTAL_ hồ sơ',
+        paginate: {
+          first: 'Đầu',
+          last: 'Cuối',
+          next: 'Sau',
+          previous: 'Trước',
+        },
+      },
       order: [[2, 'asc']],
     });
 
+    // ===== BỘ LỌC BỀN VỮNG: đăng ký 1 lần duy nhất, sống qua mọi lần draw =====
+    // (thay cho push -> draw -> pop cũ vốn bị mất filter khi user sort/search)
+    if (!window._emerFilterRegistered) {
+      window._emerFilterRegistered = true;
+      $.fn.dataTable.ext.search.push(function (settings, data) {
+        if (settings.nTable.id !== 'memberListTable') return true;
+        const teamVal = $('#emer-filter-team').val() || 'all';
+        const roleVal = $('#emer-filter-role').val() || 'all';
+        const matchTeam = teamVal === 'all' || data[2] === teamVal;
+        const matchRole =
+          roleVal === 'all' || String(data[3]).includes(roleVal);
+        return matchTeam && matchRole;
+      });
+    }
+
     $('#emer-filter-team, #emer-filter-role')
-      .off('change')
-      .on('change', function () {
-        const teamVal = $('#emer-filter-team').val();
-        const roleVal = $('#emer-filter-role').val();
-
-        $.fn.dataTable.ext.search.push(function (settings, data, dataIndex) {
-          if (settings.nTable.id !== 'memberListTable') return true;
-          const rowTeam = data[2];
-          const rowPosContent = data[3];
-
-          const matchTeam = teamVal === 'all' || rowTeam === teamVal;
-          let matchRole = true;
-          if (roleVal !== 'all') {
-            matchRole = rowPosContent.includes(roleVal);
-          }
-          return matchTeam && matchRole;
-        });
-
-        table.draw();
-        $.fn.dataTable.ext.search.pop();
+      .off('change.emer')
+      .on('change.emer', function () {
+        $('#memberListTable').DataTable().draw();
+        if (typeof window.syncSelectAllState === 'function')
+          window.syncSelectAllState();
       });
 
-    $('#memberListTable')
-      .off('change', '.member-checkbox')
-      .on('change', '.member-checkbox', function () {
-        updateSelectedCount();
-      });
+    // ===== MỖI LẦN BẢNG VẼ LẠI (đổi trang / lọc / sort) =====
+    // -> khôi phục trạng thái tick từ state, đồng bộ checkbox tổng
+    table.off('draw.emerSel').on('draw.emerSel', function () {
+      if (typeof window.restoreEmergencyChecks === 'function')
+        window.restoreEmergencyChecks();
+      if (typeof window.syncSelectAllState === 'function')
+        window.syncSelectAllState();
+    });
 
-    updateSelectedCount();
+    // Khôi phục lựa chọn nếu bảng vừa bị render lại giữa lúc admin đang chọn
+    if (typeof window.restoreEmergencyChecks === 'function')
+      window.restoreEmergencyChecks();
+    if (typeof window.renderSelectedPanel === 'function')
+      window.renderSelectedPanel();
+    if (typeof window.updateSelectedCount === 'function')
+      window.updateSelectedCount();
   };
 
   // ============================================================
@@ -8860,16 +9045,16 @@ window.loadUserNotifications = async function () {
     });
 
     // 2. Cộng điểm Thực chiến (+2 điểm/vụ)
-    const history = window.appState.deploymentHistory || [];
-    // Dùng Set để đếm số sự kiện duy nhất (tránh cộng trùng khi 1 người có nhiều log trong 1 sự kiện)
+    // 2. Cộng điểm Thực chiến (+2 điểm/vụ) — đọc đúng schema DB
+    const history = window.appState.deployment_history || [];
     const missions = new Set();
     history.forEach((h) => {
       if (
-        (h.username.toLowerCase() === username ||
-          h.username.toLowerCase() === email) &&
-        (h.action === 'Mobilize' || h.action === 'Replace_In')
+        h.user_id === member.id &&
+        (h.action_type === 'deployed' || h.action_type === 'replaced') &&
+        h.incident_id
       ) {
-        missions.add(h.incidentId);
+        missions.add(h.incident_id);
       }
     });
     score += missions.size * 2;
@@ -8891,85 +9076,255 @@ window.loadUserNotifications = async function () {
   // ==========================================
   // CÁC HÀM HELPER ĐI KÈM
   // ==========================================
-  function updateSelectedCount() {
-    const table = $('#memberListTable').DataTable();
-    const count = table.$('input.member-checkbox:checked').length;
-    const countEl = document.getElementById('selected-count');
-    if (countEl) countEl.textContent = count;
+  // ================================================================
+  // [PATCH v2] STATE CHỌN THÀNH VIÊN — NGUỒN SỰ THẬT DUY NHẤT
+  // Map<emailLowercase, {email, name, team}> — độc lập hoàn toàn với
+  // phân trang, bộ lọc và việc bảng bị render lại.
+  // ================================================================
+  window.emergencySelection = window.emergencySelection || new Map();
+
+  const _normEmail = (e) =>
+    String(e || '')
+      .trim()
+      .toLowerCase();
+  const _escHtml = (s) =>
+    typeof window.escapeHtml === 'function'
+      ? window.escapeHtml(String(s ?? ''))
+      : String(s ?? '')
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;');
+
+  // Lấy tên hiển thị từ dòng chứa checkbox (bỏ badge xếp hạng)
+  function _extractMemberInfo(checkboxEl) {
+    const $row = $(checkboxEl).closest('tr');
+    const name = $row
+      .find('td')
+      .eq(1)
+      .clone()
+      .children()
+      .remove()
+      .end()
+      .text()
+      .trim();
+    return {
+      email: checkboxEl.value,
+      name: name || checkboxEl.value,
+      team: $(checkboxEl).data('team') || '',
+    };
   }
 
-  window.autoSelectTeam = function (teamName) {
-    const table = $('#memberListTable').DataTable();
-    table.search('').columns().search('').draw(); // Reset search
-    $('#emer-filter-team').val(teamName).trigger('change'); // Filter team
-    $('.member-checkbox:visible').prop('checked', true); // Tick
-    updateSelectedCount();
-    showToast(`Đã chọn tất cả thành viên ${teamName}`, 'success');
+  window.updateSelectedCount = function () {
+    const countEl = document.getElementById('selected-count');
+    if (countEl) countEl.textContent = window.emergencySelection.size;
   };
 
-  $('#selectAllMembers')
-    .off('click')
-    .on('click', function () {
+  // Khôi phục trạng thái tick cho toàn bộ row trong bảng (kể cả trang ẩn)
+  window.restoreEmergencyChecks = function () {
+    if (!$.fn.DataTable.isDataTable('#memberListTable')) return;
+    const table = $('#memberListTable').DataTable();
+    table.$('input.member-checkbox').each(function () {
+      this.checked = window.emergencySelection.has(_normEmail(this.value));
+    });
+  };
+
+  // Đồng bộ checkbox tổng (checked / indeterminate) theo các dòng ĐANG LỌC
+  window.syncSelectAllState = function () {
+    const el = document.getElementById('selectAllMembers');
+    if (!el || !$.fn.DataTable.isDataTable('#memberListTable')) return;
+    const table = $('#memberListTable').DataTable();
+    const boxes = $(
+      'input.member-checkbox',
+      table.rows({ search: 'applied' }).nodes()
+    );
+    const total = boxes.length;
+    const checked = boxes.filter(':checked').length;
+    el.checked = total > 0 && checked === total;
+    el.indeterminate = checked > 0 && checked < total;
+  };
+
+  // ================================================================
+  // PANEL THEO DÕI "ĐÃ CHỌN AI" — tự chèn phía trên bảng
+  // ================================================================
+  window.renderSelectedPanel = function () {
+    let panel = document.getElementById('emergency-selected-panel');
+    if (!panel) {
+      const tableEl = document.getElementById('memberListTable');
+      if (!tableEl || !tableEl.parentNode) return;
+      panel = document.createElement('div');
+      panel.id = 'emergency-selected-panel';
+      panel.style.cssText =
+        'display:none;background:#fff8f0;border:1px solid #fd7e14;' +
+        'border-radius:10px;padding:12px 14px;margin:10px 0;';
+      tableEl.parentNode.insertBefore(panel, tableEl);
+    }
+
+    const selected = [...window.emergencySelection.values()];
+    if (selected.length === 0) {
+      panel.style.display = 'none';
+      panel.innerHTML = '';
+      return;
+    }
+
+    const chips = selected
+      .map((m) => {
+        const emailAttr = _escHtml(m.email).replace(/'/g, '&#39;');
+        return (
+          `<span class="badge" style="background:#fd7e14;color:#fff;` +
+          `font-weight:500;font-size:13px;padding:6px 10px;border-radius:16px;` +
+          `display:inline-flex;align-items:center;gap:6px;margin:3px;">` +
+          `${_escHtml(m.name)}` +
+          (m.team
+            ? ` <small style="opacity:.85">(${_escHtml(m.team)})</small>`
+            : '') +
+          ` <a href="javascript:void(0)" onclick="removeSelectedMember('${emailAttr}')"` +
+          ` title="Bỏ chọn ${_escHtml(m.name)}"` +
+          ` style="color:#fff;font-weight:700;text-decoration:none;line-height:1;">✕</a>` +
+          `</span>`
+        );
+      })
+      .join('');
+
+    panel.style.display = 'block';
+    panel.innerHTML =
+      `<div style="display:flex;align-items:center;justify-content:space-between;` +
+      `flex-wrap:wrap;gap:8px;margin-bottom:6px;">` +
+      `<strong style="color:#c2410c;"><i class='bx bx-user-check'></i> ` +
+      `Đã chọn ${selected.length} thành viên</strong>` +
+      `<button type="button" class="btn btn-outline-danger btn-sm" ` +
+      `onclick="clearAllSelectedMembers()">` +
+      `<i class='bx bx-x-circle'></i> Bỏ chọn tất cả</button></div>` +
+      `<div>${chips}</div>`;
+  };
+
+  function _afterSelectionChanged() {
+    window.updateSelectedCount();
+    window.renderSelectedPanel();
+    window.syncSelectAllState();
+  }
+
+  // Bỏ chọn 1 người (từ nút ✕ trên panel)
+  window.removeSelectedMember = function (email) {
+    const key = _normEmail(email);
+    window.emergencySelection.delete(key);
+    if ($.fn.DataTable.isDataTable('#memberListTable')) {
+      const table = $('#memberListTable').DataTable();
+      table.$('input.member-checkbox').each(function () {
+        if (_normEmail(this.value) === key) this.checked = false;
+      });
+    }
+    _afterSelectionChanged();
+  };
+
+  // Bỏ chọn tất cả
+  window.clearAllSelectedMembers = function (silent) {
+    window.emergencySelection.clear();
+    if ($.fn.DataTable.isDataTable('#memberListTable')) {
+      $('#memberListTable')
+        .DataTable()
+        .$('input.member-checkbox')
+        .prop('checked', false);
+    }
+    _afterSelectionChanged();
+    if (!silent && typeof showToast === 'function')
+      showToast('Đã bỏ chọn tất cả thành viên', 'info');
+  };
+
+  // ================================================================
+  // SỰ KIỆN TICK TỪNG DÒNG (delegate ở document — sống qua mọi lần render)
+  // ================================================================
+  $(document)
+    .off('change.emerSel', '#memberListTable .member-checkbox')
+    .on('change.emerSel', '#memberListTable .member-checkbox', function () {
+      const key = _normEmail(this.value);
+      if (this.checked) {
+        window.emergencySelection.set(key, _extractMemberInfo(this));
+      } else {
+        window.emergencySelection.delete(key);
+      }
+      _afterSelectionChanged();
+    });
+
+  // ================================================================
+  // "CHỌN TẤT CẢ" — quét TOÀN BỘ các dòng ĐANG LỌC trên MỌI TRANG
+  // (chỉ 1 handler duy nhất, thay cho 3 handler chồng nhau trước đây)
+  // ================================================================
+  $(document)
+    .off('change.emerSelAll', '#selectAllMembers')
+    .on('change.emerSelAll', '#selectAllMembers', function () {
+      if (!$.fn.DataTable.isDataTable('#memberListTable')) return;
       const isChecked = this.checked;
       const table = $('#memberListTable').DataTable();
       const rows = table.rows({ search: 'applied' }).nodes();
-      $('input[type="checkbox"]', rows).prop('checked', isChecked);
-      updateSelectedCount();
+      $('input.member-checkbox', rows).each(function () {
+        this.checked = isChecked;
+        const key = _normEmail(this.value);
+        if (isChecked) {
+          window.emergencySelection.set(key, _extractMemberInfo(this));
+        } else {
+          window.emergencySelection.delete(key);
+        }
+      });
+      _afterSelectionChanged();
     });
 
-  // Sự kiện khi tick từng dòng (để cập nhật số lượng)
-  // Dùng 'change' trên body bảng để bắt sự kiện từ các trang khác khi chuyển trang
-  $('#memberListTable tbody').on(
-    'change',
-    'input[type="checkbox"]',
-    function () {
-      // Nếu bỏ tick 1 cái thì bỏ tick "Chọn tất cả"
-      if (!this.checked) {
-        var el = $('#selectAllMembers').get(0);
-        if (el && el.checked && 'indeterminate' in el) {
-          el.indeterminate = true;
-        }
-      }
-      updateSelectedCount();
-    }
-  );
+  // ================================================================
+  // CHỌN NHANH ĐỘI TRỰC — quét mọi trang, không dùng :visible nữa
+  // ================================================================
+  window.autoSelectTeam = function (teamName) {
+    if (!$.fn.DataTable.isDataTable('#memberListTable')) return;
+    const table = $('#memberListTable').DataTable();
 
-  // Event listener for the "Select All" checkbox.
-  document.addEventListener('change', function (event) {
-    if (event.target.id === 'selectAllMembers') {
-      const checkboxes = document.querySelectorAll(
-        '#memberListTable input[type="checkbox"]'
+    // Reset ô search + đặt bộ lọc về đúng đội rồi vẽ lại
+    table.search('');
+    $('#emer-filter-team').val(teamName);
+    $('#emer-filter-role').val('all');
+    table.draw();
+
+    // Tick TOÀN BỘ dòng khớp bộ lọc, kể cả các trang ẩn
+    const rows = table.rows({ search: 'applied' }).nodes();
+    let added = 0;
+    $('input.member-checkbox', rows).each(function () {
+      this.checked = true;
+      window.emergencySelection.set(
+        _normEmail(this.value),
+        _extractMemberInfo(this)
       );
-      checkboxes.forEach((checkbox) => {
-        checkbox.checked = event.target.checked;
-      });
-    }
-  });
+      added++;
+    });
 
-  // Sự kiện nút Kích Hoạt (ĐÃ SỬA ĐỂ LẤY HẾT EMAIL TỪ CÁC TRANG)
+    _afterSelectionChanged();
+    if (typeof showToast === 'function')
+      showToast(
+        `Đã chọn toàn bộ ${added} thành viên ${teamName}`,
+        added > 0 ? 'success' : 'warning'
+      );
+  };
+
+  // ================================================================
+  // NÚT KÍCH HOẠT — đọc danh sách từ state (không phụ thuộc DOM/trang)
+  // ================================================================
   $('#btn-activate-emergency')
     .off('click')
     .on('click', function () {
-      const selectedEmails = [];
-      const table = $('#memberListTable').DataTable();
-
-      // Dùng API của DataTable để quét toàn bộ checkbox được tick
-      table.$('input.member-checkbox:checked').each(function () {
-        selectedEmails.push($(this).val());
-      });
+      const selectedEmails = [...window.emergencySelection.values()].map(
+        (m) => m.email
+      );
 
       if (selectedEmails.length === 0) {
         showToast('Vui lòng chọn ít nhất 1 thành viên!', 'warning');
         return;
       }
 
-      // ... (Phần code hiển thị modal phía sau giữ nguyên) ...
       document.getElementById('incidentLocation').value = '';
       document.getElementById('incidentDetails').value = '';
 
       const now = new Date();
-      const timeString = now.toLocaleString('vi-VN', { hour12: false });
-      document.getElementById('activationTime').value = timeString;
+      document.getElementById('activationTime').value = now.toLocaleString(
+        'vi-VN',
+        { hour12: false }
+      );
 
       window.tempSelectedEmails = selectedEmails;
       $('#emergencyDetailsModal').modal('show');
@@ -9049,37 +9404,47 @@ window.loadUserNotifications = async function () {
       try {
         let activeIncidents = [];
 
-        // BƯỚC 2: Kiểm tra bộ nhớ đệm, nếu rỗng thì gọi thẳng xuống Database
-        if (
-          window.appState &&
-          window.appState.trackingIncidents &&
-          window.appState.trackingIncidents.length > 0
-        ) {
-          activeIncidents = window.appState.trackingIncidents.filter(
-            (inc) => inc.status !== 'closed'
-          );
-        } else {
-          console.log('Bộ nhớ đệm rỗng, đang fetch trực tiếp từ DB...');
+        // BƯỚC 2: LUÔN lấy dữ liệu MỚI NHẤT từ DB cho quyết định khẩn cấp.
+        // Cache trong bộ nhớ CHỈ dùng làm phương án dự phòng khi mạng lỗi
+        // (trước đây ưu tiên cache -> danh sách sự kiện & số người từ chối
+        // có thể đã lỗi thời tại thời điểm admin ra quyết định thay thế).
+        try {
           const { data, error } = await window.supabaseClient
             .from('incidents')
             .select('*')
-            .neq('status', 'closed'); // Lấy tất cả sự kiện chưa đóng
+            .neq('status', 'closed')
+            .order('activation_time', { ascending: false });
+          if (error) throw error;
+          activeIncidents = data || [];
 
-          if (!error && data) {
-            activeIncidents = data;
-            // Lưu lại vào bộ nhớ đệm cho lần sau
-            if (!window.appState) window.appState = {};
-            window.appState.trackingIncidents = data;
-          }
+          // Đồng bộ lại cache để các bước sau (nextToReviewBtn) dùng đúng dữ liệu
+          if (!window.appState) window.appState = {};
+          window.appState.trackingIncidents = activeIncidents;
+        } catch (fetchErr) {
+          console.warn(
+            '⚠️ Không tải được sự kiện mới nhất, dùng tạm cache:',
+            fetchErr
+          );
+          activeIncidents = (window.appState?.trackingIncidents || []).filter(
+            (inc) => inc.status !== 'closed'
+          );
         }
 
-        // BƯỚC 3: Đổ dữ liệu vào Dropdown
-        select.innerHTML =
+        // BƯỚC 3: Đổ dữ liệu vào Dropdown (build chuỗi 1 lần + escape chống XSS)
+        const escOpt = (s) =>
+          typeof window.escapeHtml === 'function'
+            ? window.escapeHtml(String(s ?? ''))
+            : String(s ?? '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;');
+
+        let optionsHtml =
           '<option value="">-- Chọn sự kiện cần bổ sung/thay thế --</option>';
-        select.disabled = false; // Mở khóa Dropdown
 
         if (activeIncidents.length === 0) {
-          select.innerHTML +=
+          optionsHtml +=
             '<option value="" disabled>(Không có sự kiện nào đang hoạt động)</option>';
         } else {
           activeIncidents.forEach((inc) => {
@@ -9088,19 +9453,23 @@ window.loadUserNotifications = async function () {
             const location =
               inc.location_text || inc.location || 'Chưa rõ địa điểm';
             const declined = inc.declined_members || '';
-            const isActivated = !!inc.admin_activate;
-            const statusIcon = isActivated ? '🔴' : '⚠️';
+            const statusIcon = inc.admin_activate ? '🔴' : '⚠️';
 
-            select.innerHTML += `<option value="${
+            optionsHtml += `<option value="${escOpt(
               inc.id
-            }" data-declined="${declined}">
-            ${statusIcon} [ID: ${String(inc.id).substring(
-              0,
-              5
-            )}] ${eventName} (${location})
+            )}" data-declined="${escOpt(declined)}">
+            ${statusIcon} [ID: ${escOpt(
+              String(inc.id).substring(0, 5)
+            )}] ${escOpt(eventName)} (${escOpt(location)})
           </option>`;
           });
         }
+
+        select.innerHTML = optionsHtml;
+        select.disabled = false;
+
+        /* ===== HẾT KHỐI 8 — phần "// BƯỚC 4: Xử lý sự kiện khi chọn 1 option"
+   và toàn bộ catch của toggleActivationType giữ nguyên phía sau ===== */
 
         // BƯỚC 4: Xử lý sự kiện khi chọn 1 option
         select.onchange = function () {
@@ -9236,30 +9605,59 @@ window.loadUserNotifications = async function () {
         }
       }
 
-      // B. Chuẩn bị danh sách Email cần check
-      const emailsToCheck = window.tempSelectedEmails || [];
-      if (emailsToCheck.length === 0) {
+      // B. Chuẩn bị danh sách Email cần check (chuẩn hóa lowercase để khớp DB)
+      const _normEm = (e) =>
+        String(e || '')
+          .trim()
+          .toLowerCase();
+      const rawEmails = window.tempSelectedEmails || [];
+      if (rawEmails.length === 0) {
         showToast('Chưa chọn thành viên nào!', 'warning');
         return;
       }
+      const emailsToCheck = [...new Set(rawEmails.map(_normEm))].filter(
+        Boolean
+      );
 
       showLoadingSpinner();
 
       try {
-        // C. TRUY VẤN TRỰC TIẾP PROFILES TỪ DATABASE
+        // C. TRUY VẤN PROFILES — gửi cả bản gốc LẪN bản lowercase để không
+        // bị sót người do khác biệt hoa/thường giữa bảng chọn và Database
+        const emailQueryList = [...new Set([...rawEmails, ...emailsToCheck])];
         const { data: freshProfiles, error: profErr } =
           await window.supabaseClient
             .from('profiles')
             .select('id, email, full_name, position, team')
-            .in('email', emailsToCheck);
+            .in('email', emailQueryList);
 
         if (profErr) throw profErr;
 
         const dbUsers = freshProfiles || [];
         const userIdsToCheck = dbUsers.map((u) => u.id);
-        let busyList = [];
 
-        // D. KIỂM TRA LỊCH TRỰC
+        // Cảnh báo NGAY nếu có email không tìm thấy hồ sơ (thay vì mất âm thầm)
+        const foundSet = new Set(dbUsers.map((u) => _normEm(u.email)));
+        const notFoundEmails = emailsToCheck.filter((e) => !foundSet.has(e));
+        if (notFoundEmails.length > 0) {
+          showToast(
+            `⚠️ ${notFoundEmails.length} email không có hồ sơ trong hệ thống!`,
+            'warning'
+          );
+          console.warn('⚠️ Email không có hồ sơ:', notFoundEmails);
+        }
+
+        // D1. KIỂM TRA LỊCH TRỰC HÔM NAY — dùng ngày LOCAL (giờ Việt Nam),
+        // KHÔNG dùng toISOString() vì đó là ngày UTC (sai trước 7h sáng VN)
+        const _t = new Date();
+        const todayStr =
+          _t.getFullYear() +
+          '-' +
+          String(_t.getMonth() + 1).padStart(2, '0') +
+          '-' +
+          String(_t.getDate()).padStart(2, '0');
+
+        let busyList = [];
         if (userIdsToCheck.length > 0) {
           const { data: busyData, error } = await window.supabaseClient
             .from('roster_assignments')
@@ -9268,18 +9666,54 @@ window.loadUserNotifications = async function () {
             )
             .in('user_id', userIdsToCheck)
             .in('assignment_status', ['assigned', 'confirmed'])
-            .gte(
-              'roster_schedules.duty_date',
-              new Date().toISOString().split('T')[0]
-            );
+            .gte('roster_schedules.duty_date', todayStr);
 
           if (error) throw error;
 
-          const todayStr = new Date().toISOString().split('T')[0];
           busyList = (busyData || []).filter(
             (b) =>
               b.roster_schedules && b.roster_schedules.duty_date === todayStr
           );
+        }
+
+        // D2. KIỂM TRA ĐANG THAM GIA SỰ KIỆN KHÁC CHƯA ĐÓNG
+        // (trước đây helper getBusyInfo có sẵn nhưng không được gọi ở đây)
+        const deployedMap = new Map(); // user_id -> tên sự kiện đang tham gia
+        if (userIdsToCheck.length > 0) {
+          const { data: deps } = await window.supabaseClient
+            .from('deployment_history')
+            .select('user_id, incident_id, action_type, confirmed_at')
+            .in('user_id', userIdsToCheck)
+            .in('action_type', [
+              'deployed',
+              'replace_in',
+              'mobilize',
+              'active',
+            ]);
+
+          const otherIncIds = [
+            ...new Set((deps || []).map((d) => d.incident_id).filter(Boolean)),
+          ].filter((id) => String(id) !== String(incidentId)); // bỏ qua chính sự kiện đang bổ sung
+
+          if (otherIncIds.length > 0) {
+            const { data: incs } = await window.supabaseClient
+              .from('incidents')
+              .select('id, event_name, status')
+              .in('id', otherIncIds)
+              .neq('status', 'closed');
+
+            const openIncs = new Map(
+              (incs || []).map((i) => [
+                String(i.id),
+                i.event_name || `#${String(i.id).substring(0, 5)}`,
+              ])
+            );
+            (deps || []).forEach((d) => {
+              const ev = openIncs.get(String(d.incident_id));
+              if (ev && !deployedMap.has(d.user_id))
+                deployedMap.set(d.user_id, ev);
+            });
+          }
         }
 
         // E. HIỂN THỊ LÊN GIAO DIỆN REVIEW
@@ -9298,9 +9732,7 @@ window.loadUserNotifications = async function () {
           let positionBadge = '';
           let userUUID = null;
 
-          const m = dbUsers.find(
-            (u) => String(u.email).toLowerCase() === String(email).toLowerCase()
-          );
+          const m = dbUsers.find((u) => _normEm(u.email) === email);
 
           if (m) {
             displayName =
@@ -9320,15 +9752,32 @@ window.loadUserNotifications = async function () {
             }
           }
 
-          const isBusy = busyList.find((b) => b.user_id === userUUID);
+          // Phân loại trạng thái:
+          //  - Không có hồ sơ  -> cảnh báo xám
+          //  - Đang tham gia sự kiện khác chưa đóng -> BẬN (đỏ, tính busyCount)
+          //  - Đang trực định kỳ -> LỰC LƯỢNG SẴN SÀNG (xanh, KHÔNG tính bận
+          //    vì đội trực chính là nhóm ưu tiên điều động khẩn cấp)
+          const onDutyRoster = busyList.find((b) => b.user_id === userUUID);
+          const busyIncident = userUUID ? deployedMap.get(userUUID) : null;
+
           let statusHtml =
             '<i class="bx bx-check-circle text-success" style="font-size: 1.5rem;"></i>';
           let rowClass = '';
 
-          if (isBusy) {
+          if (!m) {
+            statusHtml = `<span class="badge bg-secondary"><i class='bx bx-user-x me-1'></i> Không có hồ sơ</span>`;
+            rowClass = 'bg-light';
+          } else if (busyIncident) {
             busyCount++;
-            statusHtml = `<span class="badge bg-danger busy-warning"><i class='bx bxs-error-alt me-1'></i> Bận trực: ${isBusy.roster_schedules.team_name}</span>`;
+            statusHtml = `<span class="badge bg-danger busy-warning"><i class='bx bxs-error-alt me-1'></i> Đang tham gia: ${window.escapeHtml(
+              busyIncident
+            )}</span>`;
             rowClass = 'bg-warning-subtle list-group-item-warning';
+          } else if (onDutyRoster) {
+            statusHtml = `<span class="badge bg-success"><i class='bx bx-shield-quarter me-1'></i> Đang trực ${window.escapeHtml(
+              onDutyRoster.roster_schedules.team_name || ''
+            )} — Sẵn sàng</span>`;
+            // Không tăng busyCount, không tô vàng dòng
           }
 
           let displayEmailHtml = '';
@@ -9351,6 +9800,11 @@ window.loadUserNotifications = async function () {
       `);
         });
 
+        /* ===== HẾT KHỐI 5 — phần "// F. LƯU DỮ LIỆU..." giữ nguyên phía sau =====
+   LƯU Ý: phần F dùng biến  members: emailsToCheck  -> giờ đây danh sách này
+   đã được chuẩn hóa lowercase + khử trùng lặp, mọi bước sau tự động hưởng lợi.
+============================================================================ */
+
         // F. LƯU DỮ LIỆU ĐỂ TIẾN HÀNH KÍCH HOẠT
         window.tempActivationData = {
           type: type,
@@ -9366,7 +9820,7 @@ window.loadUserNotifications = async function () {
 
         if (busyCount > 0) {
           showToast(
-            `⚠️ Cảnh báo: Có ${busyCount} nhân sự đang vướng lịch trực!`,
+            `⚠️ Cảnh báo: Có ${busyCount} nhân sự đang tham gia sự kiện khác chưa kết thúc!`,
             'warning'
           );
         }
@@ -9403,10 +9857,23 @@ window.loadUserNotifications = async function () {
   // ============================================================
   // 5. Sự kiện nút "Confirm and Send" (ĐÃ ĐỒNG BỘ ĐỦ VỆ TINH + TRIGGER)
   // ============================================================
+  /* ============================================================================
+   KHỐI 9 — THAY TOÀN BỘ HANDLER "XÁC NHẬN & GỬI"
+   XÓA từ dòng:   document.getElementById('confirmAndSendBtn')
+   ĐẾN HẾT dòng:  });   đóng handler này
+   (tức là đến ngay TRƯỚC comment  /** Xử lý sau khi kích hoạt khẩn cấp... )
+   Dán trọn khối dưới đây vào thay:
+============================================================================ */
+
   document
     .getElementById('confirmAndSendBtn')
     .addEventListener('click', async function () {
-      this.blur(); // Tắt focus nút
+      // CHỐNG BẤM ĐÚP LỚP 1 (client) — lớp 2 là activation_key phía server
+      if (window._activationInFlight) return;
+      window._activationInFlight = true;
+      this.disabled = true;
+      this.blur();
+
       $('#finalReviewModal').modal('hide');
       if (typeof window.closeModal === 'function')
         window.closeModal('finalReviewModal');
@@ -9415,163 +9882,158 @@ window.loadUserNotifications = async function () {
       const data = window.tempActivationData; // Dữ liệu từ Modal review
       const supabase = window.supabaseClient;
 
-      try {
-        // 1. LẤY UUID CỦA ADMIN ĐANG KÍCH HOẠT VÀ TOÀN BỘ MEMBERS TỪ DATABASE
-        let currentAdminId = null;
-        const currentEmail =
-          window.userSession?.email || window.userSession?.username || '';
-
-        if (currentEmail) {
-          const { data: profile } = await supabase
-            .from('profiles')
-            .select('id')
-            .ilike('email', currentEmail)
-            .single();
-          if (profile) currentAdminId = profile.id;
-        }
-
-        // TRUY VẤN TRỰC TIẾP UUID CỦA THÀNH VIÊN TỪ BẢNG PROFILES (Sửa lỗi mất dữ liệu do appState rỗng)
-        let memberProfiles = [];
-        if (data.members && data.members.length > 0) {
-          const { data: profiles, error: profErr } = await supabase
-            .from('profiles')
-            .select('id, email')
-            .in('email', data.members); // Quét danh sách email gửi lên
-
-          if (profErr) throw profErr;
-          memberProfiles = profiles || [];
-        }
-
-        const getUuidFromFetchedProfiles = (email) => {
-          const match = memberProfiles.find(
-            (p) => String(p.email).toLowerCase() === String(email).toLowerCase()
+      // Chặn trường hợp dữ liệu review bị mất (F5 / lỗi giữa chừng)
+      if (!data || !Array.isArray(data.members) || data.members.length === 0) {
+        if (typeof showToast === 'function')
+          showToast(
+            'Dữ liệu kích hoạt không hợp lệ. Vui lòng thực hiện lại từ đầu!',
+            'error'
           );
-          return match ? match.id : null;
+        window._activationInFlight = false;
+        this.disabled = false;
+        if (typeof hideLoadingSpinner === 'function') hideLoadingSpinner();
+        return;
+      }
+
+      try {
+        // ============================================================
+        // 1. CHUẨN BỊ THAM SỐ GỌI RPC
+        // ============================================================
+        const normEm = (e) =>
+          String(e || '')
+            .trim()
+            .toLowerCase();
+        const memberEmails = [...new Set(data.members.map(normEm))].filter(
+          Boolean
+        );
+
+        const toNum = (v) => {
+          if (v === '' || v === null || v === undefined) return null;
+          const n = Number(v);
+          return Number.isFinite(n) ? n : null;
         };
 
-        const membersString = data.members.join(';');
-        let activeIncidentId = data.incidentId;
+        // Khóa chống trùng: sinh MỚI cho mỗi lượt bấm Xác nhận.
+        // Nếu request bị gửi 2 lần (retry mạng...), server nhận ra key cũ
+        // và trả về incident đã tạo thay vì tạo bản ghi trùng.
+        const activationKey =
+          window.crypto && typeof crypto.randomUUID === 'function'
+            ? crypto.randomUUID()
+            : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(
+                /[xy]/g,
+                function (c) {
+                  const r = (Math.random() * 16) | 0;
+                  const v = c === 'x' ? r : (r & 0x3) | 0x8;
+                  return v.toString(16);
+                }
+              );
 
-        // ----------------------------------------------------
-        // 2. TIẾN HÀNH GHI DỮ LIỆU
-        // ----------------------------------------------------
-        if (data.type === 'new') {
-          // A. Tạo bảng chính (incidents)
-          const newIncident = {
-            event_name: data.details,
-            location_text: data.location,
-            ma_xa: data.ma_xa || null,
-            latitude: data.latitude || null,
-            longitude: data.longitude || null,
-            status: 'active',
-            activation_time: new Date().toISOString(),
-            initial_selected_members: membersString,
-            admin_activate: currentAdminId,
-          };
-
-          const { data: inserted, error: incErr } = await supabase
-            .from('incidents')
-            .insert([newIncident])
-            .select();
-          if (incErr) throw incErr;
-          activeIncidentId = inserted[0].id;
-
-          // 🌟 CÁC BẢNG: assessments, plans, objectives, activities, reports ĐÃ ĐƯỢC SQL TRIGGER TỰ ĐỘNG TẠO 🌟
-
-          // B. Tạo lịch sử điều động (deployment_history) sử dụng dữ liệu vừa quét từ DB
-          const deployments = data.members
-            .map((email) => {
-              const uId = getUuidFromFetchedProfiles(email);
-              return {
-                incident_id: activeIncidentId,
-                user_id: uId,
-                action_type: 'deployed',
-                reason: 'Điều động khẩn cấp ban đầu',
-              };
-            })
-            .filter((d) => d.user_id); // Chỉ giữ lại các bản ghi tìm thấy UUID hợp lệ
-
-          if (deployments.length > 0) {
-            const { error: deployErr } = await supabase
-              .from('deployment_history')
-              .insert(deployments);
-            if (deployErr)
-              console.error('Lỗi ghi deployment_history:', deployErr);
+        // ============================================================
+        // 2. GỌI RPC — MỘT LỆNH DUY NHẤT, ATOMIC PHÍA SERVER
+        // (kiểm tra quyền admin, tạo incident, deployment_history,
+        //  gộp thành viên khi bổ sung... tất cả trong 1 transaction)
+        // ============================================================
+        const { data: rpcResult, error: rpcErr } = await supabase.rpc(
+          'activate_emergency',
+          {
+            p_type: data.type,
+            p_activation_key: activationKey,
+            p_member_emails: memberEmails,
+            p_incident_id: data.type === 'add' ? data.incidentId : null,
+            p_event_name: data.details || null,
+            p_location_text: data.location || null,
+            p_ma_xa: data.ma_xa || null,
+            p_latitude: toNum(data.latitude),
+            p_longitude: toNum(data.longitude),
           }
-        } else if (data.type === 'add') {
-          // Logic bổ sung nhân sự vào sự kiện cũ
-          const { data: oldInc, error: fetchErr } = await supabase
-            .from('incidents')
-            .select('initial_selected_members')
-            .eq('id', activeIncidentId)
-            .single();
-          if (fetchErr) throw fetchErr;
+        );
 
-          const oldMembers = oldInc.initial_selected_members
-            ? oldInc.initial_selected_members.split(';')
-            : [];
-          const combinedMembers = [...new Set([...oldMembers, ...data.members])]
-            .filter(Boolean)
-            .join(';');
-
-          await supabase
-            .from('incidents')
-            .update({ initial_selected_members: combinedMembers })
-            .eq('id', activeIncidentId);
-
-          // Ghi nhận điều động bổ sung
-          const newDeployments = data.members
-            .map((email) => ({
-              incident_id: activeIncidentId,
-              user_id: getUuidFromFetchedProfiles(email),
-              action_type: 'deployed',
-              reason: 'Điều động bổ sung vào đội RRT',
-            }))
-            .filter((d) => d.user_id && !oldMembers.includes(email));
-
-          if (newDeployments.length > 0) {
-            await supabase.from('deployment_history').insert(newDeployments);
-          }
+        if (rpcErr) {
+          // Dịch mã lỗi nghiệp vụ từ server thành thông báo thân thiện
+          const msg = String(rpcErr.message || '');
+          if (msg.includes('FORBIDDEN'))
+            throw new Error(
+              'Tài khoản của bạn không có quyền kích hoạt khẩn cấp!'
+            );
+          if (msg.includes('AUTH_REQUIRED'))
+            throw new Error(
+              'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại!'
+            );
+          if (msg.includes('NOT_FOUND'))
+            throw new Error('Sự kiện không tồn tại hoặc đã được đóng!');
+          if (msg.includes('BAD_REQUEST'))
+            throw new Error(
+              (msg.split('BAD_REQUEST:')[1] || 'Dữ liệu không hợp lệ!').trim()
+            );
+          throw rpcErr;
         }
 
-        // ----------------------------------------------------
-        // 3. THÔNG BÁO GIAO DIỆN VÀ PHÁT LỆNH RRT
-        // ----------------------------------------------------
+        const activeIncidentId = rpcResult.incident_id;
+
+        // Cảnh báo email không có hồ sơ (server đối soát và trả về)
+        const missingEmails = rpcResult.missing_emails || [];
+        if (missingEmails.length > 0) {
+          console.warn(
+            '⚠️ Email không có hồ sơ trong hệ thống:',
+            missingEmails
+          );
+          if (typeof showToast === 'function')
+            showToast(
+              `⚠️ ${missingEmails.length} thành viên không có hồ sơ, không ghi được lịch sử điều động!`,
+              'warning'
+            );
+        }
+
+        // Lệnh trùng (bấm đúp / retry): server KHÔNG tạo bản ghi mới
+        // -> không gửi lại thông báo lần 2 cho thành viên
+        if (rpcResult.duplicated) {
+          if (typeof showToast === 'function')
+            showToast(
+              'Lệnh kích hoạt này đã được ghi nhận trước đó — không tạo trùng.',
+              'info'
+            );
+          return; // finally vẫn chạy để mở khóa nút
+        }
+
+        // ============================================================
+        // 3. THÔNG BÁO GIAO DIỆN VÀ PHÁT LỆNH RRT (giữ nguyên như cũ)
+        // ============================================================
         if (typeof showToast === 'function')
           showToast('🚨 Kích hoạt thành công!', 'success');
 
+        // Xóa toàn bộ lựa chọn để tránh lần kích hoạt sau mang theo danh sách cũ
+        if (typeof window.clearAllSelectedMembers === 'function')
+          window.clearAllSelectedMembers(true);
+
         if (
-          data.members &&
-          data.members.length > 0 &&
+          memberEmails.length > 0 &&
           typeof window.createSystemNotification === 'function'
         ) {
           const notifMsg = `THÔNG BÁO: ${
             data.type === 'new' ? 'Sự kiện' : 'Bổ sung nhân lực'
           }: ${data.details}`;
 
-          // ---> CẬP NHẬT Ở ĐÂY: Truyền đúng type 'khan_cap' và activeIncidentId
           await window.createSystemNotification(
-            data.members,
+            memberEmails,
             notifMsg,
-            'khan_cap', // type: 'khan_cap' thay vì 'incident'
-            activeIncidentId, // incidentId
-            null // scheduleId
+            'khan_cap',
+            activeIncidentId,
+            null
           );
         }
 
         if (typeof showActivationSuccessModal === 'function') {
           const allUsers =
             window.appState.users || window.appState.teamData || [];
-          const userNamesToNotify = data.members.map((email) => {
+          const userNamesToNotify = memberEmails.map((email) => {
             const u = allUsers.find(
-              (x) =>
-                String(x.email).toLowerCase() === String(email).toLowerCase()
+              (x) => String(x.email).toLowerCase() === email
             );
             return u ? u.full_name || u.email : email;
           });
           showActivationSuccessModal({
             incidentId: activeIncidentId,
-            recipientCount: data.members.length,
+            recipientCount: memberEmails.length,
             recipients: userNamesToNotify,
           });
         }
@@ -9579,11 +10041,26 @@ window.loadUserNotifications = async function () {
         console.error('Lỗi quy trình kích hoạt:', err);
         if (typeof showToast === 'function')
           showToast('Lỗi hệ thống: ' + (err.message || ''), 'error');
+        // Mở lại modal review để admin thao tác tiếp mà không mất dữ liệu
         $('#finalReviewModal').modal('show');
       } finally {
         if (typeof hideLoadingSpinner === 'function') hideLoadingSpinner();
+        // Mở khóa cho lượt kích hoạt tiếp theo
+        window._activationInFlight = false;
+        const btnConfirm = document.getElementById('confirmAndSendBtn');
+        if (btnConfirm) btnConfirm.disabled = false;
       }
     });
+
+  /* ===== HẾT KHỐI 9 =====
+LƯU Ý QUAN TRỌNG SAU KHI DÁN:
+- Khối này ĐÃ BAO GỒM nội dung của Khối 4, 6, 7 cũ. Nếu trước đó bạn đã
+ dán các khối ấy thì không sao — toàn bộ vùng handler cũ (kể cả phần đã
+ vá) đều bị thay bằng khối này.
+- Hàm getUuidFromFetchedProfiles và biến membersString không còn được
+ dùng trong handler này (server tự tra UUID). Nếu nơi khác trong file
+ không tham chiếu chúng thì không cần giữ lại.
+============================================================================ */
 
   /**
    * Xử lý sau khi kích hoạt khẩn cấp thành công
@@ -9591,9 +10068,13 @@ window.loadUserNotifications = async function () {
    */
   window.onEmergencyActivatedSuccess = async function () {
     // Xóa form cũ để lần sau mở lên sạch sẽ
-    $('.member-checkbox').prop('checked', false);
-    $('#selectAllMembers').prop('checked', false);
-    if (typeof updateSelectedCount === 'function') updateSelectedCount();
+    if (typeof window.clearAllSelectedMembers === 'function') {
+      window.clearAllSelectedMembers(true); // xóa cả state Map + DOM + panel
+    } else {
+      $('.member-checkbox').prop('checked', false);
+      $('#selectAllMembers').prop('checked', false);
+      if (typeof updateSelectedCount === 'function') updateSelectedCount();
+    }
     $('#incidentLocation').val('');
     $('#incidentDetails').val('');
 
@@ -10565,7 +11046,7 @@ window.loadUserNotifications = async function () {
       b.classList.remove('active');
     }
     btn.style.background = 'white';
-    btn.style.borderBottomColor = '#007bff';
+    btn.style.borderBottomColor = '#006a75';
     btn.classList.add('active');
   };
   // 3. Mở modal & Load Active Incidents (ĐÃ SỬA LỖI FIND)
@@ -12163,92 +12644,92 @@ window.loadUserNotifications = async function () {
     }
   };
 
-// PATCH 15 (v3): Hiển thị TẤT CẢ incident đang active trên lịch,
-// không phụ thuộc trạng thái của từng activity con bên trong
-window.loadRosterData = async function () {
-  try {
-    let combinedData = [];
-
-    // 1. Lịch trực định kỳ (giữ nguyên)
-    const { data: rosters, error: rosterErr } = await window.supabaseClient
-      .from('roster_schedules')
-      .select('*')
-      .order('duty_date', { ascending: false });
-    if (rosterErr) throw rosterErr;
-
-    if (rosters) {
-      combinedData = rosters.map((r) => ({
-        id: r.id,
-        duty_date: r.duty_date,
-        team_name: r.team_name,
-        status: r.status,
-        note: r.note || '',
-        shift_type: r.shift_type || 'roster',
-      }));
-    }
-
-    // 2. Sự cố khẩn cấp — LẤY THEO incident.status, KHÔNG theo activity
+  // PATCH 15 (v3): Hiển thị TẤT CẢ incident đang active trên lịch,
+  // không phụ thuộc trạng thái của từng activity con bên trong
+  window.loadRosterData = async function () {
     try {
-      const { data: incidents, error: incErr } = await window.supabaseClient
-        .from('incidents')
-        .select('id, event_name, status, activation_time')
-        .eq('status', 'active'); // ← Chỉ cần incident còn active
-      if (incErr) throw incErr;
+      let combinedData = [];
 
-      if (incidents && incidents.length > 0) {
-        const incidentIds = incidents.map((i) => i.id);
+      // 1. Lịch trực định kỳ (giữ nguyên)
+      const { data: rosters, error: rosterErr } = await window.supabaseClient
+        .from('roster_schedules')
+        .select('*')
+        .order('duty_date', { ascending: false });
+      if (rosterErr) throw rosterErr;
 
-        // Lấy thêm activities để biết % hoàn thành (hiển thị phụ, không dùng để filter)
-        const { data: activities } = await window.supabaseClient
-          .from('incident_activities')
-          .select('incident_id, status')
-          .in('incident_id', incidentIds);
-
-        const progressMap = {};
-        (activities || []).forEach((a) => {
-          if (!progressMap[a.incident_id]) {
-            progressMap[a.incident_id] = { total: 0, done: 0 };
-          }
-          progressMap[a.incident_id].total++;
-          if (a.status === 'completed') progressMap[a.incident_id].done++;
-        });
-
-        const formattedIncidents = incidents
-          .map((inc) => {
-            if (!inc.activation_time) return null; // Không có ngày thật → bỏ
-
-            const validDate = String(inc.activation_time).split('T')[0];
-            const prog = progressMap[inc.id];
-            const progressText = prog
-              ? ` (${prog.done}/${prog.total} HĐ xong)`
-              : '';
-
-            return {
-              id: inc.id,
-              duty_date: validDate,
-              team_name: inc.event_name || 'Sự cố',
-              status: inc.status, // Luôn là 'active' vì đã filter ở query
-              note: 'Điều động khẩn cấp' + progressText,
-              shift_type: 'incident',
-              incident_id: inc.id,
-            };
-          })
-          .filter(Boolean);
-
-        combinedData = [...combinedData, ...formattedIncidents];
+      if (rosters) {
+        combinedData = rosters.map((r) => ({
+          id: r.id,
+          duty_date: r.duty_date,
+          team_name: r.team_name,
+          status: r.status,
+          note: r.note || '',
+          shift_type: r.shift_type || 'roster',
+        }));
       }
-    } catch (e) {
-      console.warn('⚠️ Bỏ qua dữ liệu Sự cố:', e.message);
-    }
 
-    window.appState = window.appState || {};
-    window.appState.roster_schedules = combinedData;
-    return combinedData;
-  } catch (err) {
-    console.error('❌ loadRosterData error:', err);
-    return [];
-  }
-};
+      // 2. Sự cố khẩn cấp — LẤY THEO incident.status, KHÔNG theo activity
+      try {
+        const { data: incidents, error: incErr } = await window.supabaseClient
+          .from('incidents')
+          .select('id, event_name, status, activation_time')
+          .eq('status', 'active'); // ← Chỉ cần incident còn active
+        if (incErr) throw incErr;
+
+        if (incidents && incidents.length > 0) {
+          const incidentIds = incidents.map((i) => i.id);
+
+          // Lấy thêm activities để biết % hoàn thành (hiển thị phụ, không dùng để filter)
+          const { data: activities } = await window.supabaseClient
+            .from('incident_activities')
+            .select('incident_id, status')
+            .in('incident_id', incidentIds);
+
+          const progressMap = {};
+          (activities || []).forEach((a) => {
+            if (!progressMap[a.incident_id]) {
+              progressMap[a.incident_id] = { total: 0, done: 0 };
+            }
+            progressMap[a.incident_id].total++;
+            if (a.status === 'completed') progressMap[a.incident_id].done++;
+          });
+
+          const formattedIncidents = incidents
+            .map((inc) => {
+              if (!inc.activation_time) return null; // Không có ngày thật → bỏ
+
+              const validDate = String(inc.activation_time).split('T')[0];
+              const prog = progressMap[inc.id];
+              const progressText = prog
+                ? ` (${prog.done}/${prog.total} HĐ xong)`
+                : '';
+
+              return {
+                id: inc.id,
+                duty_date: validDate,
+                team_name: inc.event_name || 'Sự cố',
+                status: inc.status, // Luôn là 'active' vì đã filter ở query
+                note: 'Điều động khẩn cấp' + progressText,
+                shift_type: 'incident',
+                incident_id: inc.id,
+              };
+            })
+            .filter(Boolean);
+
+          combinedData = [...combinedData, ...formattedIncidents];
+        }
+      } catch (e) {
+        console.warn('⚠️ Bỏ qua dữ liệu Sự cố:', e.message);
+      }
+
+      window.appState = window.appState || {};
+      window.appState.roster_schedules = combinedData;
+      return combinedData;
+    } catch (err) {
+      console.error('❌ loadRosterData error:', err);
+      return [];
+    }
+  };
 
   async function waitForSupabaseReady(timeout = 10000) {
     if (window.supabaseClient?.auth) return true;
@@ -12352,13 +12833,15 @@ window.loadRosterData = async function () {
     }
   };
 
-window.submitIncidentResponse = async function (actionType) {
+  window.submitIncidentResponse = async function (actionType) {
     if (!window.selectedIncidentId) return;
-    
+
     // Lấy thông tin user
-    const myEmail = String(window.userSession?.email || '').toLowerCase().trim();
+    const myEmail = String(window.userSession?.email || '')
+      .toLowerCase()
+      .trim();
     const myUserId = window.userSession?.id; // Lấy thêm ID để lưu lịch sử
-    
+
     if (!myEmail)
       return showToast('Lỗi: Không tìm thấy email của bạn', 'error');
 
@@ -12406,20 +12889,30 @@ window.submitIncidentResponse = async function (actionType) {
       // 🔥 BƯỚC MỚI: GHI NHẬT KÝ VÀO BẢNG DEPLOYMENT_HISTORY 🔥
       // ==============================================================
       if (myUserId) {
-          const actionText = actionType === 'confirm' ? 'Thành viên' : 'Đã từ chối';
-          
-          // Dùng upsert (hoặc insert) để ghi lại hành động của nhân sự
-          const { error: historyErr } = await window.supabaseClient
-            .from('deployment_history')
-            .upsert({
-                incident_id: window.selectedIncidentId,
-                user_id: myUserId,
-                action_type: actionText,
-                // created_at sẽ tự động lấy thời gian hiện tại
-            }, { onConflict: 'incident_id, user_id' }); // Tránh tạo ra nhiều dòng nếu user bấm đổi ý liên tục
-            
-          if (historyErr) console.warn("Lỗi lưu lịch sử thực chiến:", historyErr);
-      }
+        const stdAction = actionType === 'confirm' ? 'deployed' : 'declined';
+        const stdReason = actionType === 'confirm'
+          ? 'Xác nhận tham gia (trong app)'
+          : 'Đã từ chối tham gia (trong app)';
+
+        // Cập nhật bản ghi điều động có sẵn; nếu chưa có thì tạo mới
+        const { data: updated, error: updErr } = await window.supabaseClient
+          .from('deployment_history')
+          .update({ action_type: stdAction, reason: stdReason })
+          .eq('incident_id', window.selectedIncidentId)
+          .eq('user_id', myUserId)
+          .in('action_type', ['deployed', 'replaced', 'declined'])
+          .select('id');
+
+        if (!updErr && (!updated || updated.length === 0)) {
+          await window.supabaseClient.from('deployment_history').insert({
+            incident_id: window.selectedIncidentId,
+            user_id: myUserId,
+            action_type: stdAction,
+            reason: stdReason,
+          });
+        }
+        if (updErr) console.warn('Lỗi lưu lịch sử thực chiến:', updErr);
+    }
       // ==============================================================
 
       showToast(
@@ -12435,7 +12928,7 @@ window.submitIncidentResponse = async function (actionType) {
         .select('*')
         .eq('id', window.selectedIncidentId)
         .single();
-        
+
       if (updatedInc) {
         const newIncString = encodeURIComponent(JSON.stringify(updatedInc));
         window.currentDossierString = newIncString;
@@ -12450,7 +12943,6 @@ window.submitIncidentResponse = async function (actionType) {
       }
       if (typeof window.renderTrackingPage === 'function')
         window.renderTrackingPage(true);
-        
     } catch (error) {
       showToast('Lỗi hệ thống: ' + error.message, 'error');
     } finally {
@@ -12497,9 +12989,14 @@ window.submitIncidentResponse = async function (actionType) {
 
   let geojsonBaseLayer;
   let choroplethLayer;
-  let markersLayerGroup;
+
   let incidentsLayerGroup; // Layer cho sự kiện
   let legend;
+  // Thêm vào phần khai báo biến global đầu file
+  let currentHighlightedMarker = null; // Biến lưu trữ marker đang được highlight
+  // Bằng:
+  let markersLayerGroupInstance; // Instance của L.layerGroup()
+  let markersLayerGroupMap; // Map ánh xạ tọa độ -> marker
 
   // Thêm CSS hiệu ứng chớp tắt (Pulse) cho các sự kiện khẩn cấp trực tiếp bằng JS
   const pulseCSS = `
@@ -12641,13 +13138,21 @@ window.submitIncidentResponse = async function (actionType) {
   // ============================================================
   // 3. TẠO CÁC LỚP LAYER (MARKERS & INCIDENTS)
   // ============================================================
+  // ============================================================
+  // 3. TẠO CÁC LỚP LAYER (MARKERS & INCIDENTS) - ĐÃ CẬP NHẬT
+  // ============================================================
   function createMarkersLayer(data) {
     const markers = L.layerGroup();
+    // Tạo một Map để ánh xạ giữa tọa độ (lat,lon) và marker object
+    // Điều này giúp tìm marker nhanh chóng sau này
+    const markerMap = new Map();
+
     if (Array.isArray(data)) {
       data.forEach((c) => {
         const lat = parseFloat(c.lat);
         const lon = parseFloat(c.lon);
-        if (c && !isNaN(lat) && !isNaN(lon) && c.maXa) {
+        if (c && !isNaN(lat) && !isNaN(lon) && c.ma_xa) {
+          // Dùng c.ma_xa nếu có
           const marker = L.circleMarker([lat, lon], {
             radius: 5,
             fillColor: industryColors[c.department] || '#FF5722',
@@ -12655,22 +13160,34 @@ window.submitIncidentResponse = async function (actionType) {
             weight: 1,
             opacity: 1,
             fillOpacity: 0.8,
+            // Gắn dữ liệu nhận diện vào marker
+            // Sử dụng 'id' hoặc 'customId' hoặc 'data' đều được, miễn là bạn nhớ dùng lại sau
+            customId: `${lat},${lon}`, // Hoặc có thể dùng c.ma_xa hoặc c.email nếu unique
+            // Ví dụ: customId: c.email,
+            data: c, // Gắn luôn dữ liệu thành viên vào marker nếu cần sau này
           });
+
           marker.bindPopup(`
-            <b>${c.fullName || 'N/A'}</b><br/>
-            Khoa/phòng: ${c.department || 'N/A'}<br/>
-            Chức vụ: ${c.employeeStatus || 'N/A'}
-          `);
-          marker.bindTooltip(c.fullName || 'RRT Member', {
+          <b>${c.fullName || c.full_name || 'N/A'}</b><br/>
+          Khoa/phòng: ${c.department || 'N/A'}<br/>
+          Chức vụ: ${c.employeeStatus || 'N/A'}<br/>
+          Phường: ${c.ward || c.ma_xa || 'N/A'} <!-- Hiển thị ward nếu có -->
+        `);
+          marker.bindTooltip(`${c.fullName || c.full_name || 'RRT Member'}`, {
             permanent: false,
             direction: 'top',
             offset: L.point(0, -10),
           });
           markers.addLayer(marker);
+
+          // Thêm vào Map để tra cứu sau
+          markerMap.set(`${lat},${lon}`, marker);
         }
       });
     }
-    return markers;
+
+    // Trả về cả layer group và map để tiện sử dụng sau này
+    return { layer: markers, map: markerMap };
   }
 
   function createIncidentsLayer(data) {
@@ -12787,7 +13304,10 @@ window.submitIncidentResponse = async function (actionType) {
   }
 
   // ============================================================
-  // 4. VẼ VÀ ĐỒNG BỘ BẢN ĐỒ
+  // 4. VẼ VÀ ĐỒNG BỘ BẢN ĐỒ - ĐÃ CẬP NHẬT
+  // ============================================================
+  // ============================================================
+  // 4. VẼ VÀ ĐỒNG BỘ BẢN ĐỒ - ĐÃ CẬP NHẬT LOGIC HIỂN THỊ
   // ============================================================
   function renderMap() {
     if (!geojsonData || !geojsonData.features) {
@@ -12799,7 +13319,7 @@ window.submitIncidentResponse = async function (actionType) {
     const countsByMaXa = new Map();
     if (Array.isArray(filteredData)) {
       filteredData.forEach((member) => {
-        const maXaKey = String(member.maXa || member.ma_xa || '');
+        const maXaKey = String(member.ma_xa || member.maXa || ''); // Dùng member.ma_xa
         if (maXaKey) {
           countsByMaXa.set(maXaKey, (countsByMaXa.get(maXaKey) || 0) + 1);
         }
@@ -12820,7 +13340,7 @@ window.submitIncidentResponse = async function (actionType) {
     // DỌN DẸP LỚP CŨ
     if (map) {
       if (choroplethLayer) map.removeLayer(choroplethLayer);
-      if (markersLayerGroup) map.removeLayer(markersLayerGroup);
+      if (markersLayerGroupInstance) map.removeLayer(markersLayerGroupInstance);
       if (incidentsLayerGroup) map.removeLayer(incidentsLayerGroup);
     }
 
@@ -12836,22 +13356,38 @@ window.submitIncidentResponse = async function (actionType) {
           : null,
     });
 
-    markersLayerGroup = createMarkersLayer(filteredData);
+    // Gọi createMarkersLayer và nhận cả layer và map
+    const { layer: newMarkersLayer, map: newMarkersMap } =
+      createMarkersLayer(filteredData);
+    markersLayerGroupInstance = newMarkersLayer; // Cập nhật instance
+    markersLayerGroupMap = newMarkersMap; // Cập nhật map
+
     incidentsLayerGroup = createIncidentsLayer(incidentData);
 
     // Xếp thứ tự lớp: Choropleth (Dưới) -> Markers -> Incidents (Trên cùng)
-    if (markersLayerGroup.setZIndex) markersLayerGroup.setZIndex(500);
+    // if (markersLayerGroupInstance.setZIndex) markersLayerGroupInstance.setZIndex(500); // Z-index có thể không cần thiết nếu chỉ có 3 lớp chính
     if (incidentsLayerGroup.setZIndex) incidentsLayerGroup.setZIndex(1000);
 
     // KIỂM TRA ĐIỀU KIỆN HIỂN THỊ
-    // Giả sử bạn có checkbox id="toggleFillMap" để bật tắt, nếu không có mặc định sẽ hiện hết
     const toggleCheckbox = document.getElementById('toggleFillMap');
-    const showAll = !toggleCheckbox || toggleCheckbox.checked;
+    const showAll = !toggleCheckbox || toggleCheckbox.checked; // Nếu checkbox ko tồn tại hoặc dc check -> showAll = true
 
     if (showAll) {
-      if (choroplethLayer) choroplethLayer.addTo(map);
-      if (markersLayerGroup) markersLayerGroup.addTo(map);
+      // Luôn thêm markers nếu showAll là true
+      if (markersLayerGroupInstance) markersLayerGroupInstance.addTo(map);
+
+      // Chỉ thêm choropleth nếu checkbox được check
+      if (choroplethLayer && toggleCheckbox && toggleCheckbox.checked) {
+        choroplethLayer.addTo(map);
+      }
+      // Nếu checkbox không được check, choroplethLayer sẽ không được add, nhưng markers vẫn được add.
+
       if (incidentsLayerGroup) incidentsLayerGroup.addTo(map);
+    } else {
+      // Nếu showAll là false, có thể bạn muốn chỉ hiện markers?
+      // Ví dụ: chỉ hiện markers, không hiện choropleth hoặc incidents
+      if (markersLayerGroupInstance) markersLayerGroupInstance.addTo(map);
+      // Không thêm choropleth hoặc incidents
     }
   }
 
@@ -12901,7 +13437,111 @@ window.submitIncidentResponse = async function (actionType) {
       L.control.browserPrint({ title: 'In bản đồ RRT' }).addTo(map);
     }
   }
+  // ============================================================
+  // 6. HÀM LỌC DỮ LIỆU THEO TÌM KIẾM & PHƯỜNG (Có highlight marker nếu tìm theo tên) - ĐÃ CẬP NHẬT
+  // ============================================================
+  function applyFilters() {
+    const searchTerm = document
+      .getElementById('rrt-search')
+      .value.toLowerCase()
+      .trim();
+    const selectedMaXas = Array.from(
+      document.getElementById('wardFilter').selectedOptions
+    ).map((option) => option.value);
 
+    filteredData = companyData.filter((member) => {
+      const matchesSearch =
+        !searchTerm ||
+        (member.fullName || member.full_name || member.email || '')
+          .toLowerCase()
+          .includes(searchTerm);
+      const matchesWard =
+        selectedMaXas.length === 0 ||
+        selectedMaXas.includes(String(member.ma_xa)); // Dùng member.ma_xa
+      return matchesSearch && matchesWard;
+    });
+
+    // --- PHẦN MỚI: Highlight marker nếu chỉ có 1 kết quả phù hợp ---
+    if (searchTerm && filteredData.length === 1) {
+      const matchedMember = filteredData[0];
+      const lat = parseFloat(matchedMember.lat || matchedMember.latitude);
+      const lon = parseFloat(matchedMember.lon || matchedMember.longitude);
+
+      if (!isNaN(lat) && !isNaN(lon) && markersLayerGroupMap) {
+        // Kiểm tra map tồn tại
+        const markerKey = `${lat},${lon}`;
+        const targetMarker = markersLayerGroupMap.get(markerKey); // Lấy marker từ map
+
+        if (targetMarker) {
+          // Đặt lại marker cũ nếu có
+          if (currentHighlightedMarker) {
+            // currentHighlightedMarker.closeTooltip(); // Tùy chọn
+            // currentHighlightedMarker.closePopup();   // Tùy chọn
+            // currentHighlightedMarker.setStyle({radius: 5}); // Nếu có style highlight
+          }
+
+          // Gán marker mới làm current highlighted
+          currentHighlightedMarker = targetMarker;
+
+          // Mở tooltip hoặc popup
+          targetMarker.openTooltip();
+          // targetMarker.openPopup(); // Nếu bạn muốn mở popup luôn
+
+          // Zoom đến marker
+          map.setView(targetMarker.getLatLng(), map.getZoom() + 2); // Hoặc zoom mức cụ thể
+        }
+      }
+    } else {
+      // Nếu không có kết quả tìm kiếm tên hoặc có nhiều kết quả, xóa highlight cũ
+      if (currentHighlightedMarker) {
+        // currentHighlightedMarker.closeTooltip(); // Tùy chọn
+        // currentHighlightedMarker.closePopup();   // Tùy chọn
+        currentHighlightedMarker = null;
+      }
+    }
+
+    renderMap(); // Vẫn gọi renderMap để cập nhật lớp choropleth và markers hiển thị
+  }
+  // ============================================================
+  // 7. KHỞI TẠO DROPDOWN LỌC PHƯỜNG (Dùng ma_xa để lọc, ward để hiển thị)
+  // ============================================================
+  function initWardFilter() {
+    const selectElement = document.getElementById('wardFilter');
+    // Xóa options cũ
+    selectElement.innerHTML = '';
+
+    // Tạo một Map để ánh xạ từ ma_xa sang ward, tránh trùng lặp
+    const wardMap = new Map();
+    companyData.forEach((member) => {
+      if (member.ma_xa && member.ward) {
+        // Kiểm tra cả hai trường tồn tại
+        // Nếu ma_xa chưa tồn tại trong map, thêm vào
+        if (!wardMap.has(String(member.ma_xa))) {
+          wardMap.set(String(member.ma_xa), String(member.ward));
+        }
+      }
+    });
+
+    // Chuyển Map sang mảng và sắp xếp theo tên ward để hiển thị dễ đọc hơn
+    const sortedWardEntries = Array.from(wardMap.entries()).sort((a, b) =>
+      a[1].localeCompare(b[1])
+    );
+
+    sortedWardEntries.forEach(([maXa, wardName]) => {
+      const option = document.createElement('option');
+      option.value = maXa; // Giá trị value là ma_xa để lọc
+      option.textContent = wardName; // Nội dung hiển thị là ward
+      selectElement.appendChild(option);
+    });
+
+    // Khởi tạo hoặc cập nhật lại MultiSelect (nếu bạn đang dùng thư viện như Select2)
+    if (window.$ && $.fn.select2) {
+      $(selectElement).select2({
+        placeholder: 'Chọn...',
+        allowClear: true,
+      });
+    }
+  }
   async function renderMapPage() {
     if (typeof showLoadingSpinner === 'function') showLoadingSpinner();
     try {
@@ -12915,7 +13555,7 @@ window.submitIncidentResponse = async function (actionType) {
       const { data: profData, error: profErr } = await window.supabaseClient
         .from('profiles')
         .select(
-          'email, full_name, team, department, ma_xa, latitude, longitude'
+          'email, full_name, team, department, ma_xa, latitude, longitude, ward'
         );
 
       if (!profErr && profData) {
@@ -12967,6 +13607,19 @@ window.submitIncidentResponse = async function (actionType) {
       }
 
       renderMap();
+      // --- Thêm vào cuối hàm renderMapPage ---
+      // Khởi tạo dropdown phường
+      initWardFilter();
+
+      // Gán sự kiện cho tìm kiếm và lọc
+      document
+        .getElementById('rrt-search')
+        .addEventListener('input', applyFilters); // Lọc ngay khi gõ
+
+      // Nếu dùng Select2 hoặc tương tự, sự kiện 'change' vẫn hoạt động
+      document
+        .getElementById('wardFilter')
+        .addEventListener('change', applyFilters);
     } catch (error) {
       console.error('Lỗi renderMapPage:', error);
       if (typeof showToast === 'function')
@@ -13041,7 +13694,7 @@ window.submitIncidentResponse = async function (actionType) {
           <div class="report-body">${window.escapeHtml(content)}</div>
         </div>`;
     } else {
-      htmlContent = `<div class="msg-bubble" style="background:#0084ff; color:white;">${window.escapeHtml(
+      htmlContent = `<div class="msg-bubble" style="background:#006a75; color:white;">${window.escapeHtml(
         content
       )}</div>`;
     }
@@ -13317,7 +13970,7 @@ window.submitIncidentResponse = async function (actionType) {
             : '';
 
           htmlContent = `
-          <div class="report-bubble" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border-radius: 12px; padding: 12px 16px; max-width: 90%;">
+          <div class="report-bubble" style="background: linear-gradient(135deg, rgba(242, 101, 34, 0.5) 0%, rgba(0, 106, 117, 0.5) 100%); color: white; border-radius: 12px; padding: 12px 16px; max-width: 90%;">
             <div class="report-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-size: 11px; opacity: 0.9;">
               <span><i class="bx ${iconClass}"></i> ${displayTitle}</span>
               <span>${new Date(log.created_at).toLocaleTimeString('vi-VN', {
@@ -13345,7 +13998,7 @@ window.submitIncidentResponse = async function (actionType) {
           const bubbleStyle =
             side === 'left'
               ? 'background:#f0f2f5; color:#333;'
-              : 'background:#0084ff; color:white;';
+              : 'background:#006a75; color:white;';
 
           // ✅ KIỂM TRA FILE ĐÍNH KÈM
           if (log.attachment_url) {
@@ -17848,7 +18501,7 @@ window.initMiniMap = async function () {
       // 2. Cập nhật nhãn text địa điểm trực quan ra màn hình cho admin xem
       document.getElementById(
         'incidentLocation'
-      ).value = `${locationResult.tenXa} (Đã chốt vị trí hành chính)`;
+      ).value = `${locationResult.tenXa}`;
       console.log(
         `🎯 Đã định vị ổ dịch tại Mã Xã: ${locationResult.maXa} - ${locationResult.tenXa}`
       );
