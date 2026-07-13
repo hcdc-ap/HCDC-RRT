@@ -12976,51 +12976,65 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
     return key;
   };
 
-  // === MAP - LEAFLET VERSION (FINAL PROFESSIONAL VERSION) ===
+// === MAP - LEAFLET VERSION v2 (ĐÃ SỬA LỖI LỌC + NÂNG CẤP) ===
+// ----------------------------------------------------------------------------
+// Sửa: (1) marker thành viên không vẽ do lệch tên cột lat/lon vs latitude/longitude
+//      (2) Select2 nuốt sự kiện change -> lọc phường không chạy
+//      (3) checkbox "Thành viên theo Phường" không có listener
+//      (4) listener bị đăng ký chồng mỗi lần mở trang
+//      (5) setupMapPlugins định nghĩa trùng 2 lần / plugin add lặp
+//      (6) escape HTML dữ liệu động trong popup/tooltip
+// Nâng cấp: chú giải màu (legend), bộ đếm kết quả lọc, tự zoom theo kết quả,
+//      debounce ô tìm kiếm, nút "Xóa lọc".
+// ----------------------------------------------------------------------------
+// CÁCH DÙNG: thay TRỌN khối "=== MAP - LEAFLET VERSION ===" cũ bằng file này.
+// ============================================================
 
   // ============================================================
-  // 1. KHAI BÁO BIẾN TOÀN CỤC & CSS HIỆU ỨNG
+  // 1. BIẾN TOÀN CỤC & CSS HIỆU ỨNG
   // ============================================================
   let map;
   let geojsonData;
   let companyData = [];
   let filteredData = [];
-  let incidentData = []; // Dữ liệu sự kiện khẩn cấp
+  let incidentData = [];
 
   let geojsonBaseLayer;
   let choroplethLayer;
+  let incidentsLayerGroup;
+  let legendControl = null;
+  let statsControl = null;
+  let currentHighlightedMarker = null;
+  let markersLayerGroupInstance;
+  let markersLayerGroupMap;
+  let mapPluginsReady = false; // chống add plugin lặp
+  let mapEventsBound = false;  // chống đăng ký listener lặp
 
-  let incidentsLayerGroup; // Layer cho sự kiện
-  let legend;
-  // Thêm vào phần khai báo biến global đầu file
-  let currentHighlightedMarker = null; // Biến lưu trữ marker đang được highlight
-  // Bằng:
-  let markersLayerGroupInstance; // Instance của L.layerGroup()
-  let markersLayerGroupMap; // Map ánh xạ tọa độ -> marker
-
-  // Thêm CSS hiệu ứng chớp tắt (Pulse) cho các sự kiện khẩn cấp trực tiếp bằng JS
   const pulseCSS = `
     .incident-marker-active {
-      background-color: #ff0000;
-      border-radius: 50%;
+      background-color: #ff0000; border-radius: 50%;
       box-shadow: 0 0 0 rgba(255, 0, 0, 0.4);
-      animation: pulse-red 1.5s infinite;
-      border: 2px solid #fff;
+      animation: pulse-red 1.5s infinite; border: 2px solid #fff;
     }
     .incident-marker-resolved {
-      background-color: #6b7280;
-      border-radius: 50%;
-      border: 2px solid #fff;
+      background-color: #6b7280; border-radius: 50%; border: 2px solid #fff;
     }
     @keyframes pulse-red {
       0% { box-shadow: 0 0 0 0 rgba(255, 0, 0, 0.7); }
       70% { box-shadow: 0 0 0 15px rgba(255, 0, 0, 0); }
       100% { box-shadow: 0 0 0 0 rgba(255, 0, 0, 0); }
     }
+    .map-legend, .map-stats {
+      background: #fff; padding: 8px 12px; border-radius: 8px;
+      box-shadow: 0 1px 5px rgba(0,0,0,.3); font-size: 12px; line-height: 1.7;
+    }
+    .map-legend i {
+      width: 14px; height: 14px; display: inline-block;
+      margin-right: 6px; vertical-align: middle; border-radius: 3px;
+    }
   `;
   document.head.insertAdjacentHTML('beforeend', `<style>${pulseCSS}</style>`);
 
-  // Bản màu ngành
   const industryColors = {
     'Ban Giám đốc': '#4CAF50',
     'Tổ chức hành chính': '#2E7D32',
@@ -13039,18 +13053,22 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
     'Dinh dưỡng – Bệnh không lây': '#1976D2',
   };
 
+  // Escape HTML cho mọi dữ liệu động đổ vào popup/tooltip
+  const escMap = (s) =>
+    typeof window.escapeHtml === 'function'
+      ? window.escapeHtml(String(s ?? ''))
+      : String(s ?? '')
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;');
+
   // ============================================================
-  // 2. CÁC HÀM TIỆN ÍCH CHO BẢN ĐỒ
+  // 2. TIỆN ÍCH CHOROPLETH
   // ============================================================
   function getColor(d) {
     if (d === 0) return '#fae1e1';
-    return d > 5
-      ? '#800026'
-      : d > 3
-      ? '#BD0026'
-      : d > 1
-      ? '#E31A1C'
-      : '#FC4E2A';
+    return d > 5 ? '#800026' : d > 3 ? '#BD0026' : d > 1 ? '#E31A1C' : '#FC4E2A';
   }
 
   function style(feature) {
@@ -13065,94 +13083,69 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
     };
   }
 
-  // ============================================================
-  // 1. HÀM HIGHLIGHT (Tuyệt đối không dùng bringToFront)
-  // ============================================================
   function highlightFeature(e) {
     const layer = e.target;
     layer.setStyle({
       fillColor: '#ed1384',
-      weight: 3, // Tăng độ dày viền lên 3 để nổi bật (thay vì đẩy layer lên)
-      color: '#ffffff', // Viền trắng
+      weight: 3,
+      color: '#ffffff',
       dashArray: '',
       fillOpacity: 0.9,
     });
-    // ❌ ĐÃ XÓA HOÀN TOÀN LỆNH layer.bringToFront();
   }
 
-  // ============================================================
-  // 2. HÀM RESET MÀU & ÉP ĐÓNG TOOLTIP
-  // ============================================================
   function resetHighlight(e) {
     const layer = e.target;
-
-    // Trả lại màu gốc
     if (choroplethLayer) {
       choroplethLayer.resetStyle(layer);
     } else if (typeof style === 'function' && layer.feature) {
       layer.setStyle(style(layer.feature));
     }
-
-    // 🔥 Bồi thêm cú đấm: Ép đóng Tooltip ngay lập tức nếu nó còn ngoan cố mở
-    if (layer.isTooltipOpen()) {
-      layer.closeTooltip();
-    }
+    if (layer.isTooltipOpen()) layer.closeTooltip();
   }
 
-  // ============================================================
-  // 3. HÀM GÁN SỰ KIỆN (Khai báo Tooltip 1 lần duy nhất)
-  // ============================================================
   function onEachFeatureChoropleth(feature, layer) {
     const props = feature.properties;
     const name =
-      props.name ||
-      props.tenXa ||
-      props.ma_xa ||
-      props.MA_XA ||
-      'Chưa xác định';
+      props.name || props.tenXa || props.ma_xa || props.MA_XA || 'Chưa xác định';
     const count = props.count || 0;
 
-    // Khai báo Tooltip ĐÚNG 1 LẦN, không gỡ ra gắn vào nữa
-    layer.bindTooltip(`<b>${name}</b>`, {
+    layer.bindTooltip(`<b>${escMap(name)}</b>`, {
       permanent: false,
       direction: 'auto',
       sticky: true,
-      className: 'leaflet-tooltip-own', // Thêm class để phòng hờ
+      className: 'leaflet-tooltip-own',
     });
 
     layer.on({
       mouseover: highlightFeature,
       mouseout: resetHighlight,
-      click: (e) => {
-        const popupContent = `
-          <div style="text-align: center; min-width: 120px;">
-              <b style="color: #ed1384; font-size: 15px;">${name}</b><br/>
-              <span style="font-size: 13px;">Nhân sự RRT: <b>${count}</b></span>
-          </div>
-        `;
-        layer.bindPopup(popupContent).openPopup();
+      click: () => {
+        layer
+          .bindPopup(
+            `<div style="text-align:center; min-width:120px;">
+              <b style="color:#ed1384; font-size:15px;">${escMap(name)}</b><br/>
+              <span style="font-size:13px;">Nhân sự RRT: <b>${count}</b></span>
+            </div>`
+          )
+          .openPopup();
       },
     });
   }
 
   // ============================================================
-  // 3. TẠO CÁC LỚP LAYER (MARKERS & INCIDENTS)
-  // ============================================================
-  // ============================================================
-  // 3. TẠO CÁC LỚP LAYER (MARKERS & INCIDENTS) - ĐÃ CẬP NHẬT
+  // 3. LAYER THÀNH VIÊN & SỰ KIỆN
   // ============================================================
   function createMarkersLayer(data) {
     const markers = L.layerGroup();
-    // Tạo một Map để ánh xạ giữa tọa độ (lat,lon) và marker object
-    // Điều này giúp tìm marker nhanh chóng sau này
     const markerMap = new Map();
 
     if (Array.isArray(data)) {
       data.forEach((c) => {
-        const lat = parseFloat(c.lat);
-        const lon = parseFloat(c.lon);
-        if (c && !isNaN(lat) && !isNaN(lon) && c.ma_xa) {
-          // Dùng c.ma_xa nếu có
+        // ✅ FIX GỐC: đọc cả lat/lon LẪN latitude/longitude
+        const lat = parseFloat(c.lat ?? c.latitude);
+        const lon = parseFloat(c.lon ?? c.longitude);
+        if (c && !isNaN(lat) && !isNaN(lon)) {
           const marker = L.circleMarker([lat, lon], {
             radius: 5,
             fillColor: industryColors[c.department] || '#FF5722',
@@ -13160,33 +13153,25 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
             weight: 1,
             opacity: 1,
             fillOpacity: 0.8,
-            // Gắn dữ liệu nhận diện vào marker
-            // Sử dụng 'id' hoặc 'customId' hoặc 'data' đều được, miễn là bạn nhớ dùng lại sau
-            customId: `${lat},${lon}`, // Hoặc có thể dùng c.ma_xa hoặc c.email nếu unique
-            // Ví dụ: customId: c.email,
-            data: c, // Gắn luôn dữ liệu thành viên vào marker nếu cần sau này
+            customId: `${lat},${lon}`,
+            data: c,
           });
 
           marker.bindPopup(`
-          <b>${c.fullName || c.full_name || 'N/A'}</b><br/>
-          Khoa/phòng: ${c.department || 'N/A'}<br/>
-          Chức vụ: ${c.employeeStatus || 'N/A'}<br/>
-          Phường: ${c.ward || c.ma_xa || 'N/A'} <!-- Hiển thị ward nếu có -->
-        `);
-          marker.bindTooltip(`${c.fullName || c.full_name || 'RRT Member'}`, {
-            permanent: false,
-            direction: 'top',
-            offset: L.point(0, -10),
-          });
+            <b>${escMap(c.fullName || c.full_name || 'N/A')}</b><br/>
+            Khoa/phòng: ${escMap(c.department || 'N/A')}<br/>
+            Đội: ${escMap(c.team || 'N/A')}<br/>
+            Phường: ${escMap(c.ward || c.ma_xa || 'N/A')}
+          `);
+          marker.bindTooltip(
+            escMap(c.fullName || c.full_name || 'RRT Member'),
+            { permanent: false, direction: 'top', offset: L.point(0, -10) }
+          );
           markers.addLayer(marker);
-
-          // Thêm vào Map để tra cứu sau
           markerMap.set(`${lat},${lon}`, marker);
         }
       });
     }
-
-    // Trả về cả layer group và map để tiện sử dụng sau này
     return { layer: markers, map: markerMap };
   }
 
@@ -13196,11 +13181,11 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
 
     if (Array.isArray(data)) {
       data.forEach((inc) => {
-        let lat = parseFloat(inc.latitude || inc.lat);
-        let lon = parseFloat(inc.longitude || inc.lon);
+        let lat = parseFloat(inc.latitude ?? inc.lat);
+        let lon = parseFloat(inc.longitude ?? inc.lon);
 
         if (!isNaN(lat) && !isNaN(lon)) {
-          let coordKey = `${lat.toFixed(4)},${lon.toFixed(4)}`;
+          const coordKey = `${lat.toFixed(4)},${lon.toFixed(4)}`;
           if (usedCoords.has(coordKey)) {
             lat += (Math.random() - 0.5) * 0.003;
             lon += (Math.random() - 0.5) * 0.003;
@@ -13218,12 +13203,8 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
             iconAnchor: isActive ? [8, 8] : [5, 5],
           });
 
-          // ==========================================
-          // MAPPING CHUẨN XÁC TỪ COMPANY DATA MỚI
-          // ==========================================
           let membersListHtml =
             '<span style="color:#9ca3af; font-style:italic;">Chưa có nhân sự</span>';
-
           if (inc.members) {
             const emails = inc.members
               .split(';')
@@ -13233,8 +13214,6 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
               membersListHtml = emails
                 .map((email) => {
                   const searchKey = email.toLowerCase();
-
-                  // Dò bằng email hoặc bằng đoạn chữ trước dấu @ (để bắt pasteurpk)
                   const user = companyData.find(
                     (u) =>
                       (u.email && u.email.toLowerCase() === searchKey) ||
@@ -13242,59 +13221,47 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
                         u.email.split('@')[0].toLowerCase() === searchKey) ||
                       (u.username && u.username.toLowerCase() === searchKey)
                   );
-
                   if (user) {
-                    // Đã lấy được tên và team từ CSDL
                     const name = user.full_name || user.fullName || email;
                     const team =
                       user.team &&
                       user.team !== 'No team' &&
                       user.team !== 'undefined'
-                        ? ` <i>(<span style="color:#2ca3af;">${user.team}</span>)</i>`
+                        ? ` <i>(<span style="color:#2ca3af;">${escMap(
+                            user.team
+                          )}</span>)</i>`
                         : '';
-                    return `• <b>${name}</b>${team}`;
+                    return `• <b>${escMap(name)}</b>${team}`;
                   }
-                  return `• ${email}`;
+                  return `• ${escMap(email)}`;
                 })
                 .join('<br/>');
             }
           }
 
           const marker = L.marker([lat, lon], { icon: customIcon });
-
           marker.bindPopup(`
             <div style="min-width: 250px; font-family: 'Inter', sans-serif;">
-              <h6 style="color: ${
-                isActive ? '#dc2626' : '#4b5563'
-              }; margin-bottom: 8px; font-weight: bold; border-bottom: 1px solid #e5e7eb; padding-bottom: 5px;">
+              <h6 style="color:${isActive ? '#dc2626' : '#4b5563'}; margin-bottom:8px; font-weight:bold; border-bottom:1px solid #e5e7eb; padding-bottom:5px;">
                 ${isActive ? '🚨 ĐANG KÍCH HOẠT' : '✅ ĐÃ KẾT THÚC'}
               </h6>
-              <b style="color: #1f2937;">Sự kiện:</b> ${
-                inc.event_name || 'Không rõ'
-              }<br/>
-              <b style="color: #1f2937;">Địa điểm:</b> ${
-                inc.location_text || 'N/A'
-              }<br/>
-              <b style="color: #1f2937;">Thời gian:</b> ${
+              <b style="color:#1f2937;">Sự kiện:</b> ${escMap(inc.event_name || 'Không rõ')}<br/>
+              <b style="color:#1f2937;">Địa điểm:</b> ${escMap(inc.location_text || 'N/A')}<br/>
+              <b style="color:#1f2937;">Thời gian:</b> ${
                 inc.activation_time
-                  ? new Date(inc.activation_time).toLocaleString('vi-VN')
+                  ? new Date(inc.activation_time).toLocaleString('vi-VN', { hour12: false })
                   : 'N/A'
               }<br/>
-              <hr style="margin: 10px 0; border-top: 1px dashed #cbd5e1;" />
-              <b style="color: #0369a1;"><i class='bx bx-group'></i> Nhân sự tham gia:</b>
-              <div style="max-height: 120px; overflow-y: auto; font-size: 13px; color: #4b5563; margin-top: 4px; padding-left: 4px; border-left: 2px solid #e2e8f0; line-height: 1.6;">
+              <hr style="margin:10px 0; border-top:1px dashed #cbd5e1;" />
+              <b style="color:#0369a1;"><i class='bx bx-group'></i> Nhân sự tham gia:</b>
+              <div style="max-height:120px; overflow-y:auto; font-size:13px; color:#4b5563; margin-top:4px; padding-left:4px; border-left:2px solid #e2e8f0; line-height:1.6;">
                 ${membersListHtml}
               </div>
             </div>
           `);
-
           marker.bindTooltip(
-            `${isActive ? '🚨' : '✅'} ${inc.event_name || 'Sự cố'}`,
-            {
-              permanent: false,
-              direction: 'top',
-              offset: L.point(0, -10),
-            }
+            `${isActive ? '🚨' : '✅'} ${escMap(inc.event_name || 'Sự cố')}`,
+            { permanent: false, direction: 'top', offset: L.point(0, -10) }
           );
           layerGroup.addLayer(marker);
         }
@@ -13304,10 +13271,52 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
   }
 
   // ============================================================
-  // 4. VẼ VÀ ĐỒNG BỘ BẢN ĐỒ - ĐÃ CẬP NHẬT
+  // 4. LEGEND + BỘ ĐẾM KẾT QUẢ (nâng cấp chuyên nghiệp)
   // ============================================================
+  function addLegend() {
+    if (legendControl || typeof L === 'undefined') return;
+    legendControl = L.control({ position: 'bottomright' });
+    legendControl.onAdd = function () {
+      const div = L.DomUtil.create('div', 'map-legend');
+      const grades = [0, 1, 2, 4, 6];
+      const labels = ['0', '1', '2–3', '4–5', '> 5'];
+      div.innerHTML = '<b>Nhân sự RRT / Phường</b><br>';
+      grades.forEach((g, i) => {
+        div.innerHTML += `<i style="background:${getColor(g)}"></i> ${labels[i]}<br>`;
+      });
+      div.innerHTML +=
+        `<hr style="margin:4px 0;">` +
+        `<span class="incident-marker-active" style="display:inline-block;width:12px;height:12px;"></span> Sự kiện đang kích hoạt<br>` +
+        `<span class="incident-marker-resolved" style="display:inline-block;width:10px;height:10px;"></span> Sự kiện đã kết thúc`;
+      return div;
+    };
+    legendControl.addTo(map);
+  }
+
+  function updateStatsControl() {
+    if (!map) return;
+    if (!statsControl) {
+      statsControl = L.control({ position: 'topright' });
+      statsControl.onAdd = function () {
+        const div = L.DomUtil.create('div', 'map-stats');
+        div.id = 'map-stats-box';
+        return div;
+      };
+      statsControl.addTo(map);
+    }
+    const box = document.getElementById('map-stats-box');
+    if (box) {
+      const activeCount = incidentData.filter((i) =>
+        ['active', 'pending', 'monitoring'].includes((i.status || '').toLowerCase())
+      ).length;
+      box.innerHTML =
+        `👥 Hiển thị: <b>${filteredData.length}</b>/${companyData.length} thành viên` +
+        `<br>🚨 Sự kiện đang mở: <b>${activeCount}</b>`;
+    }
+  }
+
   // ============================================================
-  // 4. VẼ VÀ ĐỒNG BỘ BẢN ĐỒ - ĐÃ CẬP NHẬT LOGIC HIỂN THỊ
+  // 5. VẼ VÀ ĐỒNG BỘ BẢN ĐỒ
   // ============================================================
   function renderMap() {
     if (!geojsonData || !geojsonData.features) {
@@ -13315,18 +13324,14 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
       return;
     }
 
-    // Tính toán thống kê nhân sự theo xã
     const countsByMaXa = new Map();
     if (Array.isArray(filteredData)) {
       filteredData.forEach((member) => {
-        const maXaKey = String(member.ma_xa || member.maXa || ''); // Dùng member.ma_xa
-        if (maXaKey) {
-          countsByMaXa.set(maXaKey, (countsByMaXa.get(maXaKey) || 0) + 1);
-        }
+        const maXaKey = String(member.ma_xa || member.maXa || '');
+        if (maXaKey) countsByMaXa.set(maXaKey, (countsByMaXa.get(maXaKey) || 0) + 1);
       });
     }
 
-    // Cập nhật GeoJSON
     const updatedGeoJson = JSON.parse(JSON.stringify(geojsonData));
     updatedGeoJson.features.forEach((feature) => {
       const props = feature.properties;
@@ -13337,62 +13342,39 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
       }
     });
 
-    // DỌN DẸP LỚP CŨ
     if (map) {
       if (choroplethLayer) map.removeLayer(choroplethLayer);
       if (markersLayerGroupInstance) map.removeLayer(markersLayerGroupInstance);
       if (incidentsLayerGroup) map.removeLayer(incidentsLayerGroup);
     }
 
-    // TẠO LỚP MỚI
     choroplethLayer = L.geoJSON(updatedGeoJson, {
-      style:
-        typeof style === 'function'
-          ? style
-          : () => ({ weight: 1, color: '#666', fillOpacity: 0.7 }),
-      onEachFeature:
-        typeof onEachFeatureChoropleth === 'function'
-          ? onEachFeatureChoropleth
-          : null,
+      style,
+      onEachFeature: onEachFeatureChoropleth,
     });
 
-    // Gọi createMarkersLayer và nhận cả layer và map
     const { layer: newMarkersLayer, map: newMarkersMap } =
       createMarkersLayer(filteredData);
-    markersLayerGroupInstance = newMarkersLayer; // Cập nhật instance
-    markersLayerGroupMap = newMarkersMap; // Cập nhật map
+    markersLayerGroupInstance = newMarkersLayer;
+    markersLayerGroupMap = newMarkersMap;
 
     incidentsLayerGroup = createIncidentsLayer(incidentData);
 
-    // Xếp thứ tự lớp: Choropleth (Dưới) -> Markers -> Incidents (Trên cùng)
-    // if (markersLayerGroupInstance.setZIndex) markersLayerGroupInstance.setZIndex(500); // Z-index có thể không cần thiết nếu chỉ có 3 lớp chính
-    if (incidentsLayerGroup.setZIndex) incidentsLayerGroup.setZIndex(1000);
-
-    // KIỂM TRA ĐIỀU KIỆN HIỂN THỊ
     const toggleCheckbox = document.getElementById('toggleFillMap');
-    const showAll = !toggleCheckbox || toggleCheckbox.checked; // Nếu checkbox ko tồn tại hoặc dc check -> showAll = true
 
-    if (showAll) {
-      // Luôn thêm markers nếu showAll là true
-      if (markersLayerGroupInstance) markersLayerGroupInstance.addTo(map);
-
-      // Chỉ thêm choropleth nếu checkbox được check
-      if (choroplethLayer && toggleCheckbox && toggleCheckbox.checked) {
-        choroplethLayer.addTo(map);
-      }
-      // Nếu checkbox không được check, choroplethLayer sẽ không được add, nhưng markers vẫn được add.
-
-      if (incidentsLayerGroup) incidentsLayerGroup.addTo(map);
-    } else {
-      // Nếu showAll là false, có thể bạn muốn chỉ hiện markers?
-      // Ví dụ: chỉ hiện markers, không hiện choropleth hoặc incidents
-      if (markersLayerGroupInstance) markersLayerGroupInstance.addTo(map);
-      // Không thêm choropleth hoặc incidents
+    // Marker thành viên + sự kiện: LUÔN hiển thị
+    markersLayerGroupInstance.addTo(map);
+    incidentsLayerGroup.addTo(map);
+    // Lớp tô màu theo phường: theo checkbox
+    if (choroplethLayer && (!toggleCheckbox || toggleCheckbox.checked)) {
+      choroplethLayer.addTo(map);
     }
+
+    updateStatsControl();
   }
 
   // ============================================================
-  // 5. LUỒNG TẢI DỮ LIỆU CHÍNH (RENDER PAGE)
+  // 6. TẢI GEOJSON
   // ============================================================
   window.loadGeoJSON = async function () {
     if (window.appState && window.appState.mapGeoData) {
@@ -13405,23 +13387,145 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
         .from('maps')
         .download('hcm_map.json');
       if (error) throw error;
-
       const text = await data.text();
       const json = JSON.parse(text);
       if (!json.features) throw new Error("File JSON thiếu 'features'.");
-
       window.appState.mapGeoData = json;
       geojsonData = json;
       return json;
     } catch (err) {
       console.error('Lỗi xử lý file bản đồ:', err);
-      if (typeof showToast === 'function')
-        showToast('Lỗi tải bản đồ.', 'error');
+      if (typeof showToast === 'function') showToast('Lỗi tải bản đồ.', 'error');
       return null;
     }
   };
 
+  // ============================================================
+  // 7. LỌC THEO TÊN + PHƯỜNG
+  // ============================================================
+  function applyFilters() {
+    const searchEl = document.getElementById('rrt-search');
+    const wardEl = document.getElementById('wardFilter');
+    if (!searchEl || !wardEl) return;
+
+    const searchTerm = searchEl.value.toLowerCase().trim();
+    const selectedMaXas = Array.from(wardEl.selectedOptions).map((o) => o.value);
+
+    filteredData = companyData.filter((member) => {
+      const matchesSearch =
+        !searchTerm ||
+        (member.fullName || member.full_name || member.email || '')
+          .toLowerCase()
+          .includes(searchTerm);
+      const matchesWard =
+        selectedMaXas.length === 0 ||
+        selectedMaXas.includes(String(member.ma_xa));
+      return matchesSearch && matchesWard;
+    });
+
+    renderMap();
+
+    // --- Tự động zoom theo kết quả ---
+    if (searchTerm && filteredData.length === 1) {
+      // Đúng 1 người -> bay đến người đó + mở tooltip
+      const m = filteredData[0];
+      const lat = parseFloat(m.lat ?? m.latitude);
+      const lon = parseFloat(m.lon ?? m.longitude);
+      if (!isNaN(lat) && !isNaN(lon) && markersLayerGroupMap) {
+        const targetMarker = markersLayerGroupMap.get(`${lat},${lon}`);
+        if (targetMarker) {
+          currentHighlightedMarker = targetMarker;
+          map.setView(targetMarker.getLatLng(), 14);
+          targetMarker.openTooltip();
+        }
+      }
+    } else if (
+      filteredData.length > 1 &&
+      (searchTerm || selectedMaXas.length > 0)
+    ) {
+      // Nhiều kết quả -> khung nhìn ôm trọn các marker kết quả
+      const pts = filteredData
+        .map((m) => [parseFloat(m.lat ?? m.latitude), parseFloat(m.lon ?? m.longitude)])
+        .filter((p) => !isNaN(p[0]) && !isNaN(p[1]));
+      if (pts.length > 0) map.fitBounds(L.latLngBounds(pts).pad(0.2));
+      currentHighlightedMarker = null;
+    } else {
+      currentHighlightedMarker = null;
+    }
+  }
+
+  // ============================================================
+  // 8. DROPDOWN PHƯỜNG (value = ma_xa, hiển thị = ward)
+  // ============================================================
+  function initWardFilter() {
+    const selectElement = document.getElementById('wardFilter');
+    if (!selectElement) return;
+
+    // Hủy Select2 cũ trước khi build lại (tránh nhân bản UI)
+    if (window.$ && $.fn.select2 && $(selectElement).hasClass('select2-hidden-accessible')) {
+      $(selectElement).select2('destroy');
+    }
+    selectElement.innerHTML = '';
+
+    const wardMap = new Map();
+    companyData.forEach((member) => {
+      if (member.ma_xa && member.ward && !wardMap.has(String(member.ma_xa))) {
+        wardMap.set(String(member.ma_xa), String(member.ward));
+      }
+    });
+
+    Array.from(wardMap.entries())
+      .sort((a, b) => a[1].localeCompare(b[1], 'vi'))
+      .forEach(([maXa, wardName]) => {
+        const option = document.createElement('option');
+        option.value = maXa;
+        option.textContent = wardName;
+        selectElement.appendChild(option);
+      });
+
+    if (window.$ && $.fn.select2) {
+      $(selectElement).select2({ placeholder: 'Chọn...', allowClear: true });
+    }
+  }
+
+  // ============================================================
+  // 9. GẮN SỰ KIỆN (chỉ 1 lần — hết lỗi chồng listener & Select2 nuốt change)
+  // ============================================================
+  function bindMapEvents() {
+    if (mapEventsBound) return;
+    mapEventsBound = true;
+
+    const searchEl = document.getElementById('rrt-search');
+    if (searchEl) {
+      // Debounce 300ms: gõ mượt, không lọc dồn dập từng phím
+      const debouncedFilter =
+        typeof window.debounce === 'function'
+          ? window.debounce(applyFilters, 300)
+          : applyFilters;
+      searchEl.addEventListener('input', debouncedFilter);
+    }
+
+    // ✅ FIX GỐC: Select2 bắn sự kiện qua jQuery, addEventListener KHÔNG nghe được
+    if (window.$ && $.fn) {
+      $(document).off('change.mapWard', '#wardFilter')
+        .on('change.mapWard', '#wardFilter', applyFilters);
+    } else {
+      const wardEl = document.getElementById('wardFilter');
+      if (wardEl) wardEl.addEventListener('change', applyFilters);
+    }
+
+    // Checkbox tô màu theo phường: trước đây KHÔNG có listener
+    const toggleEl = document.getElementById('toggleFillMap');
+    if (toggleEl) toggleEl.addEventListener('change', renderMap);
+  }
+
+  // ============================================================
+  // 10. PLUGIN (khai báo 1 lần duy nhất, chống add lặp)
+  // ============================================================
   function setupMapPlugins() {
+    if (mapPluginsReady || !map) return;
+    mapPluginsReady = true;
+
     if (typeof L.Control.Draw !== 'undefined') {
       const drawnItems = new L.FeatureGroup();
       map.addLayer(drawnItems);
@@ -13437,111 +13541,10 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
       L.control.browserPrint({ title: 'In bản đồ RRT' }).addTo(map);
     }
   }
+
   // ============================================================
-  // 6. HÀM LỌC DỮ LIỆU THEO TÌM KIẾM & PHƯỜNG (Có highlight marker nếu tìm theo tên) - ĐÃ CẬP NHẬT
+  // 11. LUỒNG CHÍNH
   // ============================================================
-  function applyFilters() {
-    const searchTerm = document
-      .getElementById('rrt-search')
-      .value.toLowerCase()
-      .trim();
-    const selectedMaXas = Array.from(
-      document.getElementById('wardFilter').selectedOptions
-    ).map((option) => option.value);
-
-    filteredData = companyData.filter((member) => {
-      const matchesSearch =
-        !searchTerm ||
-        (member.fullName || member.full_name || member.email || '')
-          .toLowerCase()
-          .includes(searchTerm);
-      const matchesWard =
-        selectedMaXas.length === 0 ||
-        selectedMaXas.includes(String(member.ma_xa)); // Dùng member.ma_xa
-      return matchesSearch && matchesWard;
-    });
-
-    // --- PHẦN MỚI: Highlight marker nếu chỉ có 1 kết quả phù hợp ---
-    if (searchTerm && filteredData.length === 1) {
-      const matchedMember = filteredData[0];
-      const lat = parseFloat(matchedMember.lat || matchedMember.latitude);
-      const lon = parseFloat(matchedMember.lon || matchedMember.longitude);
-
-      if (!isNaN(lat) && !isNaN(lon) && markersLayerGroupMap) {
-        // Kiểm tra map tồn tại
-        const markerKey = `${lat},${lon}`;
-        const targetMarker = markersLayerGroupMap.get(markerKey); // Lấy marker từ map
-
-        if (targetMarker) {
-          // Đặt lại marker cũ nếu có
-          if (currentHighlightedMarker) {
-            // currentHighlightedMarker.closeTooltip(); // Tùy chọn
-            // currentHighlightedMarker.closePopup();   // Tùy chọn
-            // currentHighlightedMarker.setStyle({radius: 5}); // Nếu có style highlight
-          }
-
-          // Gán marker mới làm current highlighted
-          currentHighlightedMarker = targetMarker;
-
-          // Mở tooltip hoặc popup
-          targetMarker.openTooltip();
-          // targetMarker.openPopup(); // Nếu bạn muốn mở popup luôn
-
-          // Zoom đến marker
-          map.setView(targetMarker.getLatLng(), map.getZoom() + 2); // Hoặc zoom mức cụ thể
-        }
-      }
-    } else {
-      // Nếu không có kết quả tìm kiếm tên hoặc có nhiều kết quả, xóa highlight cũ
-      if (currentHighlightedMarker) {
-        // currentHighlightedMarker.closeTooltip(); // Tùy chọn
-        // currentHighlightedMarker.closePopup();   // Tùy chọn
-        currentHighlightedMarker = null;
-      }
-    }
-
-    renderMap(); // Vẫn gọi renderMap để cập nhật lớp choropleth và markers hiển thị
-  }
-  // ============================================================
-  // 7. KHỞI TẠO DROPDOWN LỌC PHƯỜNG (Dùng ma_xa để lọc, ward để hiển thị)
-  // ============================================================
-  function initWardFilter() {
-    const selectElement = document.getElementById('wardFilter');
-    // Xóa options cũ
-    selectElement.innerHTML = '';
-
-    // Tạo một Map để ánh xạ từ ma_xa sang ward, tránh trùng lặp
-    const wardMap = new Map();
-    companyData.forEach((member) => {
-      if (member.ma_xa && member.ward) {
-        // Kiểm tra cả hai trường tồn tại
-        // Nếu ma_xa chưa tồn tại trong map, thêm vào
-        if (!wardMap.has(String(member.ma_xa))) {
-          wardMap.set(String(member.ma_xa), String(member.ward));
-        }
-      }
-    });
-
-    // Chuyển Map sang mảng và sắp xếp theo tên ward để hiển thị dễ đọc hơn
-    const sortedWardEntries = Array.from(wardMap.entries()).sort((a, b) =>
-      a[1].localeCompare(b[1])
-    );
-
-    sortedWardEntries.forEach(([maXa, wardName]) => {
-      const option = document.createElement('option');
-      option.value = maXa; // Giá trị value là ma_xa để lọc
-      option.textContent = wardName; // Nội dung hiển thị là ward
-      selectElement.appendChild(option);
-    });
-
-    // Khởi tạo hoặc cập nhật lại MultiSelect (nếu bạn đang dùng thư viện như Select2)
-    if (window.$ && $.fn.select2) {
-      $(selectElement).select2({
-        placeholder: 'Chọn...',
-        allowClear: true,
-      });
-    }
-  }
   async function renderMapPage() {
     if (typeof showLoadingSpinner === 'function') showLoadingSpinner();
     try {
@@ -13550,8 +13553,7 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
       }
       geojsonData = window.appState.mapGeoData;
 
-      // 🔥 BƯỚC 1: ÉP TẢI LẠI TOÀN BỘ PROFILES TỪ SUPABASE (BỎ QUA CACHE)
-      console.log('Đang ép tải danh sách nhân sự mới nhất...');
+      // BƯỚC 1: TẢI PROFILES MỚI NHẤT
       const { data: profData, error: profErr } = await window.supabaseClient
         .from('profiles')
         .select(
@@ -13559,35 +13561,29 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
         );
 
       if (!profErr && profData) {
-        // Cập nhật lại mảng companyData toàn cục với dữ liệu cực chuẩn
         companyData = profData.map((u) => ({
           ...u,
-          full_name: u.full_name,
           fullName: u.full_name || u.email,
           team: u.team || u.department,
-          email: u.email,
+          // ✅ FIX GỐC: chuẩn hóa tọa độ về lat/lon dùng thống nhất toàn module
+          lat: parseFloat(u.latitude),
+          lon: parseFloat(u.longitude),
         }));
       } else {
         console.error('Không lấy được profiles:', profErr);
-        companyData = window.appState.users || []; // Fallback
+        companyData = window.appState.users || [];
       }
-
       filteredData = [...companyData];
 
-      // 🔥 BƯỚC 2: TẢI INCIDENTS
+      // BƯỚC 2: TẢI INCIDENTS
       const { data: incData, error: incErr } = await window.supabaseClient
         .from('incidents')
         .select(
           'id, event_name, location_text, latitude, longitude, status, activation_time, members'
         );
+      incidentData = !incErr && incData ? [...incData] : [];
 
-      if (!incErr && incData) {
-        incidentData = [...incData];
-      } else {
-        incidentData = [];
-      }
-
-      // 🔥 BƯỚC 3: VẼ BẢN ĐỒ
+      // BƯỚC 3: KHỞI TẠO / CẬP NHẬT BẢN ĐỒ
       if (!map) {
         map = L.map('containerMap', {
           center: [10.77, 106.7],
@@ -13602,51 +13598,20 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
           interactive: false,
         }).addTo(map);
         setupMapPlugins();
+        addLegend();
       } else {
         setTimeout(() => map.invalidateSize(), 200);
       }
 
       renderMap();
-      // --- Thêm vào cuối hàm renderMapPage ---
-      // Khởi tạo dropdown phường
       initWardFilter();
-
-      // Gán sự kiện cho tìm kiếm và lọc
-      document
-        .getElementById('rrt-search')
-        .addEventListener('input', applyFilters); // Lọc ngay khi gõ
-
-      // Nếu dùng Select2 hoặc tương tự, sự kiện 'change' vẫn hoạt động
-      document
-        .getElementById('wardFilter')
-        .addEventListener('change', applyFilters);
+      bindMapEvents();
     } catch (error) {
       console.error('Lỗi renderMapPage:', error);
       if (typeof showToast === 'function')
         showToast('Lỗi bản đồ: ' + error.message, 'error');
     } finally {
       if (typeof hideLoadingSpinner === 'function') hideLoadingSpinner();
-    }
-  }
-
-  // Hàm phụ để tách code plugin cho sạch
-  function setupMapPlugins() {
-    // Plugin Draw
-    if (typeof L.Control.Draw !== 'undefined') {
-      const drawnItems = new L.FeatureGroup();
-      map.addLayer(drawnItems);
-      const drawControl = new L.Control.Draw({
-        position: 'topleft',
-        draw: { circle: false, rectangle: false },
-        edit: { featureGroup: drawnItems },
-      });
-      map.addControl(drawControl);
-      map.on('draw:created', (e) => drawnItems.addLayer(e.layer));
-    }
-
-    // Plugin Print
-    if (typeof L.control.browserPrint !== 'undefined') {
-      L.control.browserPrint({ title: 'In bản đồ RRT' }).addTo(map);
     }
   }
 
