@@ -696,6 +696,14 @@
         .replace(/'/g, '&#039;');
     };
   }
+  // PATCH 17: Fix cảnh báo "Blocked aria-hidden" của Bootstrap modal
+// Nguyên nhân: nút trong modal còn giữ focus khi modal đóng
+document.addEventListener('hide.bs.modal', function (event) {
+  // Nếu phần tử đang focus nằm trong modal sắp đóng → bỏ focus trước
+  if (event.target.contains(document.activeElement)) {
+    document.activeElement.blur();
+  }
+});
 
   // Shortcut nội bộ
   function _esc(s) {
