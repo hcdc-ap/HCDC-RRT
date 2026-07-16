@@ -4384,3 +4384,64 @@ html {
   outline: none;
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.3);
 }
+/* ===== Review member list — gọn, không tràn ===== */
+.review-member-item {
+  padding: 10px 14px;
+}
+
+/* Hàng tên + badge: cho phép badge xuống dòng khi hẹp */
+.review-member-info {
+  min-width: 0;                 /* cho phép co lại trong flex */
+  display: flex;
+  flex-wrap: wrap;              /* badge tự xuống dòng */
+  align-items: center;
+  gap: 4px 6px;
+}
+
+.review-member-info .badge {
+  font-size: 0.7rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+/* Email: chữ nhỏ, cắt bớt nếu quá dài */
+.review-member-email {
+  font-size: 0.78rem;
+  margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Dòng trạng thái: hàng riêng, wrap thoải mái, KHÔNG bao giờ tràn */
+.review-status-line {
+  font-size: 0.8rem;
+  margin-top: 6px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.04);
+  display: flex;
+  align-items: flex-start;
+  gap: 5px;
+  line-height: 1.35;
+  word-break: break-word;       /* tên sự kiện dài vẫn wrap gọn */
+}
+
+.review-status-line .bx {
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.review-status-line.text-danger {
+  background: rgba(220, 53, 69, 0.08);
+}
+
+.review-status-line.text-success {
+  background: rgba(25, 135, 84, 0.08);
+}
+
+/* Danh sách dài thì cuộn trong modal thay vì kéo dài modal */
+#reviewMemberList {
+  max-height: 320px;
+  overflow-y: auto;
+}
