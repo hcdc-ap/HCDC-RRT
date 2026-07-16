@@ -9716,7 +9716,7 @@ async function setupExportButton(btnSelector, tableName, fileNamePrefix) {
           }
         }
 
-        // E. HIỂN THỊ LÊN GIAO DIỆN REVIEW (bản gọn gàng, không tràn)
+// E. HIỂN THỊ LÊN GIAO DIỆN REVIEW (bản gọn gàng, không tràn)
 $('#reviewTime').text(time);
 $('#reviewLocation').text(location);
 $('#reviewDetails').text(details);
