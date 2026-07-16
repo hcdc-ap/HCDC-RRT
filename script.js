@@ -9716,89 +9716,78 @@ async function setupExportButton(btnSelector, tableName, fileNamePrefix) {
           }
         }
 
-        // E. HIỂN THỊ LÊN GIAO DIỆN REVIEW
-        $('#reviewTime').text(time);
-        $('#reviewLocation').text(location);
-        $('#reviewDetails').text(details);
-        $('#reviewMemberCount').text(emailsToCheck.length);
+        // E. HIỂN THỊ LÊN GIAO DIỆN REVIEW (bản gọn gàng, không tràn)
+$('#reviewTime').text(time);
+$('#reviewLocation').text(location);
+$('#reviewDetails').text(details);
+$('#reviewMemberCount').text(emailsToCheck.length);
 
-        const listContainer = $('#reviewMemberList');
-        listContainer.empty();
-        let busyCount = 0;
+const listContainer = $('#reviewMemberList');
+listContainer.empty();
+let busyCount = 0;
 
-        emailsToCheck.forEach((email) => {
-          let displayName = email;
-          let teamBadge = '';
-          let positionBadge = '';
-          let userUUID = null;
+emailsToCheck.forEach((email) => {
+  let displayName = email;
+  let teamBadge = '';
+  let positionBadge = '';
+  let userUUID = null;
 
-          const m = dbUsers.find((u) => _normEm(u.email) === email);
+  const m = dbUsers.find((u) => _normEm(u.email) === email);
+  if (m) {
+    displayName =
+      m.full_name && m.full_name.trim() !== ''
+        ? m.full_name
+        : m.username || email;
+    userUUID = m.id;
+    if (m.team && m.team !== 'No team') {
+      teamBadge = `<span class="badge bg-light text-dark border team-badge">${window.escapeHtml(m.team)}</span>`;
+    }
+    if (m.position && m.position.trim() !== '') {
+      positionBadge = `<span class="badge bg-info text-dark border position-badge">${window.escapeHtml(m.position)}</span>`;
+    }
+  }
 
-          if (m) {
-            displayName =
-              m.full_name && m.full_name.trim() !== ''
-                ? m.full_name
-                : m.username || email;
-            userUUID = m.id;
-            if (m.team && m.team !== 'No team') {
-              teamBadge = `<span class="badge bg-light text-dark border ms-2 team-badge">${window.escapeHtml(
-                m.team
-              )}</span>`;
-            }
-            if (m.position && m.position.trim() !== '') {
-              positionBadge = `<span class="badge bg-info text-dark border ms-1 position-badge">${window.escapeHtml(
-                m.position
-              )}</span>`;
-            }
-          }
+  const onDutyRoster = busyList.find((b) => b.user_id === userUUID);
+  const busyIncident = userUUID ? deployedMap.get(userUUID) : null;
 
-          // Phân loại trạng thái:
-          //  - Không có hồ sơ  -> cảnh báo xám
-          //  - Đang tham gia sự kiện khác chưa đóng -> BẬN (đỏ, tính busyCount)
-          //  - Đang trực định kỳ -> LỰC LƯỢNG SẴN SÀNG (xanh, KHÔNG tính bận
-          //    vì đội trực chính là nhóm ưu tiên điều động khẩn cấp)
-          const onDutyRoster = busyList.find((b) => b.user_id === userUUID);
-          const busyIncident = userUUID ? deployedMap.get(userUUID) : null;
+  // Trạng thái: icon nhỏ bên phải hàng tên + dòng mô tả riêng bên dưới (nếu có)
+  let statusIcon = `<i class="bx bx-check-circle text-success flex-shrink-0" style="font-size:1.3rem;" title="Sẵn sàng"></i>`;
+  let statusLine = '';
+  let rowClass = '';
 
-          let statusHtml =
-            '<i class="bx bx-check-circle text-success" style="font-size: 1.5rem;"></i>';
-          let rowClass = '';
+  if (!m) {
+    statusIcon = `<i class="bx bx-user-x text-secondary flex-shrink-0" style="font-size:1.3rem;" title="Không có hồ sơ"></i>`;
+    statusLine = `<div class="review-status-line text-secondary"><i class='bx bx-user-x'></i> Không có hồ sơ trong hệ thống</div>`;
+    rowClass = 'bg-light';
+  } else if (busyIncident) {
+    busyCount++;
+    statusIcon = `<i class="bx bxs-error-alt text-danger flex-shrink-0" style="font-size:1.3rem;" title="Đang bận"></i>`;
+    statusLine = `<div class="review-status-line text-danger"><i class='bx bxs-error-alt'></i> Đang tham gia: ${window.escapeHtml(busyIncident)}</div>`;
+    rowClass = 'list-group-item-warning';
+  } else if (onDutyRoster) {
+    statusIcon = `<i class="bx bx-shield-quarter text-success flex-shrink-0" style="font-size:1.3rem;" title="Đang trực — Sẵn sàng"></i>`;
+    statusLine = `<div class="review-status-line text-success"><i class='bx bx-shield-quarter'></i> Đang trực ${window.escapeHtml(onDutyRoster.roster_schedules.team_name || '')} — Sẵn sàng</div>`;
+  }
 
-          if (!m) {
-            statusHtml = `<span class="badge bg-secondary"><i class='bx bx-user-x me-1'></i> Không có hồ sơ</span>`;
-            rowClass = 'bg-light';
-          } else if (busyIncident) {
-            busyCount++;
-            statusHtml = `<span class="badge bg-danger busy-warning"><i class='bx bxs-error-alt me-1'></i> Đang tham gia: ${window.escapeHtml(
-              busyIncident
-            )}</span>`;
-            rowClass = 'bg-warning-subtle list-group-item-warning';
-          } else if (onDutyRoster) {
-            statusHtml = `<span class="badge bg-success"><i class='bx bx-shield-quarter me-1'></i> Đang trực ${window.escapeHtml(
-              onDutyRoster.roster_schedules.team_name || ''
-            )} — Sẵn sàng</span>`;
-            // Không tăng busyCount, không tô vàng dòng
-          }
+  let displayEmailHtml = '';
+  if (displayName.toLowerCase() !== email.toLowerCase()) {
+    displayEmailHtml = `<div class="review-member-email text-muted">${window.escapeHtml(email)}</div>`;
+  }
 
-          let displayEmailHtml = '';
-          if (displayName.toLowerCase() !== email.toLowerCase()) {
-            displayEmailHtml = `<small class="text-muted member-email">${window.escapeHtml(
-              email
-            )}</small>`;
-          }
-
-          listContainer.append(`
-        <li class="list-group-item d-flex justify-content-between align-items-center ${rowClass}">
-            <div class="ms-2 me-auto">
-                <div class="fw-bold">${window.escapeHtml(
-                  displayName
-                )} ${teamBadge} ${positionBadge}</div>
-                ${displayEmailHtml}
-            </div>
-            ${statusHtml}
-        </li>
-      `);
-        });
+  listContainer.append(`
+    <li class="list-group-item review-member-item ${rowClass}">
+      <div class="d-flex justify-content-between align-items-start gap-2">
+        <div class="review-member-info">
+          <span class="fw-bold">${window.escapeHtml(displayName)}</span>
+          ${teamBadge} ${positionBadge}
+        </div>
+        ${statusIcon}
+      </div>
+      ${displayEmailHtml}
+      ${statusLine}
+    </li>
+  `);
+});
 
         /* ===== HẾT KHỐI 5 — phần "// F. LƯU DỮ LIỆU..." giữ nguyên phía sau =====
    LƯU Ý: phần F dùng biến  members: emailsToCheck  -> giờ đây danh sách này
@@ -16809,6 +16798,7 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
 });
 // Biến toàn cục lưu vị trí để dùng lại (Cache)
 let cachedLocation = null;
+
 function getUserLocation(callback) {
   // 1. Nếu đã có vị trí lưu tạm trong phiên làm việc này -> Dùng luôn cho nhanh
   if (cachedLocation) {
@@ -16817,48 +16807,62 @@ function getUserLocation(callback) {
     return;
   }
 
-  if ('geolocation' in navigator) {
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        const lat = position.coords.latitude;
-        const lng = position.coords.longitude;
-
-        // Lưu lại để lần sau không phải hỏi lại
-        cachedLocation = { lat, lng };
-
-        callback(cachedLocation);
-      },
-      (error) => {
-        let msg = '';
-        switch (error.code) {
-          case error.PERMISSION_DENIED:
-            msg = 'Người dùng từ chối cấp quyền.';
-            break;
-          case error.POSITION_UNAVAILABLE:
-            msg = 'Không định vị được.';
-            break;
-          case error.TIMEOUT:
-            msg = 'Hết thời gian chờ (Timeout).';
-            break;
-          default:
-            msg = error.message;
-        }
-        console.warn('⚠️ Lỗi lấy vị trí: ' + msg);
-
-        // Trả về null để app vẫn chạy tiếp, không bị chết
-        callback({ lat: null, lng: null });
-      },
-      {
-        // 🔥 CẤU HÌNH TỐI ƯU TỐC ĐỘ 🔥
-        enableHighAccuracy: false, // FALSE: Dùng Wifi/4G (Nhanh) | TRUE: Dùng GPS (Chậm)
-        timeout: 3000, // Chỉ đợi tối đa 3 giây
-        maximumAge: 300000, // Chấp nhận vị trí cũ trong vòng 5 phút (5 * 60 * 1000)
-      }
-    );
-  } else {
+  if (!('geolocation' in navigator)) {
     console.log('Trình duyệt không hỗ trợ Geolocation.');
     callback({ lat: null, lng: null });
+    return;
   }
+
+  // Hàm gọi geolocation với cấu hình tùy chỉnh
+  const tryGetPosition = (options, onSuccess, onError) => {
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        cachedLocation = {
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+        };
+        onSuccess(cachedLocation);
+      },
+      onError,
+      options
+    );
+  };
+
+  // ── TẦNG 1: Thử nhanh (3s, WiFi/IP, chấp nhận cache 5 phút) ──
+  tryGetPosition(
+    { enableHighAccuracy: false, timeout: 3000, maximumAge: 300000 },
+    callback,
+    (error) => {
+      // Từ chối quyền → không thử lại (thử cũng vô ích), trả null luôn
+      if (error.code === error.PERMISSION_DENIED) {
+        console.warn('⚠️ Người dùng từ chối cấp quyền định vị.');
+        callback({ lat: null, lng: null });
+        return;
+      }
+
+      // ── TẦNG 2: Timeout/unavailable → thử lại kiên nhẫn hơn (12s) ──
+      console.log('⏳ Lấy vị trí nhanh thất bại, đang thử lại (tối đa 12s)...');
+      tryGetPosition(
+        { enableHighAccuracy: false, timeout: 12000, maximumAge: 600000 },
+        callback,
+        (error2) => {
+          let msg = '';
+          switch (error2.code) {
+            case error2.POSITION_UNAVAILABLE:
+              msg = 'Không định vị được.';
+              break;
+            case error2.TIMEOUT:
+              msg = 'Hết thời gian chờ (Timeout).';
+              break;
+            default:
+              msg = error2.message;
+          }
+          console.warn('⚠️ Lỗi lấy vị trí (sau 2 lần thử): ' + msg);
+          callback({ lat: null, lng: null });
+        }
+      );
+    }
+  );
 }
 
 // --- BIẾN TOÀN CỤC ---
