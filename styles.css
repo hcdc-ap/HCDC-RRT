@@ -16,6 +16,7 @@
   --transparent: #00000000;
   --font-family: 'Ubuntu', sans-serif;
 
+
   /* ĐIỀU CHỈNH DUY NHẤT: Giảm size chữ 1 chút vì Bootstrap base font to hơn */
   --large-font-size: calc(2.2rem + 1vh); /* Gốc là 3rem -> giảm còn 2.2rem */
   --medium-font-size: min(calc(1rem + 0.725vh), 1.1rem);
@@ -1147,16 +1148,16 @@ body.dark {
 }
 /* 4. Bottom menu (logout) luôn ở cuối, không absolute nữa */
 #sidebar .side-menu.bottom {
-  flex-shrink: 0;             /* ← không co lại */
+  flex-shrink: 0; /* ← không co lại */
   margin-top: 0;
   padding-bottom: 8px;
   background: var(--light);
-  border-top: 1px solid rgba(0,0,0,0.06);
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
 }
 
 /* 5. Xóa absolute positioning cũ của bottom items */
 #sidebar .side-menu.bottom li:nth-last-of-type(-n + 2) {
-  position: relative;         /* ← đổi từ absolute sang relative */
+  position: relative; /* ← đổi từ absolute sang relative */
   bottom: unset;
   left: unset;
   right: unset;
@@ -1164,7 +1165,7 @@ body.dark {
   z-index: auto;
 }
 #sidebar .side-menu.bottom li:nth-last-of-type(2) {
-  bottom: unset;              /* ← bỏ offset cũ */
+  bottom: unset; /* ← bỏ offset cũ */
 }
 
 /* =================================================================== */
@@ -1558,9 +1559,10 @@ body.dark #content nav .profile-menu li a {
 }
 #content main .table-data .order {
   flex-grow: 1;
-  flex-basis: max-content; /* Cho phép co giãn linh hoạt */
+  flex-basis: 0; /* Ép giãn rộng tối đa thay vì bóp theo nội dung */
   min-width: 0;
 }
+
 #content main .table-data .order table {
   width: 100%;
   border-collapse: collapse;
@@ -4280,7 +4282,7 @@ html {
 }
 
 #sidebar .side-menu.top::-webkit-scrollbar-thumb {
-  background: rgba(255,255,255,0.2);
+  background: rgba(255, 255, 255, 0.2);
   border-radius: 4px;
 }
 /* ===== MAP CONTROLS GRID — CÂN ĐỐI & CHUYÊN NGHIỆP ===== */
@@ -4360,7 +4362,7 @@ html {
   padding-top: 0.25rem; /* điều chỉnh nếu cần */
 }
 
-.map-controls-grid input[type="checkbox"] {
+.map-controls-grid input[type='checkbox'] {
   flex-shrink: 0;
   width: 1.25rem;
   height: 1.25rem;
@@ -4371,7 +4373,7 @@ html {
   transition: all 0.2s ease;
 }
 
-.map-controls-grid input[type="checkbox"]:checked {
+.map-controls-grid input[type='checkbox']:checked {
   background-color: #3b82f6;
   border-color: #3b82f6;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='white' width='12' height='12'%3E%3Cpath fill-rule='evenodd' d='M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z' clip-rule='evenodd'/%3E%3C/svg%3E");
@@ -4380,7 +4382,7 @@ html {
   background-repeat: no-repeat;
 }
 
-.map-controls-grid input[type="checkbox"]:focus {
+.map-controls-grid input[type='checkbox']:focus {
   outline: none;
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.3);
 }
@@ -4391,9 +4393,9 @@ html {
 
 /* Hàng tên + badge: cho phép badge xuống dòng khi hẹp */
 .review-member-info {
-  min-width: 0;                 /* cho phép co lại trong flex */
+  min-width: 0; /* cho phép co lại trong flex */
   display: flex;
-  flex-wrap: wrap;              /* badge tự xuống dòng */
+  flex-wrap: wrap; /* badge tự xuống dòng */
   align-items: center;
   gap: 4px 6px;
 }
@@ -4424,7 +4426,7 @@ html {
   align-items: flex-start;
   gap: 5px;
   line-height: 1.35;
-  word-break: break-word;       /* tên sự kiện dài vẫn wrap gọn */
+  word-break: break-word; /* tên sự kiện dài vẫn wrap gọn */
 }
 
 .review-status-line .bx {
@@ -4445,3 +4447,21 @@ html {
   max-height: 320px;
   overflow-y: auto;
 }
+/* Giới hạn chiều cao Dispatch Modal, cho cuộn trong thân */
+#dispatchModal .modal-dialog {
+  max-width: 900px;
+  margin: 1.75rem auto;
+}
+#dispatchModal .modal-content {
+  max-height: 90vh;
+}
+#dispatchModal .modal-body {
+  overflow-y: auto;
+}
+/* Ép các ô input không giãn quá cao (ảnh 3 cho thấy input bị kéo cao bất thường) */
+#dispatchModal .form-control,
+#dispatchModal .form-select {
+  height: auto;
+  min-height: 38px;
+}
+
