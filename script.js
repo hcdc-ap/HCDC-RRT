@@ -597,7 +597,9 @@ window.enterDashboard = async function () {
         QueryCache.fetch('deployments:recent', async () => {
           const { data, error } = await window.supabaseClient
             .from('deployment_history')
-            .select('id, incident_id, user_id, action_type, confirmed_at, created_at')
+            .select(
+              'id, incident_id, user_id, action_type, confirmed_at, created_at'
+            )
             .order('created_at', { ascending: false })
             .limit(50);
           if (error) throw error;
@@ -2057,6 +2059,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const notificationPage = document.getElementById('page-notification');
     const teamPage = document.getElementById('page-team');
     const emergencyPage = document.getElementById('page-emergency');
+    const labPage = document.getElementById('page-lab-admin');
 
     let currentPage = '';
     if (
@@ -3244,244 +3247,281 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   };
   async function renderCompetencyChart(filteredMembers) {
-    console.group("🔍 renderCompetencyChartDebug - BẮT ĐẦU"); // Mở nhóm log
+    console.group('🔍 renderCompetencyChartDebug - BẮT ĐẦU'); // Mở nhóm log
 
     // 1. LẤY DỮ LIỆU ĐẦU VÀO
-    console.log("1. Dữ liệu đầu vào:");
-    console.log("   - filteredMembers:", filteredMembers);
-    console.log("   - window.appState.training?.records:", window.appState?.training?.records);
-    console.log("   - window.appState.deployment_history:", window.appState?.deployment_history);
+    console.log('1. Dữ liệu đầu vào:');
+    console.log('   - filteredMembers:', filteredMembers);
+    console.log(
+      '   - window.appState.training?.records:',
+      window.appState?.training?.records
+    );
+    console.log(
+      '   - window.appState.deployment_history:',
+      window.appState?.deployment_history
+    );
 
     if (!filteredMembers || !Array.isArray(filteredMembers)) {
-        console.warn("   - filteredMembers không hợp lệ, dùng mặc định window.appState.users");
-        filteredMembers = window.appState?.users || [];
+      console.warn(
+        '   - filteredMembers không hợp lệ, dùng mặc định window.appState.users'
+      );
+      filteredMembers = window.appState?.users || [];
     }
-    console.log("   - filteredMembers sau khi xác định:", filteredMembers);
+    console.log('   - filteredMembers sau khi xác định:', filteredMembers);
 
     const trainingRecords = window.appState?.training?.records || [];
     const deploymentHistory = window.appState?.deployment_history || [];
 
-    console.log("   - Số lượng filteredMembers:", filteredMembers.length);
-    console.log("   - Số lượng trainingRecords:", trainingRecords.length);
-    console.log("   - Số lượng deploymentHistory:", deploymentHistory.length);
+    console.log('   - Số lượng filteredMembers:', filteredMembers.length);
+    console.log('   - Số lượng trainingRecords:', trainingRecords.length);
+    console.log('   - Số lượng deploymentHistory:', deploymentHistory.length);
 
     // 2. KHỞI TẠO CẤU TRÚC TEAM
-    console.log("\n2. Khởi tạo cấu trúc teams từ filteredMembers:");
+    console.log('\n2. Khởi tạo cấu trúc teams từ filteredMembers:');
     const teams = {};
     filteredMembers.forEach((m, index) => {
-        const teamName = m.team || 'No team';
-        if (!teams[teamName]) {
-            console.log(`   - Tạo team mới: "${teamName}"`);
-            teams[teamName] = { trained: 0, combat: 0, total: 0 };
-        }
-        teams[teamName].total++;
-        // Log chi tiết nếu cần thiết
-        // console.log(`   - Thành viên ${index} (${m.fullName || m.email}) -> team "${teamName}", total = ${teams[teamName].total}`);
+      const teamName = m.team || 'No team';
+      if (!teams[teamName]) {
+        console.log(`   - Tạo team mới: "${teamName}"`);
+        teams[teamName] = { trained: 0, combat: 0, total: 0 };
+      }
+      teams[teamName].total++;
+      // Log chi tiết nếu cần thiết
+      // console.log(`   - Thành viên ${index} (${m.fullName || m.email}) -> team "${teamName}", total = ${teams[teamName].total}`);
     });
-    console.log("   - Cấu trúc teams sau khi khởi tạo:", teams);
+    console.log('   - Cấu trúc teams sau khi khởi tạo:', teams);
 
     // 3. XỬ LÝ TRAINING RECORDS
-    console.log("\n3. Xử lý trainingRecords:");
+    console.log('\n3. Xử lý trainingRecords:');
     if (trainingRecords.length > 0) {
-        const trainedByUser = {};
-        console.log("   - Bắt đầu duyệt trainingRecords...");
-        trainingRecords.forEach((r, index) => {
-            if (r.result === 'pass') {
-                const userId = r.profile_id || r.user_id;
-                if (userId) {
-                    trainedByUser[userId] = (trainedByUser[userId] || 0) + 1;
-                    console.log(`   - Training record ${index}: userId="${userId}", result=pass -> trainedByUser["${userId}"] = ${trainedByUser[userId]}`);
-                } else {
-                    console.warn(`   - Training record ${index}: Thiếu profile_id và user_id, bỏ qua.`);
-                }
-            } else {
-                 console.log(`   - Training record ${index}: result="${r.result}", bỏ qua.`);
-            }
-        });
+      const trainedByUser = {};
+      console.log('   - Bắt đầu duyệt trainingRecords...');
+      trainingRecords.forEach((r, index) => {
+        if (r.result === 'pass') {
+          const userId = r.profile_id || r.user_id;
+          if (userId) {
+            trainedByUser[userId] = (trainedByUser[userId] || 0) + 1;
+            console.log(
+              `   - Training record ${index}: userId="${userId}", result=pass -> trainedByUser["${userId}"] = ${trainedByUser[userId]}`
+            );
+          } else {
+            console.warn(
+              `   - Training record ${index}: Thiếu profile_id và user_id, bỏ qua.`
+            );
+          }
+        } else {
+          console.log(
+            `   - Training record ${index}: result="${r.result}", bỏ qua.`
+          );
+        }
+      });
 
-        console.log("   - Cập nhật số lượng trained vào teams từ filteredMembers:");
-        filteredMembers.forEach((m) => {
-            const userId = m.id;
-            const teamName = m.team || 'No team';
-            if (teams[teamName] && trainedByUser[userId]) {
-                teams[teamName].trained += trainedByUser[userId];
-                console.log(`   - Team "${teamName}", userId="${userId}" -> trained += ${trainedByUser[userId]} (total now: ${teams[teamName].trained})`);
-            } else {
-                 // Có thể log nếu không match, nhưng có thể nhiều
-                 // console.log(`   - Team "${teamName}", userId="${userId}" -> không có training match hoặc trainedByUser[userId]=${trainedByUser[userId]}`);
-            }
-        });
+      console.log(
+        '   - Cập nhật số lượng trained vào teams từ filteredMembers:'
+      );
+      filteredMembers.forEach((m) => {
+        const userId = m.id;
+        const teamName = m.team || 'No team';
+        if (teams[teamName] && trainedByUser[userId]) {
+          teams[teamName].trained += trainedByUser[userId];
+          console.log(
+            `   - Team "${teamName}", userId="${userId}" -> trained += ${trainedByUser[userId]} (total now: ${teams[teamName].trained})`
+          );
+        } else {
+          // Có thể log nếu không match, nhưng có thể nhiều
+          // console.log(`   - Team "${teamName}", userId="${userId}" -> không có training match hoặc trainedByUser[userId]=${trainedByUser[userId]}`);
+        }
+      });
     } else {
-        console.log("   - Danh sách trainingRecords rỗng, bỏ qua.");
+      console.log('   - Danh sách trainingRecords rỗng, bỏ qua.');
     }
 
     // 4. XỬ LÝ DEPLOYMENT HISTORY
-    console.log("\n4. Xử lý deploymentHistory:");
+    console.log('\n4. Xử lý deploymentHistory:');
     if (deploymentHistory.length > 0) {
-        const deployedByUser = {};
-        console.log("   - Bắt đầu duyệt deploymentHistory...");
-        deploymentHistory.forEach((h, index) => {
-            const isValidForCombat = (
-                (h.action_type === 'deployed' || h.action_type === 'replaced') &&
-                h.confirmed_at &&
-                h.incident_id
+      const deployedByUser = {};
+      console.log('   - Bắt đầu duyệt deploymentHistory...');
+      deploymentHistory.forEach((h, index) => {
+        const isValidForCombat =
+          (h.action_type === 'deployed' || h.action_type === 'replaced') &&
+          h.confirmed_at &&
+          h.incident_id;
+        const userId = h.profile_id || h.user_id;
+
+        if (isValidForCombat) {
+          if (userId) {
+            deployedByUser[userId] = (deployedByUser[userId] || 0) + 1;
+            console.log(
+              `   - Deployment record ${index}: userId="${userId}", valid -> deployedByUser["${userId}"] = ${deployedByUser[userId]}`
             );
-            const userId = h.profile_id || h.user_id;
+          } else {
+            console.warn(
+              `   - Deployment record ${index}: Hợp lệ nhưng thiếu profile_id và user_id, bỏ qua.`,
+              h
+            );
+          }
+        } else {
+          console.log(
+            `   - Deployment record ${index}: Không hợp lệ (action_type:${
+              h.action_type
+            }, confirmed_at:${!!h.confirmed_at}, incident_id:${!!h.incident_id}), bỏ qua.`,
+            h
+          );
+        }
+      });
 
-            if (isValidForCombat) {
-                if (userId) {
-                    deployedByUser[userId] = (deployedByUser[userId] || 0) + 1;
-                    console.log(`   - Deployment record ${index}: userId="${userId}", valid -> deployedByUser["${userId}"] = ${deployedByUser[userId]}`);
-                } else {
-                    console.warn(`   - Deployment record ${index}: Hợp lệ nhưng thiếu profile_id và user_id, bỏ qua.`, h);
-                }
-            } else {
-                console.log(`   - Deployment record ${index}: Không hợp lệ (action_type:${h.action_type}, confirmed_at:${!!h.confirmed_at}, incident_id:${!!h.incident_id}), bỏ qua.`, h);
-            }
-        });
-
-        console.log("   - Cập nhật số lượng combat vào teams từ filteredMembers:");
-        filteredMembers.forEach((m) => {
-            const userId = m.id;
-            const teamName = m.team || 'No team';
-            if (teams[teamName] && deployedByUser[userId]) {
-                teams[teamName].combat += deployedByUser[userId];
-                console.log(`   - Team "${teamName}", userId="${userId}" -> combat += ${deployedByUser[userId]} (total now: ${teams[teamName].combat})`);
-            } else {
-                 // Có thể log nếu không match, nhưng có thể nhiều
-                 // console.log(`   - Team "${teamName}", userId="${userId}" -> không có deployment match hoặc deployedByUser[userId]=${deployedByUser[userId]}`);
-            }
-        });
+      console.log(
+        '   - Cập nhật số lượng combat vào teams từ filteredMembers:'
+      );
+      filteredMembers.forEach((m) => {
+        const userId = m.id;
+        const teamName = m.team || 'No team';
+        if (teams[teamName] && deployedByUser[userId]) {
+          teams[teamName].combat += deployedByUser[userId];
+          console.log(
+            `   - Team "${teamName}", userId="${userId}" -> combat += ${deployedByUser[userId]} (total now: ${teams[teamName].combat})`
+          );
+        } else {
+          // Có thể log nếu không match, nhưng có thể nhiều
+          // console.log(`   - Team "${teamName}", userId="${userId}" -> không có deployment match hoặc deployedByUser[userId]=${deployedByUser[userId]}`);
+        }
+      });
     } else {
-        console.log("   - Danh sách deploymentHistory rỗng, bỏ qua.");
+      console.log('   - Danh sách deploymentHistory rỗng, bỏ qua.');
     }
 
     // 5. TÍNH TRUNG BÌNH
-    console.log("\n5. Tính trung bình theo team:");
+    console.log('\n5. Tính trung bình theo team:');
     const categories = Object.keys(teams).sort();
     const dataTrained = [];
     const dataCombat = [];
 
     categories.forEach((team) => {
-        const stat = teams[team];
-        const avgTrained = stat.total > 0 ? parseFloat((stat.trained / stat.total).toFixed(1)) : 0;
-        const avgCombat = stat.total > 0 ? parseFloat((stat.combat / stat.total).toFixed(1)) : 0;
-        dataTrained.push(avgTrained);
-        dataCombat.push(avgCombat);
-        console.log(`   - Team "${team}": total=${stat.total}, trained=${stat.trained}, combat=${stat.combat} -> avgTrained=${avgTrained}, avgCombat=${avgCombat}`);
+      const stat = teams[team];
+      const avgTrained =
+        stat.total > 0 ? parseFloat((stat.trained / stat.total).toFixed(1)) : 0;
+      const avgCombat =
+        stat.total > 0 ? parseFloat((stat.combat / stat.total).toFixed(1)) : 0;
+      dataTrained.push(avgTrained);
+      dataCombat.push(avgCombat);
+      console.log(
+        `   - Team "${team}": total=${stat.total}, trained=${stat.trained}, combat=${stat.combat} -> avgTrained=${avgTrained}, avgCombat=${avgCombat}`
+      );
     });
 
     // 6. KIỂM TRA CÓ DỮ LIỆU HIỂN THỊ KHÔNG
-    const hasData = dataTrained.some(v => v > 0) || dataCombat.some(v => v > 0);
-    console.log("\n6. Kiểm tra dữ liệu để hiển thị:");
-    console.log("   - dataTrained:", dataTrained);
-    console.log("   - dataCombat:", dataCombat);
-    console.log("   - hasData (dữ liệu > 0):", hasData);
+    const hasData =
+      dataTrained.some((v) => v > 0) || dataCombat.some((v) => v > 0);
+    console.log('\n6. Kiểm tra dữ liệu để hiển thị:');
+    console.log('   - dataTrained:', dataTrained);
+    console.log('   - dataCombat:', dataCombat);
+    console.log('   - hasData (dữ liệu > 0):', hasData);
 
     // 7. RENDER
     const chartContainer = document.getElementById('competencyChartAP');
     if (!chartContainer) {
-        console.error("❌ Container #competencyChartAP không tìm thấy!");
-        console.groupEnd(); // Đóng nhóm log
-        return;
+      console.error('❌ Container #competencyChartAP không tìm thấy!');
+      console.groupEnd(); // Đóng nhóm log
+      return;
     }
 
     if (!hasData) {
-        console.log("   - Không có dữ liệu, hiển thị thông báo trống.");
-        chartContainer.innerHTML = `
+      console.log('   - Không có dữ liệu, hiển thị thông báo trống.');
+      chartContainer.innerHTML = `
             <p class="text-center text-muted" style="padding: 50px 20px;">
                 📊 <strong>Chưa có dữ liệu năng lực.</strong><br><br>
                 <small>Hệ thống cần có:<br>
                 • Dữ liệu tham gia đào tạo, tập huấn<br>
                 • Dữ liệu tham gia sự kiện kích hoạt khẩn cấp</small>
             </p>`;
-        console.groupEnd(); // Đóng nhóm log
-        return;
+      console.groupEnd(); // Đóng nhóm log
+      return;
     }
 
-    console.log("   - Có dữ liệu, chuẩn bị vẽ biểu đồ.");
+    console.log('   - Có dữ liệu, chuẩn bị vẽ biểu đồ.');
     if (typeof Highcharts === 'undefined') {
-        console.error('❌ Thư viện Highcharts chưa được tải!');
-        chartContainer.innerHTML = '<p class="text-danger">Thư viện biểu đồ chưa được tải.</p>';
-        console.groupEnd(); // Đóng nhóm log
-        return;
+      console.error('❌ Thư viện Highcharts chưa được tải!');
+      chartContainer.innerHTML =
+        '<p class="text-danger">Thư viện biểu đồ chưa được tải.</p>';
+      console.groupEnd(); // Đóng nhóm log
+      return;
     }
 
-    console.log("   - Gọi Highcharts.chart...");
+    console.log('   - Gọi Highcharts.chart...');
     Highcharts.chart('competencyChartAP', {
-        chart: {
-            type: 'column',
-            backgroundColor: 'transparent',
-            style: { fontFamily: "'Ubuntu', sans-serif" },
+      chart: {
+        type: 'column',
+        backgroundColor: 'transparent',
+        style: { fontFamily: "'Ubuntu', sans-serif" },
+      },
+      title: {
+        text: 'Năng lực Trung bình theo Đội (Đào tạo vs Thực chiến)',
+        style: { fontSize: '16px', fontWeight: 'bold' },
+      },
+      subtitle: { text: 'Chỉ số trung bình trên mỗi thành viên' },
+      xAxis: {
+        categories: categories,
+        crosshair: true,
+        labels: { style: { fontSize: '12px' } },
+      },
+      yAxis: {
+        min: 0,
+        title: { text: 'Số lượng (Avg)', style: { color: '#666' } },
+        labels: { style: { fontSize: '11px' } },
+      },
+      tooltip: {
+        shared: true,
+        headerFormat: '<b>{point.x}</b><br/>',
+        pointFormat: '{series.name}: <b>{point.y}</b>{point.suffix}',
+      },
+      legend: {
+        layout: 'horizontal',
+        align: 'center',
+        verticalAlign: 'bottom',
+        x: 0,
+        y: 0,
+        floating: false,
+        backgroundColor: 'rgba(255,255,255,0.9)',
+        itemStyle: { fontSize: '12px' },
+      },
+      plotOptions: {
+        column: {
+          borderRadius: 6,
+          dataLabels: {
+            enabled: true,
+            style: { fontSize: '11px', fontWeight: 'bold' },
+          },
+          pointPadding: 0.2,
+          groupPadding: 0.1,
         },
-        title: {
-            text: 'Năng lực Trung bình theo Đội (Đào tạo vs Thực chiến)',
-            style: { fontSize: '16px', fontWeight: 'bold' },
+      },
+      series: [
+        {
+          name: '📚 Đào tạo (chứng chỉ/người)',
+          data: dataTrained.map((v, i) => ({
+            y: v,
+            suffix: ' khóa',
+          })),
+          color: 'rgba(54, 162, 235, 0.85)',
         },
-        subtitle: { text: 'Chỉ số trung bình trên mỗi thành viên' },
-        xAxis: {
-            categories: categories,
-            crosshair: true,
-            labels: { style: { fontSize: '12px' } },
+        {
+          name: '⚡ Thực chiến (lần tham gia/người)',
+          data: dataCombat.map((v, i) => ({
+            y: v,
+            suffix: ' lần',
+          })),
+          color: 'rgba(255, 99, 132, 0.85)',
         },
-        yAxis: {
-            min: 0,
-            title: { text: 'Số lượng (Avg)', style: { color: '#666' } },
-            labels: { style: { fontSize: '11px' } },
-        },
-        tooltip: {
-            shared: true,
-            headerFormat: '<b>{point.x}</b><br/>',
-            pointFormat: '{series.name}: <b>{point.y}</b>{point.suffix}',
-        },
-        legend: {
-            layout: 'horizontal',
-            align: 'center',
-            verticalAlign: 'bottom',
-            x: 0,
-            y: 0,
-            floating: false,
-            backgroundColor: 'rgba(255,255,255,0.9)',
-            itemStyle: { fontSize: '12px' },
-        },
-        plotOptions: {
-            column: {
-                borderRadius: 6,
-                dataLabels: {
-                    enabled: true,
-                    style: { fontSize: '11px', fontWeight: 'bold' },
-                },
-                pointPadding: 0.2,
-                groupPadding: 0.1,
-            },
-        },
-        series: [
-            {
-                name: '📚 Đào tạo (chứng chỉ/người)',
-                data: dataTrained.map((v, i) => ({
-                    y: v,
-                    suffix: ' khóa',
-                })),
-                color: 'rgba(54, 162, 235, 0.85)',
-            },
-            {
-                name: '⚡ Thực chiến (lần tham gia/người)',
-                data: dataCombat.map((v, i) => ({
-                    y: v,
-                    suffix: ' lần',
-                })),
-                color: 'rgba(255, 99, 132, 0.85)',
-            },
-        ],
-        credits: { enabled: false },
+      ],
+      credits: { enabled: false },
     });
 
     console.log('✅ Competency chart đã được render thành công.');
     console.groupEnd(); // Đóng nhóm log
-}
+  }
 
-// Gọi hàm mới để kiểm tra
-// renderCompetencyChartDebug(window.appState?.users);
+  // Gọi hàm mới để kiểm tra
+  // renderCompetencyChartDebug(window.appState?.users);
 
   window.updateKpiCards = async function () {
     try {
@@ -3729,262 +3769,256 @@ document.addEventListener('DOMContentLoaded', function () {
   // TÍNH NĂNG XUẤT EXCEL TỪ SUPABASE (THAY THẾ GAS)
   // ==========================================
   // Sử dụng thư viện SheetJS (XLSX) đã nhúng ở index.html
-// ============================================================================
-// setupExportButton v2 — THAY TRỌN HÀM CŨ
-// Bổ sung cho export RRT-ers (tableName === 'profiles') 4 cột mới:
-//   - nang_luc_dao_tao      : số khóa đào tạo đạt (result = 'pass')
-//   - chi_tiet_dao_tao      : tên các khóa đã đạt
-//   - kinh_nghiem_thuc_chien: số SỰ KIỆN đã tham gia thực chiến
-//                             (deployed/replaced VÀ có confirmed_at — đúng
-//                              quy tắc đã thống nhất: từ chối/chờ không tính)
-//   - chi_tiet_thuc_chien   : tên các sự kiện đã tham gia
-// ============================================================================
-async function setupExportButton(btnSelector, tableName, fileNamePrefix) {
-  $(btnSelector)
-    .off('click')
-    .on('click', async function () {
-      const btn = $(this);
-      const originalText = btn.html();
-      try {
-        // 1. Hiệu ứng Loading
-        btn
-          .prop('disabled', true)
-          .html('<i class="bx bx-loader-alt bx-spin"></i> Đang tải...');
-        if (typeof showToast === 'function')
-          showToast(`Đang truy xuất dữ liệu từ ${tableName}...`, 'info');
+  // ============================================================================
+  // setupExportButton v2 — THAY TRỌN HÀM CŨ
+  // Bổ sung cho export RRT-ers (tableName === 'profiles') 4 cột mới:
+  //   - nang_luc_dao_tao      : số khóa đào tạo đạt (result = 'pass')
+  //   - chi_tiet_dao_tao      : tên các khóa đã đạt
+  //   - kinh_nghiem_thuc_chien: số SỰ KIỆN đã tham gia thực chiến
+  //                             (deployed/replaced VÀ có confirmed_at — đúng
+  //                              quy tắc đã thống nhất: từ chối/chờ không tính)
+  //   - chi_tiet_thuc_chien   : tên các sự kiện đã tham gia
+  // ============================================================================
+  async function setupExportButton(btnSelector, tableName, fileNamePrefix) {
+    $(btnSelector)
+      .off('click')
+      .on('click', async function () {
+        const btn = $(this);
+        const originalText = btn.html();
+        try {
+          // 1. Hiệu ứng Loading
+          btn
+            .prop('disabled', true)
+            .html('<i class="bx bx-loader-alt bx-spin"></i> Đang tải...');
+          if (typeof showToast === 'function')
+            showToast(`Đang truy xuất dữ liệu từ ${tableName}...`, 'info');
 
-        let data = [];
+          let data = [];
 
-        // 2. Xử lý riêng cho bảng profiles (join kỹ năng + đào tạo + thực chiến)
-        if (tableName === 'profiles') {
-          // 2a. Fetch profiles
-          const { data: profilesData, error: profilesErr } =
-            await supabaseClient
-              .from('profiles')
-              .select('*')
-              .order('full_name', { ascending: true });
-          if (profilesErr) throw profilesErr;
-          if (!profilesData || profilesData.length === 0) {
+          // 2. Xử lý riêng cho bảng profiles (join kỹ năng + đào tạo + thực chiến)
+          if (tableName === 'profiles') {
+            // 2a. Fetch profiles
+            const { data: profilesData, error: profilesErr } =
+              await supabaseClient
+                .from('profiles')
+                .select('*')
+                .order('full_name', { ascending: true });
+            if (profilesErr) throw profilesErr;
+            if (!profilesData || profilesData.length === 0) {
+              if (typeof showToast === 'function')
+                showToast('Không có dữ liệu để xuất!', 'warning');
+              btn.prop('disabled', false).html(originalText);
+              return;
+            }
+            const profileIds = profilesData.map((p) => p.id);
+
+            // 2b. Fetch rrt_qualifications (kỹ năng khai báo)
+            const { data: qualsData, error: qualsErr } = await supabaseClient
+              .from('rrt_qualifications')
+              .select('profile_id, skills')
+              .in('profile_id', profileIds);
+            if (qualsErr)
+              console.warn('⚠️ Warning fetching qualifications:', qualsErr);
+            const skillsMap = {};
+            (qualsData || []).forEach((q) => {
+              skillsMap[q.profile_id] = q.skills || {};
+            });
+
+            // 2c. NĂNG LỰC ĐÀO TẠO: đếm khóa result='pass' theo người
+            const trainCountMap = {}; // user_id -> số khóa pass
+            const trainDetailMap = {}; // user_id -> [tên khóa]
+            try {
+              const { data: trainRecs, error: trainErr } = await supabaseClient
+                .from('training_records')
+                .select('profile_id, user_id, result, course_id');
+              if (trainErr) throw trainErr;
+
+              // Lấy tên khóa học để ghi cột chi tiết
+              const courseIds = [
+                ...new Set(
+                  (trainRecs || []).map((r) => r.course_id).filter(Boolean)
+                ),
+              ];
+              const courseNameMap = {};
+              if (courseIds.length > 0) {
+                const { data: courses } = await supabaseClient
+                  .from('training_courses')
+                  .select('id, course_name')
+                  .in('id', courseIds);
+                (courses || []).forEach((c) => {
+                  courseNameMap[c.id] = c.course_name || '';
+                });
+              }
+
+              (trainRecs || []).forEach((r) => {
+                if (String(r.result || '').toLowerCase() !== 'pass') return;
+                const uid = r.profile_id || r.user_id;
+                if (!uid) return;
+                trainCountMap[uid] = (trainCountMap[uid] || 0) + 1;
+                if (!trainDetailMap[uid]) trainDetailMap[uid] = [];
+                trainDetailMap[uid].push(
+                  courseNameMap[r.course_id] || 'Khóa học'
+                );
+              });
+            } catch (e) {
+              console.warn('⚠️ Không tải được dữ liệu đào tạo:', e);
+            }
+
+            // 2d. KINH NGHIỆM THỰC CHIẾN: deployed/replaced + confirmed_at,
+            //     đếm theo SỰ KIỆN duy nhất (không đếm trùng 1 vụ nhiều dòng)
+            const combatSetMap = {}; // user_id -> Set(incident_id)
+            const combatDetailMap = {}; // user_id -> [tên sự kiện]
+            try {
+              const { data: deps, error: depErr } = await supabaseClient
+                .from('deployment_history')
+                .select('user_id, incident_id, action_type, confirmed_at');
+              if (depErr) throw depErr;
+
+              const validDeps = (deps || []).filter(
+                (h) =>
+                  (h.action_type === 'deployed' ||
+                    h.action_type === 'replaced') &&
+                  h.confirmed_at &&
+                  h.incident_id &&
+                  h.user_id
+              );
+
+              // Lấy tên sự kiện cho cột chi tiết
+              const incIds = [...new Set(validDeps.map((h) => h.incident_id))];
+              const incNameMap = {};
+              if (incIds.length > 0) {
+                const { data: incs } = await supabaseClient
+                  .from('incidents')
+                  .select('id, event_name')
+                  .in('id', incIds);
+                (incs || []).forEach((i) => {
+                  incNameMap[String(i.id)] =
+                    i.event_name || `#${String(i.id).substring(0, 5)}`;
+                });
+              }
+
+              validDeps.forEach((h) => {
+                if (!combatSetMap[h.user_id])
+                  combatSetMap[h.user_id] = new Set();
+                // Set tự khử trùng: 1 sự kiện chỉ tính 1 lần/người
+                if (!combatSetMap[h.user_id].has(h.incident_id)) {
+                  combatSetMap[h.user_id].add(h.incident_id);
+                  if (!combatDetailMap[h.user_id])
+                    combatDetailMap[h.user_id] = [];
+                  const label =
+                    h.action_type === 'replaced' ? ' (được thay thế)' : '';
+                  combatDetailMap[h.user_id].push(
+                    (incNameMap[String(h.incident_id)] || 'Sự kiện') + label
+                  );
+                }
+              });
+            } catch (e) {
+              console.warn('⚠️ Không tải được dữ liệu thực chiến:', e);
+            }
+
+            // 2e. Merge profiles + skills + đào tạo + thực chiến
+            data = profilesData.map((profile) => {
+              const skills = skillsMap[profile.id] || {};
+              const flattenedSkills = {
+                skill_ungpho_has: skills.emergency_response?.has_skill || false,
+                skill_ungpho_level: skills.emergency_response?.level || '',
+                skill_ruiro_has: skills.risk_communication?.has_skill || false,
+                skill_ruiro_level: skills.risk_communication?.level || '',
+                skill_tamly_has: skills.psycho_social?.has_skill || false,
+                skill_tamly_level: skills.psycho_social?.level || '',
+                skill_dulieu_has: skills.data_management?.has_skill || false,
+                skill_dulieu_level: skills.data_management?.level || '',
+                skill_dichte_has: skills.epidemiology?.has_skill || false,
+                skill_dichte_level: skills.epidemiology?.level || '',
+                skill_nhiemtrung_has:
+                  skills.infection_control?.has_skill || false,
+                skill_nhiemtrung_level: skills.infection_control?.level || '',
+                skill_thinghiem_has: skills.lab?.has_skill || false,
+                skill_thinghiem_level: skills.lab?.level || '',
+                skill_haucan_has: skills.logistics?.has_skill || false,
+                skill_haucan_level: skills.logistics?.level || '',
+                skill_vanhanh_has:
+                  skills.operation_materials?.has_skill || false,
+                skill_vanhanh_level: skills.operation_materials?.level || '',
+                skill_cabenh_has: skills.case_management?.has_skill || false,
+                skill_cabenh_level: skills.case_management?.level || '',
+                skill_dinhduong_has: skills.food_management?.has_skill || false,
+                skill_dinhduong_level: skills.food_management?.level || '',
+                skill_nuoc_has: skills.wash_management?.has_skill || false,
+                skill_nuoc_level: skills.wash_management?.level || '',
+                skill_nguyhiem_has:
+                  skills.hazardous_management?.has_skill || false,
+                skill_nguyhiem_level: skills.hazardous_management?.level || '',
+                skill_anninh_has:
+                  skills.security_management?.has_skill || false,
+                skill_anninh_level: skills.security_management?.level || '',
+              };
+
+              return {
+                ...profile,
+                ...flattenedSkills,
+                // === 4 CỘT MỚI ===
+                nang_luc_dao_tao: trainCountMap[profile.id] || 0,
+                chi_tiet_dao_tao: (trainDetailMap[profile.id] || []).join('; '),
+                kinh_nghiem_thuc_chien: combatSetMap[profile.id]
+                  ? combatSetMap[profile.id].size
+                  : 0,
+                chi_tiet_thuc_chien: (combatDetailMap[profile.id] || []).join(
+                  '; '
+                ),
+              };
+            });
+          } else {
+            // 3. Fetch bình thường cho các bảng khác
+            const { data: normalData, error } = await supabaseClient
+              .from(tableName)
+              .select('*');
+            if (error) throw error;
+            data = normalData || [];
+          }
+
+          if (data.length === 0) {
             if (typeof showToast === 'function')
               showToast('Không có dữ liệu để xuất!', 'warning');
-            btn.prop('disabled', false).html(originalText);
             return;
           }
-          const profileIds = profilesData.map((p) => p.id);
 
-          // 2b. Fetch rrt_qualifications (kỹ năng khai báo)
-          const { data: qualsData, error: qualsErr } = await supabaseClient
-            .from('rrt_qualifications')
-            .select('profile_id, skills')
-            .in('profile_id', profileIds);
-          if (qualsErr)
-            console.warn('⚠️ Warning fetching qualifications:', qualsErr);
-          const skillsMap = {};
-          (qualsData || []).forEach((q) => {
-            skillsMap[q.profile_id] = q.skills || {};
-          });
-
-          // 2c. NĂNG LỰC ĐÀO TẠO: đếm khóa result='pass' theo người
-          const trainCountMap = {}; // user_id -> số khóa pass
-          const trainDetailMap = {}; // user_id -> [tên khóa]
-          try {
-            const { data: trainRecs, error: trainErr } = await supabaseClient
-              .from('training_records')
-              .select('profile_id, user_id, result, course_id');
-            if (trainErr) throw trainErr;
-
-            // Lấy tên khóa học để ghi cột chi tiết
-            const courseIds = [
-              ...new Set(
-                (trainRecs || []).map((r) => r.course_id).filter(Boolean)
-              ),
-            ];
-            const courseNameMap = {};
-            if (courseIds.length > 0) {
-              const { data: courses } = await supabaseClient
-                .from('training_courses')
-                .select('id, course_name')
-                .in('id', courseIds);
-              (courses || []).forEach((c) => {
-                courseNameMap[c.id] = c.course_name || '';
-              });
-            }
-
-            (trainRecs || []).forEach((r) => {
-              if (String(r.result || '').toLowerCase() !== 'pass') return;
-              const uid = r.profile_id || r.user_id;
-              if (!uid) return;
-              trainCountMap[uid] = (trainCountMap[uid] || 0) + 1;
-              if (!trainDetailMap[uid]) trainDetailMap[uid] = [];
-              trainDetailMap[uid].push(
-                courseNameMap[r.course_id] || 'Khóa học'
-              );
-            });
-          } catch (e) {
-            console.warn('⚠️ Không tải được dữ liệu đào tạo:', e);
-          }
-
-          // 2d. KINH NGHIỆM THỰC CHIẾN: deployed/replaced + confirmed_at,
-          //     đếm theo SỰ KIỆN duy nhất (không đếm trùng 1 vụ nhiều dòng)
-          const combatSetMap = {}; // user_id -> Set(incident_id)
-          const combatDetailMap = {}; // user_id -> [tên sự kiện]
-          try {
-            const { data: deps, error: depErr } = await supabaseClient
-              .from('deployment_history')
-              .select('user_id, incident_id, action_type, confirmed_at');
-            if (depErr) throw depErr;
-
-            const validDeps = (deps || []).filter(
-              (h) =>
-                (h.action_type === 'deployed' ||
-                  h.action_type === 'replaced') &&
-                h.confirmed_at &&
-                h.incident_id &&
-                h.user_id
+          // 4. Dùng SheetJS tạo file Excel
+          if (typeof XLSX === 'undefined') {
+            throw new Error(
+              'Không tìm thấy thư viện SheetJS. Hãy kiểm tra thẻ <script> ở index.html'
             );
-
-            // Lấy tên sự kiện cho cột chi tiết
-            const incIds = [
-              ...new Set(validDeps.map((h) => h.incident_id)),
-            ];
-            const incNameMap = {};
-            if (incIds.length > 0) {
-              const { data: incs } = await supabaseClient
-                .from('incidents')
-                .select('id, event_name')
-                .in('id', incIds);
-              (incs || []).forEach((i) => {
-                incNameMap[String(i.id)] =
-                  i.event_name || `#${String(i.id).substring(0, 5)}`;
-              });
-            }
-
-            validDeps.forEach((h) => {
-              if (!combatSetMap[h.user_id])
-                combatSetMap[h.user_id] = new Set();
-              // Set tự khử trùng: 1 sự kiện chỉ tính 1 lần/người
-              if (!combatSetMap[h.user_id].has(h.incident_id)) {
-                combatSetMap[h.user_id].add(h.incident_id);
-                if (!combatDetailMap[h.user_id])
-                  combatDetailMap[h.user_id] = [];
-                const label =
-                  h.action_type === 'replaced'
-                    ? ' (được thay thế)'
-                    : '';
-                combatDetailMap[h.user_id].push(
-                  (incNameMap[String(h.incident_id)] || 'Sự kiện') + label
-                );
-              }
-            });
-          } catch (e) {
-            console.warn('⚠️ Không tải được dữ liệu thực chiến:', e);
           }
+          const worksheet = XLSX.utils.json_to_sheet(data);
+          const colWidths = Object.keys(data[0] || {}).map((key) => ({
+            wch:
+              Math.max(
+                key.length,
+                ...data.map((row) => String(row[key] || '').length)
+              ) + 2,
+          }));
+          worksheet['!cols'] = colWidths;
+          const workbook = XLSX.utils.book_new();
+          XLSX.utils.book_append_sheet(workbook, worksheet, 'Data');
 
-          // 2e. Merge profiles + skills + đào tạo + thực chiến
-          data = profilesData.map((profile) => {
-            const skills = skillsMap[profile.id] || {};
-            const flattenedSkills = {
-              skill_ungpho_has: skills.emergency_response?.has_skill || false,
-              skill_ungpho_level: skills.emergency_response?.level || '',
-              skill_ruiro_has: skills.risk_communication?.has_skill || false,
-              skill_ruiro_level: skills.risk_communication?.level || '',
-              skill_tamly_has: skills.psycho_social?.has_skill || false,
-              skill_tamly_level: skills.psycho_social?.level || '',
-              skill_dulieu_has: skills.data_management?.has_skill || false,
-              skill_dulieu_level: skills.data_management?.level || '',
-              skill_dichte_has: skills.epidemiology?.has_skill || false,
-              skill_dichte_level: skills.epidemiology?.level || '',
-              skill_nhiemtrung_has:
-                skills.infection_control?.has_skill || false,
-              skill_nhiemtrung_level: skills.infection_control?.level || '',
-              skill_thinghiem_has: skills.lab?.has_skill || false,
-              skill_thinghiem_level: skills.lab?.level || '',
-              skill_haucan_has: skills.logistics?.has_skill || false,
-              skill_haucan_level: skills.logistics?.level || '',
-              skill_vanhanh_has:
-                skills.operation_materials?.has_skill || false,
-              skill_vanhanh_level: skills.operation_materials?.level || '',
-              skill_cabenh_has: skills.case_management?.has_skill || false,
-              skill_cabenh_level: skills.case_management?.level || '',
-              skill_dinhduong_has: skills.food_management?.has_skill || false,
-              skill_dinhduong_level: skills.food_management?.level || '',
-              skill_nuoc_has: skills.wash_management?.has_skill || false,
-              skill_nuoc_level: skills.wash_management?.level || '',
-              skill_nguyhiem_has:
-                skills.hazardous_management?.has_skill || false,
-              skill_nguyhiem_level: skills.hazardous_management?.level || '',
-              skill_anninh_has:
-                skills.security_management?.has_skill || false,
-              skill_anninh_level: skills.security_management?.level || '',
-            };
+          // 5. Tải file về máy
+          const fileName = `${fileNamePrefix}_${new Date()
+            .toISOString()
+            .slice(0, 10)}.xlsx`;
+          XLSX.writeFile(workbook, fileName);
 
-            return {
-              ...profile,
-              ...flattenedSkills,
-              // === 4 CỘT MỚI ===
-              nang_luc_dao_tao: trainCountMap[profile.id] || 0,
-              chi_tiet_dao_tao: (trainDetailMap[profile.id] || []).join(
-                '; '
-              ),
-              kinh_nghiem_thuc_chien: combatSetMap[profile.id]
-                ? combatSetMap[profile.id].size
-                : 0,
-              chi_tiet_thuc_chien: (
-                combatDetailMap[profile.id] || []
-              ).join('; '),
-            };
-          });
-        } else {
-          // 3. Fetch bình thường cho các bảng khác
-          const { data: normalData, error } = await supabaseClient
-            .from(tableName)
-            .select('*');
-          if (error) throw error;
-          data = normalData || [];
-        }
-
-        if (data.length === 0) {
           if (typeof showToast === 'function')
-            showToast('Không có dữ liệu để xuất!', 'warning');
-          return;
+            showToast(`✅ Đã xuất ${data.length} dòng thành công!`, 'success');
+        } catch (err) {
+          console.error('Lỗi xuất file:', err);
+          if (typeof showToast === 'function')
+            showToast('Lỗi: ' + err.message, 'error');
+        } finally {
+          // 6. Trả lại nút ban đầu
+          btn.prop('disabled', false).html(originalText);
         }
-
-        // 4. Dùng SheetJS tạo file Excel
-        if (typeof XLSX === 'undefined') {
-          throw new Error(
-            'Không tìm thấy thư viện SheetJS. Hãy kiểm tra thẻ <script> ở index.html'
-          );
-        }
-        const worksheet = XLSX.utils.json_to_sheet(data);
-        const colWidths = Object.keys(data[0] || {}).map((key) => ({
-          wch:
-            Math.max(
-              key.length,
-              ...data.map((row) => String(row[key] || '').length)
-            ) + 2,
-        }));
-        worksheet['!cols'] = colWidths;
-        const workbook = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(workbook, worksheet, 'Data');
-
-        // 5. Tải file về máy
-        const fileName = `${fileNamePrefix}_${new Date()
-          .toISOString()
-          .slice(0, 10)}.xlsx`;
-        XLSX.writeFile(workbook, fileName);
-
-        if (typeof showToast === 'function')
-          showToast(`✅ Đã xuất ${data.length} dòng thành công!`, 'success');
-      } catch (err) {
-        console.error('Lỗi xuất file:', err);
-        if (typeof showToast === 'function')
-          showToast('Lỗi: ' + err.message, 'error');
-      } finally {
-        // 6. Trả lại nút ban đầu
-        btn.prop('disabled', false).html(originalText);
-      }
-    });
-}
+      });
+  }
 
   // Kích hoạt nút bấm Export khi tải xong trang
   $(document).ready(function () {
@@ -4821,6 +4855,7 @@ async function setupExportButton(btnSelector, tableName, fileNamePrefix) {
     'page-logistics',
     'page-library',
     'page-map',
+    'page-lab-admin',
     'page-notification',
   ];
   const sideMenuItems = document.querySelectorAll('#sidebar .side-menu.top li');
@@ -4863,6 +4898,9 @@ async function setupExportButton(btnSelector, tableName, fileNamePrefix) {
       case 'page-map':
         // [QUAN TRỌNG] Dùng await ở đây vì renderMapPage là async
         await renderMapPage();
+        break;
+      case 'page-lab-admin':
+        renderLabAdminPage();
         break;
       case 'page-library':
         if (typeof renderLibraryPage === 'function') renderLibraryPage();
@@ -6739,7 +6777,33 @@ async function setupExportButton(btnSelector, tableName, fileNamePrefix) {
         }
       };
     }
-
+    // 3. NÚT TÌM PXN — mở Dispatch Modal với tọa độ sự cố
+    const btnFindLab = document.getElementById('btn-find-lab');
+    if (btnFindLab) {
+      btnFindLab.onclick = function () {
+        // Kiểm tra sự cố đã có tọa độ chưa
+        if (inc.latitude == null || inc.longitude == null) {
+          if (typeof showToast === 'function')
+            showToast(
+              'Sự cố này chưa có tọa độ (latitude/longitude) để tìm Phòng Xét nghiệm.',
+              'warning'
+            );
+          return;
+        }
+        if (typeof window.openDispatchModal === 'function') {
+          window.openDispatchModal({
+            incidentId: inc.id,
+            incidentName: inc.event_name || inc.event || 'Sự cố',
+            lat: inc.latitude,
+            lng: inc.longitude,
+          });
+        } else {
+          console.error(
+            'Chưa load được hàm openDispatchModal (kiểm tra đã nhúng lab-dispatch-modal.js chưa)'
+          );
+        }
+      };
+    }
     // 3. Nút AAR (Màu xanh)
     const btnAar = document.getElementById('btn-open-aar-modal');
     if (btnAar) {
@@ -7877,47 +7941,51 @@ async function setupExportButton(btnSelector, tableName, fileNamePrefix) {
               ? String(h.incident_id).substring(0, 8)
               : 'N/A';
 
-              const ACTION_UI = {
-                deployed: { label: 'Tham gia', cls: 'bg-success' },
-                replaced: { label: 'Được thay thế', cls: 'bg-secondary' },
-                declined: { label: 'Đã từ chối', cls: 'bg-danger' },
-              };
-              const aUI = ACTION_UI[h.action_type] || {
-                label: h.action_type || 'Khác',
-                cls: 'bg-light text-dark border',
-              };
-              const role = aUI.label;
-              const isParticipated =
-                (h.action_type === 'deployed' || h.action_type === 'replaced') &&
-                h.confirmed_at;
-  
-              let actionBadge;
-              if (h.action_type === 'declined') {
-                actionBadge = '<span class="badge bg-danger">❌ Từ chối</span>';
-              } else if (!isParticipated) {
-                actionBadge = '<span class="badge bg-warning text-dark">⏳ Chờ xác nhận</span>';
-              } else if (incidentStatus === 'active') {
-                actionBadge = '<span class="badge bg-success">🔥 Đang tham gia</span>';
-              } else {
-                actionBadge = '<span class="badge bg-primary">🏁 Hoàn thành</span>';
-              }
+            const ACTION_UI = {
+              deployed: { label: 'Tham gia', cls: 'bg-success' },
+              replaced: { label: 'Được thay thế', cls: 'bg-secondary' },
+              declined: { label: 'Đã từ chối', cls: 'bg-danger' },
+            };
+            const aUI = ACTION_UI[h.action_type] || {
+              label: h.action_type || 'Khác',
+              cls: 'bg-light text-dark border',
+            };
+            const role = aUI.label;
+            const isParticipated =
+              (h.action_type === 'deployed' || h.action_type === 'replaced') &&
+              h.confirmed_at;
+
+            let actionBadge;
+            if (h.action_type === 'declined') {
+              actionBadge = '<span class="badge bg-danger">❌ Từ chối</span>';
+            } else if (!isParticipated) {
+              actionBadge =
+                '<span class="badge bg-warning text-dark">⏳ Chờ xác nhận</span>';
+            } else if (incidentStatus === 'active') {
+              actionBadge =
+                '<span class="badge bg-success">🔥 Đang tham gia</span>';
+            } else {
+              actionBadge =
+                '<span class="badge bg-primary">🏁 Hoàn thành</span>';
+            }
             const notes = h.reason || '';
             const startDate = h.created_at
               ? new Date(h.created_at).toLocaleDateString('vi-VN')
               : 'N/A';
 
             const incidentStatus = (incInfo.status || '').toLowerCase();
- 
-
 
             if (h.action_type === 'declined') {
               actionBadge = '<span class="badge bg-danger">❌ Từ chối</span>';
             } else if (!isParticipated) {
-              actionBadge = '<span class="badge bg-warning text-dark">⏳ Chờ xác nhận</span>';
+              actionBadge =
+                '<span class="badge bg-warning text-dark">⏳ Chờ xác nhận</span>';
             } else if (incidentStatus === 'active') {
-              actionBadge = '<span class="badge bg-success">🔥 Đang tham gia</span>';
+              actionBadge =
+                '<span class="badge bg-success">🔥 Đang tham gia</span>';
             } else {
-              actionBadge = '<span class="badge bg-primary">🏁 Hoàn thành</span>';
+              actionBadge =
+                '<span class="badge bg-primary">🏁 Hoàn thành</span>';
             }
 
             expBody.insertAdjacentHTML(
@@ -9716,65 +9784,75 @@ async function setupExportButton(btnSelector, tableName, fileNamePrefix) {
           }
         }
 
-// E. HIỂN THỊ LÊN GIAO DIỆN REVIEW (bản gọn gàng, không tràn)
-$('#reviewTime').text(time);
-$('#reviewLocation').text(location);
-$('#reviewDetails').text(details);
-$('#reviewMemberCount').text(emailsToCheck.length);
+        // E. HIỂN THỊ LÊN GIAO DIỆN REVIEW (bản gọn gàng, không tràn)
+        $('#reviewTime').text(time);
+        $('#reviewLocation').text(location);
+        $('#reviewDetails').text(details);
+        $('#reviewMemberCount').text(emailsToCheck.length);
 
-const listContainer = $('#reviewMemberList');
-listContainer.empty();
-let busyCount = 0;
+        const listContainer = $('#reviewMemberList');
+        listContainer.empty();
+        let busyCount = 0;
 
-emailsToCheck.forEach((email) => {
-  let displayName = email;
-  let teamBadge = '';
-  let positionBadge = '';
-  let userUUID = null;
+        emailsToCheck.forEach((email) => {
+          let displayName = email;
+          let teamBadge = '';
+          let positionBadge = '';
+          let userUUID = null;
 
-  const m = dbUsers.find((u) => _normEm(u.email) === email);
-  if (m) {
-    displayName =
-      m.full_name && m.full_name.trim() !== ''
-        ? m.full_name
-        : m.username || email;
-    userUUID = m.id;
-    if (m.team && m.team !== 'No team') {
-      teamBadge = `<span class="badge bg-light text-dark border team-badge">${window.escapeHtml(m.team)}</span>`;
-    }
-    if (m.position && m.position.trim() !== '') {
-      positionBadge = `<span class="badge bg-info text-dark border position-badge">${window.escapeHtml(m.position)}</span>`;
-    }
-  }
+          const m = dbUsers.find((u) => _normEm(u.email) === email);
+          if (m) {
+            displayName =
+              m.full_name && m.full_name.trim() !== ''
+                ? m.full_name
+                : m.username || email;
+            userUUID = m.id;
+            if (m.team && m.team !== 'No team') {
+              teamBadge = `<span class="badge bg-light text-dark border team-badge">${window.escapeHtml(
+                m.team
+              )}</span>`;
+            }
+            if (m.position && m.position.trim() !== '') {
+              positionBadge = `<span class="badge bg-info text-dark border position-badge">${window.escapeHtml(
+                m.position
+              )}</span>`;
+            }
+          }
 
-  const onDutyRoster = busyList.find((b) => b.user_id === userUUID);
-  const busyIncident = userUUID ? deployedMap.get(userUUID) : null;
+          const onDutyRoster = busyList.find((b) => b.user_id === userUUID);
+          const busyIncident = userUUID ? deployedMap.get(userUUID) : null;
 
-  // Trạng thái: icon nhỏ bên phải hàng tên + dòng mô tả riêng bên dưới (nếu có)
-  let statusIcon = `<i class="bx bx-check-circle text-success flex-shrink-0" style="font-size:1.3rem;" title="Sẵn sàng"></i>`;
-  let statusLine = '';
-  let rowClass = '';
+          // Trạng thái: icon nhỏ bên phải hàng tên + dòng mô tả riêng bên dưới (nếu có)
+          let statusIcon = `<i class="bx bx-check-circle text-success flex-shrink-0" style="font-size:1.3rem;" title="Sẵn sàng"></i>`;
+          let statusLine = '';
+          let rowClass = '';
 
-  if (!m) {
-    statusIcon = `<i class="bx bx-user-x text-secondary flex-shrink-0" style="font-size:1.3rem;" title="Không có hồ sơ"></i>`;
-    statusLine = `<div class="review-status-line text-secondary"><i class='bx bx-user-x'></i> Không có hồ sơ trong hệ thống</div>`;
-    rowClass = 'bg-light';
-  } else if (busyIncident) {
-    busyCount++;
-    statusIcon = `<i class="bx bxs-error-alt text-danger flex-shrink-0" style="font-size:1.3rem;" title="Đang bận"></i>`;
-    statusLine = `<div class="review-status-line text-danger"><i class='bx bxs-error-alt'></i> Đang tham gia: ${window.escapeHtml(busyIncident)}</div>`;
-    rowClass = 'list-group-item-warning';
-  } else if (onDutyRoster) {
-    statusIcon = `<i class="bx bx-shield-quarter text-success flex-shrink-0" style="font-size:1.3rem;" title="Đang trực — Sẵn sàng"></i>`;
-    statusLine = `<div class="review-status-line text-success"><i class='bx bx-shield-quarter'></i> Đang trực ${window.escapeHtml(onDutyRoster.roster_schedules.team_name || '')} — Sẵn sàng</div>`;
-  }
+          if (!m) {
+            statusIcon = `<i class="bx bx-user-x text-secondary flex-shrink-0" style="font-size:1.3rem;" title="Không có hồ sơ"></i>`;
+            statusLine = `<div class="review-status-line text-secondary"><i class='bx bx-user-x'></i> Không có hồ sơ trong hệ thống</div>`;
+            rowClass = 'bg-light';
+          } else if (busyIncident) {
+            busyCount++;
+            statusIcon = `<i class="bx bxs-error-alt text-danger flex-shrink-0" style="font-size:1.3rem;" title="Đang bận"></i>`;
+            statusLine = `<div class="review-status-line text-danger"><i class='bx bxs-error-alt'></i> Đang tham gia: ${window.escapeHtml(
+              busyIncident
+            )}</div>`;
+            rowClass = 'list-group-item-warning';
+          } else if (onDutyRoster) {
+            statusIcon = `<i class="bx bx-shield-quarter text-success flex-shrink-0" style="font-size:1.3rem;" title="Đang trực — Sẵn sàng"></i>`;
+            statusLine = `<div class="review-status-line text-success"><i class='bx bx-shield-quarter'></i> Đang trực ${window.escapeHtml(
+              onDutyRoster.roster_schedules.team_name || ''
+            )} — Sẵn sàng</div>`;
+          }
 
-  let displayEmailHtml = '';
-  if (displayName.toLowerCase() !== email.toLowerCase()) {
-    displayEmailHtml = `<div class="review-member-email text-muted">${window.escapeHtml(email)}</div>`;
-  }
+          let displayEmailHtml = '';
+          if (displayName.toLowerCase() !== email.toLowerCase()) {
+            displayEmailHtml = `<div class="review-member-email text-muted">${window.escapeHtml(
+              email
+            )}</div>`;
+          }
 
-  listContainer.append(`
+          listContainer.append(`
     <li class="list-group-item review-member-item ${rowClass}">
       <div class="d-flex justify-content-between align-items-start gap-2">
         <div class="review-member-info">
@@ -9787,7 +9865,7 @@ emailsToCheck.forEach((email) => {
       ${statusLine}
     </li>
   `);
-});
+        });
 
         /* ===== HẾT KHỐI 5 — phần "// F. LƯU DỮ LIỆU..." giữ nguyên phía sau =====
    LƯU Ý: phần F dùng biến  members: emailsToCheck  -> giờ đây danh sách này
@@ -12879,9 +12957,10 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
       // ==============================================================
       if (myUserId) {
         const stdAction = actionType === 'confirm' ? 'deployed' : 'declined';
-        const stdReason = actionType === 'confirm'
-          ? 'Xác nhận tham gia (trong app)'
-          : 'Đã từ chối tham gia (trong app)';
+        const stdReason =
+          actionType === 'confirm'
+            ? 'Xác nhận tham gia (trong app)'
+            : 'Đã từ chối tham gia (trong app)';
 
         // Cập nhật bản ghi điều động có sẵn; nếu chưa có thì tạo mới
         const { data: updated, error: updErr } = await window.supabaseClient
@@ -12901,7 +12980,7 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
           });
         }
         if (updErr) console.warn('Lỗi lưu lịch sử thực chiến:', updErr);
-    }
+      }
       // ==============================================================
 
       showToast(
@@ -12965,19 +13044,19 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
     return key;
   };
 
-// === MAP - LEAFLET VERSION v2 (ĐÃ SỬA LỖI LỌC + NÂNG CẤP) ===
-// ----------------------------------------------------------------------------
-// Sửa: (1) marker thành viên không vẽ do lệch tên cột lat/lon vs latitude/longitude
-//      (2) Select2 nuốt sự kiện change -> lọc phường không chạy
-//      (3) checkbox "Thành viên theo Phường" không có listener
-//      (4) listener bị đăng ký chồng mỗi lần mở trang
-//      (5) setupMapPlugins định nghĩa trùng 2 lần / plugin add lặp
-//      (6) escape HTML dữ liệu động trong popup/tooltip
-// Nâng cấp: chú giải màu (legend), bộ đếm kết quả lọc, tự zoom theo kết quả,
-//      debounce ô tìm kiếm, nút "Xóa lọc".
-// ----------------------------------------------------------------------------
-// CÁCH DÙNG: thay TRỌN khối "=== MAP - LEAFLET VERSION ===" cũ bằng file này.
-// ============================================================
+  // === MAP - LEAFLET VERSION v2 (ĐÃ SỬA LỖI LỌC + NÂNG CẤP) ===
+  // ----------------------------------------------------------------------------
+  // Sửa: (1) marker thành viên không vẽ do lệch tên cột lat/lon vs latitude/longitude
+  //      (2) Select2 nuốt sự kiện change -> lọc phường không chạy
+  //      (3) checkbox "Thành viên theo Phường" không có listener
+  //      (4) listener bị đăng ký chồng mỗi lần mở trang
+  //      (5) setupMapPlugins định nghĩa trùng 2 lần / plugin add lặp
+  //      (6) escape HTML dữ liệu động trong popup/tooltip
+  // Nâng cấp: chú giải màu (legend), bộ đếm kết quả lọc, tự zoom theo kết quả,
+  //      debounce ô tìm kiếm, nút "Xóa lọc".
+  // ----------------------------------------------------------------------------
+  // CÁCH DÙNG: thay TRỌN khối "=== MAP - LEAFLET VERSION ===" cũ bằng file này.
+  // ============================================================
 
   // ============================================================
   // 1. BIẾN TOÀN CỤC & CSS HIỆU ỨNG
@@ -12997,7 +13076,7 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
   let markersLayerGroupInstance;
   let markersLayerGroupMap;
   let mapPluginsReady = false; // chống add plugin lặp
-  let mapEventsBound = false;  // chống đăng ký listener lặp
+  let mapEventsBound = false; // chống đăng ký listener lặp
 
   const pulseCSS = `
     .incident-marker-active {
@@ -13057,7 +13136,13 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
   // ============================================================
   function getColor(d) {
     if (d === 0) return '#fae1e1';
-    return d > 5 ? '#800026' : d > 3 ? '#BD0026' : d > 1 ? '#E31A1C' : '#FC4E2A';
+    return d > 5
+      ? '#800026'
+      : d > 3
+      ? '#BD0026'
+      : d > 1
+      ? '#E31A1C'
+      : '#FC4E2A';
   }
 
   function style(feature) {
@@ -13096,7 +13181,11 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
   function onEachFeatureChoropleth(feature, layer) {
     const props = feature.properties;
     const name =
-      props.name || props.tenXa || props.ma_xa || props.MA_XA || 'Chưa xác định';
+      props.name ||
+      props.tenXa ||
+      props.ma_xa ||
+      props.MA_XA ||
+      'Chưa xác định';
     const count = props.count || 0;
 
     layer.bindTooltip(`<b>${escMap(name)}</b>`, {
@@ -13231,14 +13320,22 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
           const marker = L.marker([lat, lon], { icon: customIcon });
           marker.bindPopup(`
             <div style="min-width: 250px; font-family: 'Inter', sans-serif;">
-              <h6 style="color:${isActive ? '#dc2626' : '#4b5563'}; margin-bottom:8px; font-weight:bold; border-bottom:1px solid #e5e7eb; padding-bottom:5px;">
+              <h6 style="color:${
+                isActive ? '#dc2626' : '#4b5563'
+              }; margin-bottom:8px; font-weight:bold; border-bottom:1px solid #e5e7eb; padding-bottom:5px;">
                 ${isActive ? '🚨 ĐANG KÍCH HOẠT' : '✅ ĐÃ KẾT THÚC'}
               </h6>
-              <b style="color:#1f2937;">Sự kiện:</b> ${escMap(inc.event_name || 'Không rõ')}<br/>
-              <b style="color:#1f2937;">Địa điểm:</b> ${escMap(inc.location_text || 'N/A')}<br/>
+              <b style="color:#1f2937;">Sự kiện:</b> ${escMap(
+                inc.event_name || 'Không rõ'
+              )}<br/>
+              <b style="color:#1f2937;">Địa điểm:</b> ${escMap(
+                inc.location_text || 'N/A'
+              )}<br/>
               <b style="color:#1f2937;">Thời gian:</b> ${
                 inc.activation_time
-                  ? new Date(inc.activation_time).toLocaleString('vi-VN', { hour12: false })
+                  ? new Date(inc.activation_time).toLocaleString('vi-VN', {
+                      hour12: false,
+                    })
                   : 'N/A'
               }<br/>
               <hr style="margin:10px 0; border-top:1px dashed #cbd5e1;" />
@@ -13271,7 +13368,9 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
       const labels = ['0', '1', '2–3', '4–5', '> 5'];
       div.innerHTML = '<b>Nhân sự RRT / Phường</b><br>';
       grades.forEach((g, i) => {
-        div.innerHTML += `<i style="background:${getColor(g)}"></i> ${labels[i]}<br>`;
+        div.innerHTML += `<i style="background:${getColor(g)}"></i> ${
+          labels[i]
+        }<br>`;
       });
       div.innerHTML +=
         `<hr style="margin:4px 0;">` +
@@ -13296,7 +13395,9 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
     const box = document.getElementById('map-stats-box');
     if (box) {
       const activeCount = incidentData.filter((i) =>
-        ['active', 'pending', 'monitoring'].includes((i.status || '').toLowerCase())
+        ['active', 'pending', 'monitoring'].includes(
+          (i.status || '').toLowerCase()
+        )
       ).length;
       box.innerHTML =
         `👥 Hiển thị: <b>${filteredData.length}</b>/${companyData.length} thành viên` +
@@ -13317,7 +13418,8 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
     if (Array.isArray(filteredData)) {
       filteredData.forEach((member) => {
         const maXaKey = String(member.ma_xa || member.maXa || '');
-        if (maXaKey) countsByMaXa.set(maXaKey, (countsByMaXa.get(maXaKey) || 0) + 1);
+        if (maXaKey)
+          countsByMaXa.set(maXaKey, (countsByMaXa.get(maXaKey) || 0) + 1);
       });
     }
 
@@ -13384,7 +13486,8 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
       return json;
     } catch (err) {
       console.error('Lỗi xử lý file bản đồ:', err);
-      if (typeof showToast === 'function') showToast('Lỗi tải bản đồ.', 'error');
+      if (typeof showToast === 'function')
+        showToast('Lỗi tải bản đồ.', 'error');
       return null;
     }
   };
@@ -13398,7 +13501,9 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
     if (!searchEl || !wardEl) return;
 
     const searchTerm = searchEl.value.toLowerCase().trim();
-    const selectedMaXas = Array.from(wardEl.selectedOptions).map((o) => o.value);
+    const selectedMaXas = Array.from(wardEl.selectedOptions).map(
+      (o) => o.value
+    );
 
     filteredData = companyData.filter((member) => {
       const matchesSearch =
@@ -13434,7 +13539,10 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
     ) {
       // Nhiều kết quả -> khung nhìn ôm trọn các marker kết quả
       const pts = filteredData
-        .map((m) => [parseFloat(m.lat ?? m.latitude), parseFloat(m.lon ?? m.longitude)])
+        .map((m) => [
+          parseFloat(m.lat ?? m.latitude),
+          parseFloat(m.lon ?? m.longitude),
+        ])
         .filter((p) => !isNaN(p[0]) && !isNaN(p[1]));
       if (pts.length > 0) map.fitBounds(L.latLngBounds(pts).pad(0.2));
       currentHighlightedMarker = null;
@@ -13451,7 +13559,11 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
     if (!selectElement) return;
 
     // Hủy Select2 cũ trước khi build lại (tránh nhân bản UI)
-    if (window.$ && $.fn.select2 && $(selectElement).hasClass('select2-hidden-accessible')) {
+    if (
+      window.$ &&
+      $.fn.select2 &&
+      $(selectElement).hasClass('select2-hidden-accessible')
+    ) {
       $(selectElement).select2('destroy');
     }
     selectElement.innerHTML = '';
@@ -13496,7 +13608,8 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
 
     // ✅ FIX GỐC: Select2 bắn sự kiện qua jQuery, addEventListener KHÔNG nghe được
     if (window.$ && $.fn) {
-      $(document).off('change.mapWard', '#wardFilter')
+      $(document)
+        .off('change.mapWard', '#wardFilter')
         .on('change.mapWard', '#wardFilter', applyFilters);
     } else {
       const wardEl = document.getElementById('wardFilter');
@@ -13595,6 +13708,9 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
       renderMap();
       initWardFilter();
       bindMapEvents();
+      // trong renderMapPage(), sau khi render xong:
+      const b = document.getElementById('btn-map-find-lab');
+      if (b) b.onclick = () => window.openDispatchModal();  // mở trống, admin tự nhập tọa độ
     } catch (error) {
       console.error('Lỗi renderMapPage:', error);
       if (typeof showToast === 'function')
@@ -13602,6 +13718,7 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
     } finally {
       if (typeof hideLoadingSpinner === 'function') hideLoadingSpinner();
     }
+
   }
 
   // ====================================================================
