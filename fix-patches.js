@@ -696,7 +696,17 @@
         .replace(/'/g, '&#039;');
     };
   }
-  // PATCH 17: Fix cảnh báo "Blocked aria-hidden" của Bootstrap modal
+// PATCH 14: Đảm bảo tab Bản đồ luôn hiển thị
+document.addEventListener('DOMContentLoaded', function () {
+  setTimeout(function () {
+    const menuMap = document.getElementById('menu-map');
+    if (menuMap) {
+      menuMap.style.display = '';
+      menuMap.style.visibility = 'visible';
+    }
+  }, 500);
+});
+// PATCH 17: Fix cảnh báo "Blocked aria-hidden" của Bootstrap modal
 // Nguyên nhân: nút trong modal còn giữ focus khi modal đóng
 document.addEventListener('hide.bs.modal', function (event) {
   // Nếu phần tử đang focus nằm trong modal sắp đóng → bỏ focus trước
@@ -704,7 +714,17 @@ document.addEventListener('hide.bs.modal', function (event) {
     document.activeElement.blur();
   }
 });
-
+// PATCH 19: Dọn backdrop kẹt cho MỌI modal động trong app
+document.addEventListener('hidden.bs.modal', function () {
+  setTimeout(() => {
+    if (!document.querySelector('.modal.show')) {
+      document.querySelectorAll('.modal-backdrop').forEach((b) => b.remove());
+      document.body.classList.remove('modal-open');
+      document.body.style.overflow = '';
+      document.body.style.paddingRight = '';
+    }
+  }, 150);
+});
   // Shortcut nội bộ
   function _esc(s) {
     return window.escapeHtml(s);
