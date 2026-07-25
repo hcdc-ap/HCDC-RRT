@@ -1559,7 +1559,7 @@ body.dark #content nav .profile-menu li a {
 }
 #content main .table-data .order {
   flex-grow: 1;
-  flex-basis: 0; /* Ép giãn rộng tối đa thay vì bóp theo nội dung */
+  flex-basis: max-content; /* Cho phép co giãn linh hoạt */
   min-width: 0;
 }
 
