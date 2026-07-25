@@ -1,5 +1,5 @@
 // ============================================================================
-// MODULE: QUẢN LÝ PHÒNG XÉT NGHIỆM (Phòng Xét nghiệm) — Giai đoạn 1, phần giao diện
+// MODULE: QUẢN LÝ PHÒNG XÉT NGHIỆM (PXN) — Giai đoạn 1, phần giao diện
 // Hệ thống RRT-HCDC
 // ----------------------------------------------------------------------------
 // CÁCH NHÚNG:
@@ -7,7 +7,7 @@
 // (1) HTML — thêm mục menu vào sidebar (cạnh các mục Bản đồ, Thành viên...):
 //     <li id="menu-lab-admin">
 //       <a href="#" data-target="page-lab-admin">
-//         <i class='bx bxs-flask bx-sm'></i><span class="text">Quản lý Phòng Xét nghiệm</span>
+//         <i class='bx bxs-flask bx-sm'></i><span class="text">Quản lý PXN</span>
 //       </a>
 //     </li>
 //     (icon bxs-flask cần Boxicons — app bạn đã dùng bx rồi nên có sẵn)
@@ -30,10 +30,10 @@
 (function () {
   'use strict';
 
-  let _labMap = null;          // instance Leaflet trong modal thêm/sửa Phòng Xét nghiệm
+  let _labMap = null;          // instance Leaflet trong modal thêm/sửa PXN
   let _labMarker = null;       // marker chọn tọa độ
-  let _editingLabId = null;    // id Phòng Xét nghiệm đang sửa (null = thêm mới)
-  let _testTypesCache = [];    // cache Danh mục loại Xét nghiệm
+  let _editingLabId = null;    // id PXN đang sửa (null = thêm mới)
+  let _testTypesCache = [];    // cache danh mục loại XN
 
   const esc = (s) =>
     window.escapeHtml
@@ -63,7 +63,7 @@
   }
 
   // ==========================================================================
-  // ENTRY POINT — gọi khi mở trang Quản lý Phòng Xét nghiệm
+  // ENTRY POINT — gọi khi mở trang Quản lý PXN
   // ==========================================================================
   window.renderLabAdminPage = async function () {
     const container = document.getElementById('lab-admin-content');
@@ -107,7 +107,7 @@
   }
 
   // ==========================================================================
-  // DANH SÁCH Phòng Xét nghiệm
+  // DANH SÁCH PXN
   // ==========================================================================
   async function renderLabList() {
     const container = document.getElementById('lab-admin-content');
@@ -115,7 +115,7 @@
       '<div class="text-center p-4"><span class="spinner-border"></span> Đang tải danh sách...</div>';
 
     try {
-      // Lấy Phòng Xét nghiệm kèm số năng lực (loại XN) mỗi Phòng Xét nghiệm đảm nhận
+      // Lấy PXN kèm số năng lực (loại XN) mỗi PXN đảm nhận
       const { data: labs, error } = await window.supabaseClient
         .from('laboratories')
         .select('*, lab_capabilities(count)')
@@ -170,9 +170,12 @@
             <h5 class="mb-0"><i class='bx bxs-flask'></i> Danh mục Phòng xét nghiệm</h5>
             <small class="text-muted">Quản lý Phòng Xét nghiệm, tuyến, cấp an toàn sinh học và năng lực xét nghiệm</small>
           </div>
-          <div class="d-flex gap-2">
+          <div class="d-flex gap-2 flex-wrap">
+            <button class="btn btn-outline-info" onclick="window._openDispatchHistorySafe()">
+              <i class='bx bx-history'></i> Lịch sử điều mẫu
+            </button>
             <button class="btn btn-outline-secondary" onclick="window.openTestTypeModal()">
-              <i class='bx bx-list-ul'></i> Danh mục loại Xét nghiệm
+              <i class='bx bx-list-ul'></i> Danh mục loại XN
             </button>
             <button class="btn btn-primary" onclick="window.openLabModal()">
               <i class='bx bx-plus'></i> Thêm Phòng Xét nghiệm
@@ -201,7 +204,7 @@
   }
 
   // ==========================================================================
-  // MODAL THÊM / SỬA Phòng Xét nghiệm (có bản đồ chọn tọa độ)
+  // MODAL THÊM / SỬA PXN (có bản đồ chọn tọa độ)
   // ==========================================================================
   window.openLabModal = async function (labId) {
     _editingLabId = labId || null;
@@ -388,7 +391,7 @@
   };
 
   // ==========================================================================
-  // LƯU Phòng Xét nghiệm
+  // LƯU PXN
   // ==========================================================================
   window.saveLab = async function () {
     const name = document.getElementById('lab-name').value.trim();
@@ -435,19 +438,11 @@
   };
 
   // ==========================================================================
-  // XÓA Phòng Xét nghiệm
+  // XÓA PXN
   // ==========================================================================
   window.deleteLab = async function (labId, labName) {
-    const ok = await window.showConfirm({
-      title: 'Xóa phòng xét nghiệm',
-      message: `Xóa Phòng Xét nghiệm "${labName}"?\n\nToàn bộ năng lực xét nghiệm đã gán cũng sẽ bị xóa. ` +
-               `Nhật ký điều mẫu cũ được giữ lại.`,
-      confirmText: 'Xóa',
-      cancelText: 'Giữ lại',
-      variant: 'danger',
-      icon: 'bx-trash',
-    });
-    if (!ok) return;
+    if (!confirm(`Xóa Phòng Xét nghiệm "${labName}"?\n\nToàn bộ năng lực xét nghiệm đã gán cũng sẽ bị xóa. Nhật ký điều mẫu cũ được giữ lại.`))
+      return;
     try {
       const { error } = await window.supabaseClient
         .from('laboratories').delete().eq('id', labId);
@@ -460,7 +455,7 @@
   };
 
   // ==========================================================================
-  // MODAL QUẢN LÝ NĂNG LỰC (loại XN + công suất + thời gian trả KQ) CHO 1 Phòng Xét nghiệm
+  // MODAL QUẢN LÝ NĂNG LỰC (loại XN + công suất + thời gian trả KQ) CHO 1 PXN
   // ==========================================================================
   window.openCapabilityModal = async function (labId) {
     let lab, caps;
@@ -478,11 +473,11 @@
       return;
     }
 
-    // Loại XN chưa được gán cho Phòng Xét nghiệm này (để thêm mới)
+    // Loại XN chưa được gán cho PXN này (để thêm mới)
     const usedIds = new Set(caps.map((c) => c.test_type_id));
     const available = _testTypesCache.filter((t) => !usedIds.has(t.id));
 
-    // Cảnh báo nếu năng lực đòi BSL cao hơn cấp của Phòng Xét nghiệm (dữ liệu mâu thuẫn)
+    // Cảnh báo nếu năng lực đòi BSL cao hơn cấp của PXN (dữ liệu mâu thuẫn)
     const capRows = caps.map((c) => {
       const reqBsl = c.test_types?.required_bsl ?? '?';
       const mismatch = c.test_types && c.test_types.required_bsl > lab.bsl_level;
@@ -566,17 +561,11 @@
 
     // Cảnh báo (không chặn) nếu gán XN đòi BSL cao hơn cấp Phòng Xét nghiệm — dữ liệu sẽ mâu thuẫn
     if (reqBsl > labBsl) {
-      const ok = await window.showConfirm({
-        title: 'Cảnh báo an toàn sinh học',
-        message: `Loại XN này yêu cầu BSL-${reqBsl}, nhưng Phòng Xét nghiệm chỉ đạt BSL-${labBsl}.\n\n` +
-                 `Nếu vẫn gán, khi điều mẫu hệ thống sẽ TỰ ĐỘNG LOẠI Phòng Xét nghiệm này khỏi gợi ý ` +
-                 `(vì không đủ cấp an toàn) — năng lực gán vào sẽ vô tác dụng.\n\n` +
-                 `Bạn có chắc muốn tiếp tục?`,
-        confirmText: 'Vẫn gán',
-        cancelText: 'Kiểm tra lại',
-        variant: 'danger',
-        icon: 'bx-error',
-      });
+      const ok = confirm(
+        `Cảnh báo an toàn sinh học:\n\nLoại XN này yêu cầu BSL-${reqBsl}, nhưng Phòng Xét nghiệm chỉ đạt BSL-${labBsl}.\n\n` +
+        `Nếu vẫn gán, khi điều mẫu hệ thống sẽ TỰ ĐỘNG LOẠI Phòng Xét nghiệm này khỏi gợi ý (vì không đủ cấp an toàn) — năng lực gán vào sẽ vô tác dụng.\n\n` +
+        `Bạn có chắc muốn tiếp tục? (Nên kiểm tra lại cấp BSL của Phòng Xét nghiệm)`
+      );
       if (!ok) return;
     }
 
@@ -597,12 +586,7 @@
   };
 
   window.removeCapability = async function (capId, labId) {
-    const ok = await window.showConfirm({
-      title: 'Xóa năng lực',
-      message: 'Xóa loại xét nghiệm này khỏi Phòng Xét nghiệm?',
-      confirmText: 'Xóa', cancelText: 'Hủy', variant: 'danger', icon: 'bx-trash',
-    });
-    if (!ok) return;
+    if (!confirm('Xóa năng lực này khỏi Phòng Xét nghiệm?')) return;
     try {
       const { error } = await window.supabaseClient.from('lab_capabilities').delete().eq('id', capId);
       if (error) throw error;
@@ -639,17 +623,17 @@
             <div class="modal-body">
               <div class="alert alert-warning py-2">
                 <small><i class='bx bx-info-circle'></i> Cấp BSL yêu cầu quyết định việc chặn điều mẫu.
-                Cần cán bộ an toàn sinh học của HCDC rà soát.</small>
+                Cần cán bộ an toàn sinh học của HCDC rà soát trước khi dùng thật.</small>
               </div>
               <table class="table table-sm align-middle">
-                <thead class="table-light"><tr><th>Tên loại Xét nghiệm</th><th>Nhóm</th><th class="text-center">BSL yêu cầu</th></tr></thead>
+                <thead class="table-light"><tr><th>Tên loại XN</th><th>Nhóm</th><th class="text-center">BSL yêu cầu</th></tr></thead>
                 <tbody>${rows || '<tr><td colspan="3" class="text-center text-muted">Chưa có loại XN.</td></tr>'}</tbody>
               </table>
               <hr>
               <h6 class="mb-2"><i class='bx bx-plus-circle'></i> Thêm loại xét nghiệm</h6>
               <div class="row g-2 align-items-end">
                 <div class="col-md-5">
-                  <label class="form-label">Tên loại Xét nghiệm</label>
+                  <label class="form-label">Tên loại XN</label>
                   <input id="tt-name" class="form-control" placeholder="VD: PCR Sốt rét">
                 </div>
                 <div class="col-md-3">
@@ -680,7 +664,7 @@
   window.addTestType = async function () {
     const name = document.getElementById('tt-name').value.trim();
     if (!name) {
-      if (window.showToast) window.showToast('Nhập Tên loại Xét nghiệm', 'warning');
+      if (window.showToast) window.showToast('Nhập tên loại XN', 'warning');
       return;
     }
     try {
@@ -698,9 +682,20 @@
     }
   };
 
+  // Mở lịch sử điều mẫu (không tham số = xem tất cả sự cố).
+  // Guard: hàm showDispatchHistory nằm ở lab-dispatch-actions.js.
+  window._openDispatchHistorySafe = function () {
+    if (typeof window.showDispatchHistory === 'function') {
+      window.showDispatchHistory();  // không tham số → xem tất cả
+    } else {
+      if (window.showToast)
+        window.showToast('Chưa nạp module điều phối (lab-dispatch-actions.js).', 'warning');
+      console.warn('[lab-admin] showDispatchHistory chưa tồn tại — kiểm tra đã nhúng lab-dispatch-actions.js chưa.');
+    }
+  };
+
   console.log('[lab-admin.js] ✅ Module Quản lý Phòng Xét nghiệm đã sẵn sàng.');
 })();
-
 // ============================================================
 // PATCH 18: showConfirm() — modal xác nhận thay cho confirm() gốc
 // Trả về Promise<boolean>: true nếu bấm đồng ý, false nếu hủy.
@@ -780,3 +775,19 @@ window.showConfirm = function (opts = {}) {
     modal.show();
   });
 };
+/* ============================================================================
+   LAB_ADMIN_PAGE_HTML — DÁN KHỐI NÀY VÀO index.html (vùng chứa các trang)
+   ----------------------------------------------------------------------------
+   Đặt cạnh các <div id="page-map">, <div id="page-members">... của bạn.
+   Class ẩn/hiện trang (d-none / .page-section) tùy theo cơ chế chuyển trang
+   của app — chỉnh cho khớp. Ví dụ dưới dùng class "page-section" + "d-none".
+
+<div id="page-lab-admin" class="page-section d-none">
+  <div class="container-fluid py-3">
+    <div id="lab-admin-content">
+      <!-- renderLabAdminPage() sẽ đổ nội dung vào đây -->
+    </div>
+  </div>
+</div>
+
+============================================================================ */
