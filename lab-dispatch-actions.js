@@ -24,19 +24,9 @@
   'use strict';
 
   const esc = (s) =>
-    window.escapeHtml
-      ? window.escapeHtml(s)
-      : String(s ?? '').replace(
-          /[&<>"']/g,
-          (c) =>
-            ({
-              '&': '&amp;',
-              '<': '&lt;',
-              '>': '&gt;',
-              '"': '&quot;',
-              "'": '&#039;',
-            }[c])
-        );
+    window.escapeHtml ? window.escapeHtml(s)
+      : String(s ?? '').replace(/[&<>"']/g, (c) => ({
+          '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;' }[c]));
 
   let _role = { isAdmin: false, isLeader: false, userId: null, checked: false };
 
@@ -73,15 +63,14 @@
     const role = await resolveRole();
 
     // Không đủ chỗ → không cho điều thẳng (chỉ cảnh báo); vẫn cho đề xuất để admin cân nhắc
-    const enoughNote = lab.is_enough
-      ? ''
-      : `<div class="text-danger" style="font-size:.7rem;">Vượt công suất còn lại</div>`;
+    const enoughNote = lab.is_enough ? '' :
+      `<div class="text-danger" style="font-size:.7rem;">Vượt công suất còn lại</div>`;
 
     if (role.isAdmin) {
       slot.innerHTML = `
         <button class="btn btn-success btn-sm w-100"
           onclick='window.confirmDispatch(${_labPayloadAttr(lab, S)})'>
-          <i class='bx bx-check-double'></i> Chốt điều mẫu
+          <i class='bx bx-check-double'></i> Xác nhận điều mẫu
         </button>${enoughNote}`;
     } else if (role.isLeader) {
       slot.innerHTML = `
@@ -127,17 +116,15 @@
       // 1. Ghi log đề xuất
       const { data: logRow, error } = await window.supabaseClient
         .from('lab_dispatch_log')
-        .insert([
-          {
-            lab_id: p.labId,
-            incident_id: p.incidentId || null,
-            test_type_id: p.testTypeId,
-            sample_count: p.sampleCount,
-            status: 'suggested',
-            dispatched_by: role.userId,
-            note: note || null,
-          },
-        ])
+        .insert([{
+          lab_id: p.labId,
+          incident_id: p.incidentId || null,
+          test_type_id: p.testTypeId,
+          sample_count: p.sampleCount,
+          status: 'suggested',
+          dispatched_by: role.userId,
+          note: note || null,
+        }])
         .select()
         .single();
       if (error) throw error;
@@ -145,21 +132,17 @@
       // 2. Gửi thông báo cho admin qua hệ thống notifications sẵn có
       await _notifyAdmins(
         `Đề xuất điều ${p.sampleCount} mẫu tới ${p.labName}` +
-          (p.incidentId ? ' (có gắn sự cố)' : ''),
+        (p.incidentId ? ' (có gắn sự kiện)' : ''),
         p.incidentId
       );
 
-      if (window.showToast)
-        window.showToast('✅ Đã gửi đề xuất lên điều phối', 'success');
+      if (window.showToast) window.showToast('✅ Đã gửi đề xuất lên điều phối', 'success');
       // Cập nhật lại nút thành trạng thái đã gửi
       const slot = document.getElementById('disp-action-' + p.labId);
-      if (slot)
-        slot.innerHTML =
-          '<span class="badge bg-warning text-dark"><i class="bx bx-time"></i> Đã đề xuất</span>';
+      if (slot) slot.innerHTML = '<span class="badge bg-warning text-dark"><i class="bx bx-time"></i> Đã đề xuất</span>';
     } catch (e) {
       console.error('[suggestDispatch]', e);
-      if (window.showToast)
-        window.showToast('Lỗi đề xuất: ' + e.message, 'error');
+      if (window.showToast) window.showToast('Lỗi đề xuất: ' + e.message, 'error');
     }
   };
 
@@ -167,9 +150,7 @@
   async function _notifyAdmins(message, incidentId) {
     try {
       const { data: admins } = await window.supabaseClient
-        .from('profiles')
-        .select('email')
-        .eq('role', 'admin');
+        .from('profiles').select('email').eq('role', 'admin');
       if (!admins || admins.length === 0) return;
 
       const rows = admins.map((a) => ({
@@ -186,6 +167,66 @@
     }
   }
 
+  // Báo cho THÀNH VIÊN đang tham gia sự cố khi đã CHỐT điều mẫu (kèm km + phút).
+  // Nguồn thành viên: incidents.members (chuỗi email nối bằng ';').
+  async function _notifyIncidentMembers(p) {
+    if (!p.incidentId) {
+      // Điều mẫu không gắn sự cố (mở từ trang bản đồ) → không có thành viên để báo
+      return;
+    }
+    try {
+      // 1. Lấy danh sách email thành viên + tên loại XN để ghi nội dung
+      const [incRes, ttRes] = await Promise.all([
+        window.supabaseClient
+          .from('incidents')
+          .select('event_name, members')
+          .eq('id', p.incidentId)
+          .single(),
+        window.supabaseClient
+          .from('test_types')
+          .select('name')
+          .eq('id', p.testTypeId)
+          .single(),
+      ]);
+
+      const inc = incRes.data;
+      if (!inc) return;
+
+      const emails = String(inc.members || '')
+        .split(';')
+        .map((e) => e.trim().toLowerCase())
+        .filter(Boolean);
+
+      if (emails.length === 0) {
+        console.info('[notifyIncidentMembers] Sự kiện chưa có thành viên nào để báo.');
+        return;
+      }
+
+      const testName = ttRes.data?.name || 'xét nghiệm';
+
+      // 2. Soạn nội dung có km + phút (đúng yêu cầu)
+      const message =
+        `Đã điều ${p.sampleCount} mẫu (${testName}) tới ${p.labName} — ` +
+        `${p.km} km, khoảng ${p.minutes} phút di chuyển.`;
+
+      // 3. Ghi vào notifications cho từng thành viên → trigger tự bắn Telegram/email
+      const rows = emails.map((email) => ({
+        user_email: email,
+        message: message,
+        notification_type: 'thong_tin',
+        incident_id: p.incidentId,
+        is_read: false,
+      }));
+      const { error } = await window.supabaseClient.from('notifications').insert(rows);
+      if (error) throw error;
+
+      console.info(`[notifyIncidentMembers] Đã báo ${emails.length} thành viên sự kiện.`);
+    } catch (e) {
+      console.warn('[notifyIncidentMembers] không gửi được thông báo:', e.message);
+      // Không chặn luồng chính — điều mẫu đã thành công dù notify lỗi
+    }
+  }
+
   // --------------------------------------------------------------------------
   // ADMIN: CHỐT ĐIỀU MẪU (ghi dispatched → trừ công suất)
   // --------------------------------------------------------------------------
@@ -193,51 +234,43 @@
     if (typeof p === 'string') p = JSON.parse(p);
     const role = await resolveRole();
     if (!role.isAdmin) {
-      if (window.showToast)
-        window.showToast('Chỉ điều phối viên mới chốt được', 'warning');
+      if (window.showToast) window.showToast('Chỉ điều phối viên mới chốt được', 'warning');
       return;
     }
 
     const ok = await window.showConfirm({
-      title: 'Chốt điều mẫu',
-      message:
-        `Xác nhận điều ${p.sampleCount} mẫu tới:\n"${p.labName}"\n(${p.km} km · ${p.minutes} phút)\n\n` +
-        `Công suất còn lại hôm nay của Phòng Xét nghiệm sẽ được trừ tương ứng.`,
-      confirmText: 'Chốt điều',
-      cancelText: 'Xem lại',
-      variant: 'primary',
-      icon: 'bx-check-double',
+      title: 'Xác nhận điều mẫu',
+      message: `Xác nhận điều ${p.sampleCount} mẫu tới:\n"${p.labName}"\n(${p.km} km · ${p.minutes} phút)\n\n` +
+               `Công suất còn lại hôm nay của Phòng Xét nghiệm sẽ được trừ tương ứng.`,
+      confirmText: 'Xác nhận', cancelText: 'Xem lại', variant: 'primary', icon: 'bx-check-double',
     });
     if (!ok) return;
 
     try {
       const { error } = await window.supabaseClient
         .from('lab_dispatch_log')
-        .insert([
-          {
-            lab_id: p.labId,
-            incident_id: p.incidentId || null,
-            test_type_id: p.testTypeId,
-            sample_count: p.sampleCount,
-            status: 'dispatched',
-            dispatched_by: role.userId,
-          },
-        ]);
+        .insert([{
+          lab_id: p.labId,
+          incident_id: p.incidentId || null,
+          test_type_id: p.testTypeId,
+          sample_count: p.sampleCount,
+          status: 'dispatched',
+          dispatched_by: role.userId,
+        }]);
       if (error) throw error;
 
-      if (window.showToast)
-        window.showToast(
-          `✅ Đã điều ${p.sampleCount} mẫu tới ${p.labName}`,
-          'success'
-        );
+      if (window.showToast) window.showToast(`✅ Đã điều ${p.sampleCount} mẫu tới ${p.labName}`, 'success');
+
+      // Gửi thông báo cho THÀNH VIÊN đang tham gia sự cố (kèm km + phút).
+      // → ghi vào bảng notifications → trigger tự bắn Telegram/email.
+      await _notifyIncidentMembers(p);
 
       // Hiện lịch sử điều mẫu (có nút hủy) + chạy lại tìm kiếm để cập nhật công suất
       await window.showDispatchHistory(p.incidentId, p.testTypeId);
       if (typeof window._runDispatch === 'function') window._runDispatch();
     } catch (e) {
       console.error('[confirmDispatch]', e);
-      if (window.showToast)
-        window.showToast('Lỗi chốt điều: ' + e.message, 'error');
+      if (window.showToast) window.showToast('Lỗi xác nhận điều mẫu: ' + e.message, 'error');
     }
   };
 
@@ -258,10 +291,7 @@
       if (error) throw error;
 
       if (window.showToast)
-        window.showToast(
-          action === 'approve' ? 'Đã duyệt đề xuất' : 'Đã từ chối đề xuất',
-          'success'
-        );
+        window.showToast(action === 'approve' ? 'Đã duyệt đề xuất' : 'Đã từ chối đề xuất', 'success');
 
       // reload panel đề xuất + kết quả
       const S = window._getDispatchState?.();
@@ -279,57 +309,37 @@
     const role = await resolveRole();
     const host = document.getElementById('disp-pending');
     if (!host) return;
-    if (!role.isAdmin) {
-      host.innerHTML = '';
-      return;
-    }
+    if (!role.isAdmin) { host.innerHTML = ''; return; }
 
     try {
       let q = window.supabaseClient
         .from('lab_dispatch_log')
-        .select(
-          '*, laboratories(name), test_types(name), profiles:dispatched_by(full_name)'
-        )
+        .select('*, laboratories(name), test_types(name), profiles:dispatched_by(full_name)')
         .eq('status', 'suggested')
         .order('created_at', { ascending: false });
       if (incidentId) q = q.eq('incident_id', incidentId);
       const { data, error } = await q;
       if (error) throw error;
 
-      if (!data || data.length === 0) {
-        host.innerHTML = '';
-        return;
-      }
+      if (!data || data.length === 0) { host.innerHTML = ''; return; }
 
-      const rows = data
-        .map(
-          (s) => `
+      const rows = data.map((s) => `
         <div class="d-flex justify-content-between align-items-center border rounded p-2 mb-1 bg-warning-subtle">
           <div>
-            <small><b>${esc(s.laboratories?.name || '?')}</b> · ${
-            s.sample_count
-          } mẫu ·
+            <small><b>${esc(s.laboratories?.name || '?')}</b> · ${s.sample_count} mẫu ·
             ${esc(s.test_types?.name || '')}</small><br>
-            <small class="text-muted">Đề xuất bởi ${esc(
-              s.profiles?.full_name || '—'
-            )}
+            <small class="text-muted">Đề xuất bởi ${esc(s.profiles?.full_name || '—')}
             ${s.note ? '· "' + esc(s.note) + '"' : ''}</small>
           </div>
           <div class="btn-group btn-group-sm flex-shrink-0">
-            <button class="btn btn-success" onclick="window.approveSuggestion('${
-              s.id
-            }','approve')">
+            <button class="btn btn-success" onclick="window.approveSuggestion('${s.id}','approve')">
               <i class='bx bx-check'></i> Duyệt
             </button>
-            <button class="btn btn-outline-danger" onclick="window.approveSuggestion('${
-              s.id
-            }','reject')">
+            <button class="btn btn-outline-danger" onclick="window.approveSuggestion('${s.id}','reject')">
               <i class='bx bx-x'></i>
             </button>
           </div>
-        </div>`
-        )
-        .join('');
+        </div>`).join('');
 
       host.innerHTML = `
         <div class="card border-warning mb-3">
@@ -344,71 +354,102 @@
   };
 
   // --------------------------------------------------------------------------
-  // LỊCH SỬ ĐIỀU MẪU HÔM NAY (có nút hủy) — modal riêng
+  // LỊCH SỬ ĐIỀU MẪU — modal riêng.
+  //   • Xem theo SỰ CỐ hiện tại hoặc TẤT CẢ (nút chuyển)
+  //   • Chọn NGÀY (mặc định hôm nay) — xem lại lệnh cũ
+  //   • Cột "Sự cố" hiện khi xem tất cả
+  //   • Admin hủy được lệnh 'dispatched'
+  // scopeIncidentId: id sự cố để lọc (null/undefined = xem tất cả)
   // --------------------------------------------------------------------------
-  window.showDispatchHistory = async function (incidentId, testTypeId) {
+  window._histState = { scopeIncidentId: null, date: null };
+
+  window.showDispatchHistory = function (incidentId) {
+    // Lần mở đầu: mặc định lọc theo sự cố truyền vào (nếu có) + ngày hôm nay
+    window._histState.scopeIncidentId = incidentId || null;
+    window._histState.date = new Date().toISOString().slice(0, 10);
+    _renderDispatchHistory();
+  };
+
+  async function _renderDispatchHistory() {
+    const st = window._histState;
     try {
       let q = window.supabaseClient
         .from('lab_dispatch_log')
-        .select('*, laboratories(name), test_types(name)')
-        .eq('dispatch_date', new Date().toISOString().slice(0, 10))
+        .select('*, laboratories(name), test_types(name), incidents(event_name)')
+        .eq('dispatch_date', st.date)
         .in('status', ['dispatched', 'completed'])
         .order('created_at', { ascending: false });
-      if (incidentId) q = q.eq('incident_id', incidentId);
+      if (st.scopeIncidentId) q = q.eq('incident_id', st.scopeIncidentId);
       const { data, error } = await q;
       if (error) throw error;
 
       const role = await resolveRole();
-      const rows = (data || [])
-        .map(
-          (d) => `
+      const showIncidentCol = !st.scopeIncidentId; // xem tất cả → hiện cột Sự cố
+
+      const rows = (data || []).map((d) => `
         <tr>
+          ${showIncidentCol
+            ? `<td><small>${esc(d.incidents?.event_name || '— (không gắn sự kiện)')}</small></td>`
+            : ''}
           <td>${esc(d.laboratories?.name || '?')}</td>
-          <td>${esc(d.test_types?.name || '')}</td>
+          <td><small>${esc(d.test_types?.name || '')}</small></td>
           <td class="text-center">${d.sample_count}</td>
           <td class="text-center">
-            <span class="badge ${
-              d.status === 'completed' ? 'bg-success' : 'bg-primary'
-            }">
+            <span class="badge ${d.status === 'completed' ? 'bg-success' : 'bg-primary'}">
               ${d.status === 'completed' ? 'Hoàn thành' : 'Đã điều'}
             </span>
           </td>
           <td class="text-center">
-            ${
-              role.isAdmin && d.status === 'dispatched'
-                ? `<button class="btn btn-sm btn-outline-danger" onclick="window.cancelDispatch('${d.id}')">
+            ${role.isAdmin && d.status === 'dispatched'
+              ? `<button class="btn btn-sm btn-outline-danger" onclick="window.cancelDispatch('${d.id}')">
                    <i class='bx bx-undo'></i> Hủy
                  </button>`
-                : ''
-            }
+              : ''}
           </td>
-        </tr>`
-        )
-        .join('');
+        </tr>`).join('');
+
+      const colspan = showIncidentCol ? 6 : 5;
+      const headIncident = showIncidentCol ? '<th>Sự kiện</th>' : '';
+
+      // Nút chuyển phạm vi: chỉ hiện "Xem sự cố này" khi đang có scope,
+      // và "Xem tất cả" khi đang lọc theo sự cố.
+      const scopeToggle = st.scopeIncidentId
+        ? `<button class="btn btn-sm btn-outline-primary" onclick="window._histSetScope(null)">
+             <i class='bx bx-list-ul'></i> Xem tất cả điều mẫu
+           </button>`
+        : `<span class="badge bg-secondary">Đang xem: tất cả sự kiện</span>`;
+
+      const total = (data || []).reduce((s, d) => s + (d.sample_count || 0), 0);
 
       document.getElementById('dispatch-history-wrapper')?.remove();
       const wrap = document.createElement('div');
       wrap.id = 'dispatch-history-wrapper';
       wrap.innerHTML = `
         <div class="modal fade" id="dispatchHistModal" tabindex="-1">
-          <div class="modal-dialog modal-lg modal-dialog-centered">
+          <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
             <div class="modal-content">
               <div class="modal-header" style="background:#006a75;color:#fff;">
-                <h5 class="modal-title"><i class='bx bx-history'></i> Lịch sử điều mẫu hôm nay</h5>
+                <h5 class="modal-title"><i class='bx bx-history'></i> Lịch sử điều phối mẫu</h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
               </div>
               <div class="modal-body">
+                <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+                  <div class="d-flex align-items-center gap-2">
+                    <label class="mb-0"><small>Ngày:</small></label>
+                    <input type="date" id="hist-date" class="form-control form-control-sm" style="width:auto;"
+                           value="${st.date}" onchange="window._histSetDate(this.value)">
+                  </div>
+                  ${scopeToggle}
+                </div>
                 <table class="table table-sm align-middle">
                   <thead class="table-light"><tr>
-                    <th>Phòng Xét nghiệm</th><th>Loại Xét nghiệm</th><th class="text-center">Số mẫu</th>
-                    <th class="text-center">Trạng thái</th><th></th>
+                    ${headIncident}<th>Phòng Xét nghiệm</th><th>Loại XN</th>
+                    <th class="text-center">Số mẫu</th><th class="text-center">Trạng thái</th><th></th>
                   </tr></thead>
-                  <tbody>${
-                    rows ||
-                    '<tr><td colspan="5" class="text-center text-muted py-3">Chưa có lệnh điều mẫu nào hôm nay.</td></tr>'
-                  }</tbody>
+                  <tbody>${rows || `<tr><td colspan="${colspan}" class="text-center text-muted py-3">Không có lệnh điều mẫu nào ${st.scopeIncidentId ? 'cho sự kiện này ' : ''}trong ngày ${st.date}.</td></tr>`}</tbody>
                 </table>
-                <small class="text-muted"><i class='bx bx-info-circle'></i>
+                ${data && data.length ? `<div class="text-end"><small class="text-muted">Tổng: <b>${total}</b> mẫu / ${data.length} lệnh</small></div>` : ''}
+                <small class="text-muted d-block mt-1"><i class='bx bx-info-circle'></i>
                   Hủy lệnh sẽ trả lại công suất cho Phòng Xét nghiệm. Chỉ hủy được lệnh chưa hoàn thành.</small>
               </div>
             </div>
@@ -418,9 +459,19 @@
       new bootstrap.Modal(document.getElementById('dispatchHistModal')).show();
     } catch (e) {
       console.error('[showDispatchHistory]', e);
-      if (window.showToast)
-        window.showToast('Lỗi tải lịch sử: ' + e.message, 'error');
+      if (window.showToast) window.showToast('Lỗi tải lịch sử: ' + e.message, 'error');
     }
+  }
+
+  // Đổi phạm vi (sự cố này ↔ tất cả) → render lại
+  window._histSetScope = function (incidentId) {
+    window._histState.scopeIncidentId = incidentId;
+    _renderDispatchHistory();
+  };
+  // Đổi ngày → render lại
+  window._histSetDate = function (dateStr) {
+    window._histState.date = dateStr;
+    _renderDispatchHistory();
   };
 
   // --------------------------------------------------------------------------
@@ -429,12 +480,8 @@
   window.cancelDispatch = async function (logId) {
     const ok = await window.showConfirm({
       title: 'Hủy lệnh điều mẫu',
-      message:
-        'Hủy lệnh này? Công suất sẽ được trả lại cho Phòng Xét nghiệm và không còn tính vào tổng hôm nay.',
-      confirmText: 'Hủy lệnh',
-      cancelText: 'Giữ lại',
-      variant: 'danger',
-      icon: 'bx-undo',
+      message: 'Hủy lệnh này? Công suất sẽ được trả lại cho Phòng Xét nghiệm và không còn tính vào tổng hôm nay.',
+      confirmText: 'Hủy lệnh', cancelText: 'Giữ lại', variant: 'danger', icon: 'bx-undo',
     });
     if (!ok) return;
 
@@ -445,7 +492,8 @@
         .eq('id', logId);
       if (error) throw error;
       if (window.showToast) window.showToast('Đã hủy lệnh điều mẫu', 'success');
-      window.showDispatchHistory(); // reload lịch sử
+      // Reload lịch sử GIỮ NGUYÊN phạm vi + ngày đang xem (không reset về hôm nay/sự cố)
+      _renderDispatchHistory();
       if (typeof window._runDispatch === 'function') window._runDispatch(); // cập nhật công suất
     } catch (e) {
       if (window.showToast) window.showToast('Lỗi hủy: ' + e.message, 'error');
@@ -481,39 +529,24 @@
       document.body.appendChild(wrap);
       const modalEl = document.getElementById('noteModal');
       const modal = new bootstrap.Modal(modalEl);
-      let done = false,
-        val = null;
-      const finish = (v) => {
-        if (done) return;
-        done = true;
-        val = v;
-        modal.hide();
-      };
-      document.getElementById('note-ok').onclick = () =>
-        finish(document.getElementById('note-input').value.trim());
+      let done = false, val = null;
+      const finish = (v) => { if (done) return; done = true; val = v; modal.hide(); };
+      document.getElementById('note-ok').onclick = () => finish(document.getElementById('note-input').value.trim());
       document.getElementById('note-cancel').onclick = () => finish(null);
-      modalEl.addEventListener(
-        'hidden.bs.modal',
-        () => {
-          wrap.remove();
-          setTimeout(() => {
-            if (!document.querySelector('.modal.show')) {
-              document
-                .querySelectorAll('.modal-backdrop')
-                .forEach((b) => b.remove());
-              document.body.classList.remove('modal-open');
-              document.body.style.overflow = '';
-            }
-          }, 150);
-          resolve(val);
-        },
-        { once: true }
-      );
+      modalEl.addEventListener('hidden.bs.modal', () => {
+        wrap.remove();
+        setTimeout(() => {
+          if (!document.querySelector('.modal.show')) {
+            document.querySelectorAll('.modal-backdrop').forEach((b) => b.remove());
+            document.body.classList.remove('modal-open');
+            document.body.style.overflow = '';
+          }
+        }, 150);
+        resolve(val);
+      }, { once: true });
       modal.show();
     });
   }
 
-  console.log(
-    '[lab-dispatch-actions.js] ✅ Hành động điều phối (đề xuất/duyệt/chốt/hủy) sẵn sàng.'
-  );
+  console.log('[lab-dispatch-actions.js] ✅ Hành động điều phối (đề xuất/duyệt/chốt/hủy) sẵn sàng.');
 })();
