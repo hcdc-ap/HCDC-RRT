@@ -172,7 +172,7 @@
           </div>
           <div class="d-flex gap-2 flex-wrap">
             <button class="btn btn-outline-info" onclick="window._openDispatchHistorySafe()">
-              <i class='bx bx-history'></i> Lịch sử điều mẫu
+              <i class='bx bx-history'></i> Lịch sử điều phối mẫu
             </button>
             <button class="btn btn-outline-secondary" onclick="window.openTestTypeModal()">
               <i class='bx bx-list-ul'></i> Danh mục loại XN
@@ -267,7 +267,7 @@
                 <div class="col-md-6">
                   <label class="form-label">
                     Cấp an toàn sinh học
-                    <i class='bx bx-info-circle' title="Cấp BSL cao nhất Phòng Xét nghiệm đạt được. Dùng để chặn điều mẫu tác nhân nguy hiểm tới Phòng Xét nghiệm không đủ cấp."></i>
+                    <i class='bx bx-info-circle' title="Cấp BSL cao nhất Phòng Xét nghiệm đạt được. Dùng để chặn điều phối mẫu tác nhân nguy hiểm tới Phòng Xét nghiệm không đủ cấp."></i>
                   </label>
                   <select id="lab-bsl" class="form-select">${bslOptions}</select>
                 </div>
@@ -295,7 +295,7 @@
                 <div class="col-12">
                   <div class="form-check form-switch">
                     <input class="form-check-input" type="checkbox" id="lab-active" ${lab.is_active ? 'checked' : ''}>
-                    <label class="form-check-label" for="lab-active">Phòng Xét nghiệm đang hoạt động (nhận điều mẫu)</label>
+                    <label class="form-check-label" for="lab-active">Phòng Xét nghiệm đang hoạt động (nhận điều phối mẫu)</label>
                   </div>
                 </div>
               </div>
@@ -441,7 +441,7 @@
   // XÓA PXN
   // ==========================================================================
   window.deleteLab = async function (labId, labName) {
-    if (!confirm(`Xóa Phòng Xét nghiệm "${labName}"?\n\nToàn bộ năng lực xét nghiệm đã gán cũng sẽ bị xóa. Nhật ký điều mẫu cũ được giữ lại.`))
+    if (!confirm(`Xóa Phòng Xét nghiệm "${labName}"?\n\nToàn bộ năng lực xét nghiệm đã gán cũng sẽ bị xóa. Nhật ký điều phối mẫu cũ được giữ lại.`))
       return;
     try {
       const { error } = await window.supabaseClient
@@ -563,7 +563,7 @@
     if (reqBsl > labBsl) {
       const ok = confirm(
         `Cảnh báo an toàn sinh học:\n\nLoại XN này yêu cầu BSL-${reqBsl}, nhưng Phòng Xét nghiệm chỉ đạt BSL-${labBsl}.\n\n` +
-        `Nếu vẫn gán, khi điều mẫu hệ thống sẽ TỰ ĐỘNG LOẠI Phòng Xét nghiệm này khỏi gợi ý (vì không đủ cấp an toàn) — năng lực gán vào sẽ vô tác dụng.\n\n` +
+        `Nếu vẫn gán, khi điều phối mẫu hệ thống sẽ TỰ ĐỘNG LOẠI Phòng Xét nghiệm này khỏi gợi ý (vì không đủ cấp an toàn) — năng lực gán vào sẽ vô tác dụng.\n\n` +
         `Bạn có chắc muốn tiếp tục? (Nên kiểm tra lại cấp BSL của Phòng Xét nghiệm)`
       );
       if (!ok) return;
@@ -622,7 +622,7 @@
             </div>
             <div class="modal-body">
               <div class="alert alert-warning py-2">
-                <small><i class='bx bx-info-circle'></i> Cấp BSL yêu cầu quyết định việc chặn điều mẫu.
+                <small><i class='bx bx-info-circle'></i> Cấp BSL yêu cầu quyết định việc chặn điều phối mẫu.
                 Cần cán bộ an toàn sinh học của HCDC rà soát trước khi dùng thật.</small>
               </div>
               <table class="table table-sm align-middle">
