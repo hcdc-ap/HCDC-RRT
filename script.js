@@ -13044,39 +13044,53 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
     return key;
   };
 
-  // === MAP - LEAFLET VERSION v2 (ĐÃ SỬA LỖI LỌC + NÂNG CẤP) ===
+  // ============================================================================
+  // MODULE BẢN ĐỒ RRT-HCDC — PHIÊN BẢN 2 (KIẾN TRÚC LAYER THỐNG NHẤT)
   // ----------------------------------------------------------------------------
-  // Sửa: (1) marker thành viên không vẽ do lệch tên cột lat/lon vs latitude/longitude
-  //      (2) Select2 nuốt sự kiện change -> lọc phường không chạy
-  //      (3) checkbox "Thành viên theo Phường" không có listener
-  //      (4) listener bị đăng ký chồng mỗi lần mở trang
-  //      (5) setupMapPlugins định nghĩa trùng 2 lần / plugin add lặp
-  //      (6) escape HTML dữ liệu động trong popup/tooltip
-  // Nâng cấp: chú giải màu (legend), bộ đếm kết quả lọc, tự zoom theo kết quả,
-  //      debounce ô tìm kiếm, nút "Xóa lọc".
-  // ----------------------------------------------------------------------------
-  // CÁCH DÙNG: thay TRỌN khối "=== MAP - LEAFLET VERSION ===" cũ bằng file này.
-  // ============================================================
+  // Nâng cấp so với bản cũ:
+  //   • MỌI lớp (choropleth phường, thành viên, sự cố, PXN) quản lý qua MỘT
+  //     L.control.layers duy nhất → bật/tắt chuẩn, không còn add/remove thủ công
+  //     tranh chấp (khắc phục lỗi "tắt sự kiện vẫn hiện").
+  //   • Layer là ĐỐI TƯỢNG ỔN ĐỊNH: filter chỉ cập nhật NỘI DUNG bên trong
+  //     (clearLayers + add lại marker), KHÔNG tạo layer mới → control không lệch.
+  //   • Legend tự ẩn/hiện phần tương ứng khi bật/tắt lớp (overlayadd/remove).
+  //   • Lớp PXN tích hợp sẵn qua window.LabMapLayer (Bước 1 đã viết).
+  //
+  // THAY TOÀN BỘ code bản đồ cũ bằng file này (đặt trong cùng IIFE/scope cũ).
+  // HTML #page-map giữ nguyên. Bỏ checkbox #toggleFillMap cũ (giờ dùng control),
+  // hoặc giữ lại cũng được — file này không phụ thuộc nó nữa.
+  // ============================================================================
 
   // ============================================================
-  // 1. BIẾN TOÀN CỤC & CSS HIỆU ỨNG
+  // 1. BIẾN TOÀN CỤC & CSS
   // ============================================================
   let map;
   let geojsonData;
   let companyData = [];
   let filteredData = [];
   let incidentData = [];
-
   let geojsonBaseLayer;
-  let choroplethLayer;
-  let incidentsLayerGroup;
+
+  // Các LAYER ỔN ĐỊNH (tạo 1 lần, cập nhật nội dung bên trong)
+  let choroplethLayer = null; // L.geoJSON (tô màu phường)
+  let membersLayer = null; // L.layerGroup (thành viên)
+  let incidentsLayer = null; // L.layerGroup (sự cố)
+  let membersMarkerMap = new Map(); // tra marker theo tọa độ (cho zoom-to)
+
+  let layersControl = null; // L.control.layers DUY NHẤT
   let legendControl = null;
   let statsControl = null;
-  let currentHighlightedMarker = null;
-  let markersLayerGroupInstance;
-  let markersLayerGroupMap;
-  let mapPluginsReady = false; // chống add plugin lặp
-  let mapEventsBound = false; // chống đăng ký listener lặp
+
+  // Trạng thái bật/tắt từng lớp (để legend biết ẩn/hiện phần nào)
+  const layerVisible = {
+    choropleth: true,
+    members: true,
+    incidents: true,
+    labs: false,
+  };
+
+  let mapPluginsReady = false;
+  let mapEventsBound = false;
 
   const pulseCSS = `
     .incident-marker-active {
@@ -13100,6 +13114,7 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
       width: 14px; height: 14px; display: inline-block;
       margin-right: 6px; vertical-align: middle; border-radius: 3px;
     }
+    .map-legend .legend-section { margin-top: 4px; }
   `;
   document.head.insertAdjacentHTML('beforeend', `<style>${pulseCSS}</style>`);
 
@@ -13121,7 +13136,6 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
     'Dinh dưỡng – Bệnh không lây': '#1976D2',
   };
 
-  // Escape HTML cho mọi dữ liệu động đổ vào popup/tooltip
   const escMap = (s) =>
     typeof window.escapeHtml === 'function'
       ? window.escapeHtml(String(s ?? ''))
@@ -13132,7 +13146,7 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
           .replace(/"/g, '&quot;');
 
   // ============================================================
-  // 2. TIỆN ÍCH CHOROPLETH
+  // 2. CHOROPLETH
   // ============================================================
   function getColor(d) {
     if (d === 0) return '#fae1e1';
@@ -13144,11 +13158,9 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
       ? '#E31A1C'
       : '#FC4E2A';
   }
-
-  function style(feature) {
-    const count = feature.properties.count || 0;
+  function choroStyle(feature) {
     return {
-      fillColor: getColor(count),
+      fillColor: getColor(feature.properties.count || 0),
       weight: 2,
       opacity: 1,
       color: 'white',
@@ -13156,229 +13168,230 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
       fillOpacity: 0.7,
     };
   }
-
   function highlightFeature(e) {
-    const layer = e.target;
-    layer.setStyle({
+    e.target.setStyle({
       fillColor: '#ed1384',
       weight: 3,
-      color: '#ffffff',
+      color: '#fff',
       dashArray: '',
       fillOpacity: 0.9,
     });
   }
-
   function resetHighlight(e) {
     const layer = e.target;
-    if (choroplethLayer) {
-      choroplethLayer.resetStyle(layer);
-    } else if (typeof style === 'function' && layer.feature) {
-      layer.setStyle(style(layer.feature));
-    }
-    if (layer.isTooltipOpen()) layer.closeTooltip();
+    if (choroplethLayer) choroplethLayer.resetStyle(layer);
+    if (layer.isTooltipOpen && layer.isTooltipOpen()) layer.closeTooltip();
   }
-
   function onEachFeatureChoropleth(feature, layer) {
-    const props = feature.properties;
-    const name =
-      props.name ||
-      props.tenXa ||
-      props.ma_xa ||
-      props.MA_XA ||
-      'Chưa xác định';
-    const count = props.count || 0;
-
+    const p = feature.properties;
+    const name = p.name || p.tenXa || p.ma_xa || p.MA_XA || 'Chưa xác định';
+    const count = p.count || 0;
     layer.bindTooltip(`<b>${escMap(name)}</b>`, {
-      permanent: false,
-      direction: 'auto',
       sticky: true,
+      direction: 'auto',
       className: 'leaflet-tooltip-own',
     });
-
     layer.on({
       mouseover: highlightFeature,
       mouseout: resetHighlight,
-      click: () => {
+      click: () =>
         layer
           .bindPopup(
-            `<div style="text-align:center; min-width:120px;">
-              <b style="color:#ed1384; font-size:15px;">${escMap(name)}</b><br/>
-              <span style="font-size:13px;">Nhân sự RRT: <b>${count}</b></span>
-            </div>`
+            `<div style="text-align:center;min-width:120px;">
+           <b style="color:#ed1384;font-size:15px;">${escMap(name)}</b><br/>
+           <span style="font-size:13px;">Nhân sự RRT: <b>${count}</b></span>
+         </div>`
           )
-          .openPopup();
-      },
+          .openPopup(),
+    });
+  }
+
+  // Tính lại count theo filteredData rồi trả GeoJSON đã gắn count
+  function buildChoroGeoJson() {
+    const countsByMaXa = new Map();
+    (filteredData || []).forEach((m) => {
+      const k = String(m.ma_xa || m.maXa || '');
+      if (k) countsByMaXa.set(k, (countsByMaXa.get(k) || 0) + 1);
+    });
+    const g = JSON.parse(JSON.stringify(geojsonData));
+    g.features.forEach((f) => {
+      const p = f.properties;
+      if (p) {
+        const maXa = String(p.maXa || p.MA_XA || '');
+        p.count = countsByMaXa.get(maXa) || 0;
+        if (!p.name && p.tenXa) p.name = p.tenXa;
+      }
+    });
+    return g;
+  }
+
+  // ============================================================
+  // 3. NỘI DUNG LAYER THÀNH VIÊN & SỰ CỐ (điền vào layer ổn định)
+  // ============================================================
+  function fillMembersLayer() {
+    membersLayer.clearLayers();
+    membersMarkerMap.clear();
+    (filteredData || []).forEach((c) => {
+      const lat = parseFloat(c.lat ?? c.latitude);
+      const lon = parseFloat(c.lon ?? c.longitude);
+      if (isNaN(lat) || isNaN(lon)) return;
+      const marker = L.circleMarker([lat, lon], {
+        radius: 5,
+        fillColor: industryColors[c.department] || '#FF5722',
+        color: '#000',
+        weight: 1,
+        opacity: 1,
+        fillOpacity: 0.8,
+      });
+      marker.bindPopup(`
+        <b>${escMap(c.fullName || c.full_name || 'N/A')}</b><br/>
+        Khoa/phòng: ${escMap(c.department || 'N/A')}<br/>
+        Đội: ${escMap(c.team || 'N/A')}<br/>
+        Phường: ${escMap(c.ward || c.ma_xa || 'N/A')}
+      `);
+      marker.bindTooltip(escMap(c.fullName || c.full_name || 'RRT Member'), {
+        direction: 'top',
+        offset: L.point(0, -10),
+      });
+      membersLayer.addLayer(marker);
+      membersMarkerMap.set(`${lat},${lon}`, marker);
+    });
+  }
+
+  function fillIncidentsLayer() {
+    incidentsLayer.clearLayers();
+    const usedCoords = new Set();
+    (incidentData || []).forEach((inc) => {
+      let lat = parseFloat(inc.latitude ?? inc.lat);
+      let lon = parseFloat(inc.longitude ?? inc.lon);
+      if (isNaN(lat) || isNaN(lon)) return;
+      const coordKey = `${lat.toFixed(4)},${lon.toFixed(4)}`;
+      if (usedCoords.has(coordKey)) {
+        lat += (Math.random() - 0.5) * 0.003;
+        lon += (Math.random() - 0.5) * 0.003;
+      }
+      usedCoords.add(coordKey);
+      const isActive = ['active', 'pending', 'monitoring'].includes(
+        (inc.status || '').toLowerCase()
+      );
+      const icon = L.divIcon({
+        className: isActive
+          ? 'incident-marker-active'
+          : 'incident-marker-resolved',
+        iconSize: isActive ? [16, 16] : [10, 10],
+        iconAnchor: isActive ? [8, 8] : [5, 5],
+      });
+      let membersListHtml =
+        '<span style="color:#9ca3af;font-style:italic;">Chưa có nhân sự</span>';
+      if (inc.members) {
+        const emails = inc.members
+          .split(';')
+          .map((e) => e.trim())
+          .filter(Boolean);
+        if (emails.length) {
+          membersListHtml = emails
+            .map((email) => {
+              const key = email.toLowerCase();
+              const u = companyData.find(
+                (x) =>
+                  (x.email && x.email.toLowerCase() === key) ||
+                  (x.email && x.email.split('@')[0].toLowerCase() === key) ||
+                  (x.username && x.username.toLowerCase() === key)
+              );
+              if (u) {
+                const name = u.full_name || u.fullName || email;
+                const team =
+                  u.team && u.team !== 'No team' && u.team !== 'undefined'
+                    ? ` <i>(<span style="color:#2ca3af;">${escMap(
+                        u.team
+                      )}</span>)</i>`
+                    : '';
+                return `• <b>${escMap(name)}</b>${team}`;
+              }
+              return `• ${escMap(email)}`;
+            })
+            .join('<br/>');
+        }
+      }
+      const marker = L.marker([lat, lon], { icon });
+      marker.bindPopup(`
+        <div style="min-width:250px;font-family:'Inter',sans-serif;">
+          <h6 style="color:${
+            isActive ? '#dc2626' : '#4b5563'
+          };margin-bottom:8px;font-weight:bold;border-bottom:1px solid #e5e7eb;padding-bottom:5px;">
+            ${isActive ? '🚨 ĐANG KÍCH HOẠT' : '✅ ĐÃ KẾT THÚC'}
+          </h6>
+          <b style="color:#1f2937;">Sự kiện:</b> ${escMap(
+            inc.event_name || 'Không rõ'
+          )}<br/>
+          <b style="color:#1f2937;">Địa điểm:</b> ${escMap(
+            inc.location_text || 'N/A'
+          )}<br/>
+          <b style="color:#1f2937;">Thời gian:</b> ${
+            inc.activation_time
+              ? new Date(inc.activation_time).toLocaleString('vi-VN', {
+                  hour12: false,
+                })
+              : 'N/A'
+          }<br/>
+          <hr style="margin:10px 0;border-top:1px dashed #cbd5e1;" />
+          <b style="color:#0369a1;"><i class='bx bx-group'></i> Nhân sự tham gia:</b>
+          <div style="max-height:120px;overflow-y:auto;font-size:13px;color:#4b5563;margin-top:4px;padding-left:4px;border-left:2px solid #e2e8f0;line-height:1.6;">
+            ${membersListHtml}
+          </div>
+        </div>`);
+      marker.bindTooltip(
+        `${isActive ? '🚨' : '✅'} ${escMap(inc.event_name || 'Sự cố')}`,
+        { direction: 'top', offset: L.point(0, -10) }
+      );
+      incidentsLayer.addLayer(marker);
     });
   }
 
   // ============================================================
-  // 3. LAYER THÀNH VIÊN & SỰ KIỆN
+  // 4. LEGEND (tự ẩn/hiện phần theo lớp đang bật) + STATS
   // ============================================================
-  function createMarkersLayer(data) {
-    const markers = L.layerGroup();
-    const markerMap = new Map();
-
-    if (Array.isArray(data)) {
-      data.forEach((c) => {
-        // ✅ FIX GỐC: đọc cả lat/lon LẪN latitude/longitude
-        const lat = parseFloat(c.lat ?? c.latitude);
-        const lon = parseFloat(c.lon ?? c.longitude);
-        if (c && !isNaN(lat) && !isNaN(lon)) {
-          const marker = L.circleMarker([lat, lon], {
-            radius: 5,
-            fillColor: industryColors[c.department] || '#FF5722',
-            color: '#000',
-            weight: 1,
-            opacity: 1,
-            fillOpacity: 0.8,
-            customId: `${lat},${lon}`,
-            data: c,
-          });
-
-          marker.bindPopup(`
-            <b>${escMap(c.fullName || c.full_name || 'N/A')}</b><br/>
-            Khoa/phòng: ${escMap(c.department || 'N/A')}<br/>
-            Đội: ${escMap(c.team || 'N/A')}<br/>
-            Phường: ${escMap(c.ward || c.ma_xa || 'N/A')}
-          `);
-          marker.bindTooltip(
-            escMap(c.fullName || c.full_name || 'RRT Member'),
-            { permanent: false, direction: 'top', offset: L.point(0, -10) }
-          );
-          markers.addLayer(marker);
-          markerMap.set(`${lat},${lon}`, marker);
-        }
-      });
+  function renderLegendContent(div) {
+    let html = '';
+    // Choropleth
+    if (layerVisible.choropleth) {
+      const grades = [0, 1, 2, 4, 6],
+        labels = ['0', '1', '2–3', '4–5', '> 5'];
+      html += '<div class="legend-section"><b>RRT-ers/Phường</b><br>';
+      grades.forEach(
+        (g, i) =>
+          (html += `<i style="background:${getColor(g)}"></i> ${labels[i]}<br>`)
+      );
+      html += '</div>';
     }
-    return { layer: markers, map: markerMap };
+    // Sự cố
+    if (layerVisible.incidents) {
+      html += `<div class="legend-section"><hr style="margin:4px 0;">
+        <span class="incident-marker-active" style="display:inline-block;width:12px;height:12px;"></span> Sự kiện đang kích hoạt<br>
+        <span class="incident-marker-resolved" style="display:inline-block;width:10px;height:10px;"></span> Sự kiện đã kết thúc</div>`;
+    }
+    // PXN
+    if (layerVisible.labs && window.LabMapLayer) {
+      html += `<div class="legend-section">${window.LabMapLayer.legendHtml()}</div>`;
+    }
+    div.innerHTML =
+      html || '<span class="text-muted">Không có lớp nào bật.</span>';
   }
 
-  function createIncidentsLayer(data) {
-    const layerGroup = L.layerGroup();
-    const usedCoords = new Set();
-
-    if (Array.isArray(data)) {
-      data.forEach((inc) => {
-        let lat = parseFloat(inc.latitude ?? inc.lat);
-        let lon = parseFloat(inc.longitude ?? inc.lon);
-
-        if (!isNaN(lat) && !isNaN(lon)) {
-          const coordKey = `${lat.toFixed(4)},${lon.toFixed(4)}`;
-          if (usedCoords.has(coordKey)) {
-            lat += (Math.random() - 0.5) * 0.003;
-            lon += (Math.random() - 0.5) * 0.003;
-          }
-          usedCoords.add(coordKey);
-
-          const isActive = ['active', 'pending', 'monitoring'].includes(
-            (inc.status || '').toLowerCase()
-          );
-          const customIcon = L.divIcon({
-            className: isActive
-              ? 'incident-marker-active'
-              : 'incident-marker-resolved',
-            iconSize: isActive ? [16, 16] : [10, 10],
-            iconAnchor: isActive ? [8, 8] : [5, 5],
-          });
-
-          let membersListHtml =
-            '<span style="color:#9ca3af; font-style:italic;">Chưa có nhân sự</span>';
-          if (inc.members) {
-            const emails = inc.members
-              .split(';')
-              .map((e) => e.trim())
-              .filter(Boolean);
-            if (emails.length > 0) {
-              membersListHtml = emails
-                .map((email) => {
-                  const searchKey = email.toLowerCase();
-                  const user = companyData.find(
-                    (u) =>
-                      (u.email && u.email.toLowerCase() === searchKey) ||
-                      (u.email &&
-                        u.email.split('@')[0].toLowerCase() === searchKey) ||
-                      (u.username && u.username.toLowerCase() === searchKey)
-                  );
-                  if (user) {
-                    const name = user.full_name || user.fullName || email;
-                    const team =
-                      user.team &&
-                      user.team !== 'No team' &&
-                      user.team !== 'undefined'
-                        ? ` <i>(<span style="color:#2ca3af;">${escMap(
-                            user.team
-                          )}</span>)</i>`
-                        : '';
-                    return `• <b>${escMap(name)}</b>${team}`;
-                  }
-                  return `• ${escMap(email)}`;
-                })
-                .join('<br/>');
-            }
-          }
-
-          const marker = L.marker([lat, lon], { icon: customIcon });
-          marker.bindPopup(`
-            <div style="min-width: 250px; font-family: 'Inter', sans-serif;">
-              <h6 style="color:${
-                isActive ? '#dc2626' : '#4b5563'
-              }; margin-bottom:8px; font-weight:bold; border-bottom:1px solid #e5e7eb; padding-bottom:5px;">
-                ${isActive ? '🚨 ĐANG KÍCH HOẠT' : '✅ ĐÃ KẾT THÚC'}
-              </h6>
-              <b style="color:#1f2937;">Sự kiện:</b> ${escMap(
-                inc.event_name || 'Không rõ'
-              )}<br/>
-              <b style="color:#1f2937;">Địa điểm:</b> ${escMap(
-                inc.location_text || 'N/A'
-              )}<br/>
-              <b style="color:#1f2937;">Thời gian:</b> ${
-                inc.activation_time
-                  ? new Date(inc.activation_time).toLocaleString('vi-VN', {
-                      hour12: false,
-                    })
-                  : 'N/A'
-              }<br/>
-              <hr style="margin:10px 0; border-top:1px dashed #cbd5e1;" />
-              <b style="color:#0369a1;"><i class='bx bx-group'></i> Nhân sự tham gia:</b>
-              <div style="max-height:120px; overflow-y:auto; font-size:13px; color:#4b5563; margin-top:4px; padding-left:4px; border-left:2px solid #e2e8f0; line-height:1.6;">
-                ${membersListHtml}
-              </div>
-            </div>
-          `);
-          marker.bindTooltip(
-            `${isActive ? '🚨' : '✅'} ${escMap(inc.event_name || 'Sự cố')}`,
-            { permanent: false, direction: 'top', offset: L.point(0, -10) }
-          );
-          layerGroup.addLayer(marker);
-        }
-      });
-    }
-    return layerGroup;
-  }
-
-  // ============================================================
-  // 4. LEGEND + BỘ ĐẾM KẾT QUẢ (nâng cấp chuyên nghiệp)
-  // ============================================================
   function addLegend() {
     if (legendControl || typeof L === 'undefined') return;
     legendControl = L.control({ position: 'bottomright' });
     legendControl.onAdd = function () {
       const div = L.DomUtil.create('div', 'map-legend');
-      const grades = [0, 1, 2, 4, 6];
-      const labels = ['0', '1', '2–3', '4–5', '> 5'];
-      div.innerHTML = '<b>Nhân sự RRT / Phường</b><br>';
-      grades.forEach((g, i) => {
-        div.innerHTML += `<i style="background:${getColor(g)}"></i> ${
-          labels[i]
-        }<br>`;
-      });
-      div.innerHTML +=
-        `<hr style="margin:4px 0;">` +
-        `<span class="incident-marker-active" style="display:inline-block;width:12px;height:12px;"></span> Sự kiện đang kích hoạt<br>` +
-        `<span class="incident-marker-resolved" style="display:inline-block;width:10px;height:10px;"></span> Sự kiện đã kết thúc`;
+      div.id = 'map-legend-box';
+      renderLegendContent(div);
       return div;
     };
     legendControl.addTo(map);
+  }
+  function refreshLegend() {
+    const box = document.getElementById('map-legend-box');
+    if (box) renderLegendContent(box);
   }
 
   function updateStatsControl() {
@@ -13406,62 +13419,36 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
   }
 
   // ============================================================
-  // 5. VẼ VÀ ĐỒNG BỘ BẢN ĐỒ
+  // 5. XÂY LAYER (1 lần) + control thống nhất
   // ============================================================
-  function renderMap() {
-    if (!geojsonData || !geojsonData.features) {
-      console.warn('Dữ liệu bản đồ chưa sẵn sàng.');
-      return;
-    }
-
-    const countsByMaXa = new Map();
-    if (Array.isArray(filteredData)) {
-      filteredData.forEach((member) => {
-        const maXaKey = String(member.ma_xa || member.maXa || '');
-        if (maXaKey)
-          countsByMaXa.set(maXaKey, (countsByMaXa.get(maXaKey) || 0) + 1);
-      });
-    }
-
-    const updatedGeoJson = JSON.parse(JSON.stringify(geojsonData));
-    updatedGeoJson.features.forEach((feature) => {
-      const props = feature.properties;
-      if (props) {
-        const maXa = String(props.maXa || props.MA_XA || '');
-        props.count = countsByMaXa.get(maXa) || 0;
-        if (!props.name && props.tenXa) props.name = props.tenXa;
-      }
-    });
-
-    if (map) {
-      if (choroplethLayer) map.removeLayer(choroplethLayer);
-      if (markersLayerGroupInstance) map.removeLayer(markersLayerGroupInstance);
-      if (incidentsLayerGroup) map.removeLayer(incidentsLayerGroup);
-    }
-
-    choroplethLayer = L.geoJSON(updatedGeoJson, {
-      style,
+  function buildLayersOnce() {
+    // Choropleth: tạo layer rỗng, sẽ nạp GeoJSON trong refreshChoropleth
+    choroplethLayer = L.geoJSON(buildChoroGeoJson(), {
+      style: choroStyle,
       onEachFeature: onEachFeatureChoropleth,
     });
+    membersLayer = L.layerGroup();
+    incidentsLayer = L.layerGroup();
+    fillMembersLayer();
+    fillIncidentsLayer();
 
-    const { layer: newMarkersLayer, map: newMarkersMap } =
-      createMarkersLayer(filteredData);
-    markersLayerGroupInstance = newMarkersLayer;
-    markersLayerGroupMap = newMarkersMap;
+    // Bật mặc định theo layerVisible
+    if (layerVisible.choropleth) choroplethLayer.addTo(map);
+    if (layerVisible.members) membersLayer.addTo(map);
+    if (layerVisible.incidents) incidentsLayer.addTo(map);
+  }
 
-    incidentsLayerGroup = createIncidentsLayer(incidentData);
-
-    const toggleCheckbox = document.getElementById('toggleFillMap');
-
-    // Marker thành viên + sự kiện: LUÔN hiển thị
-    markersLayerGroupInstance.addTo(map);
-    incidentsLayerGroup.addTo(map);
-    // Lớp tô màu theo phường: theo checkbox
-    if (choroplethLayer && (!toggleCheckbox || toggleCheckbox.checked)) {
-      choroplethLayer.addTo(map);
-    }
-
-    updateStatsControl();
+  // Cập nhật CHOROPLETH khi filter đổi (không tạo control mới)
+  function refreshChoropleth() {
+    if (!choroplethLayer) return;
+    const wasOn = map.hasLayer(choroplethLayer);
+    // clearLayers + addData để giữ cùng 1 đối tượng layer
+    choroplethLayer.clearLayers();
+    choroplethLayer.addData(buildChoroGeoJson());
+    // addData không tự áp style/onEachFeature lần 2 → set lại
+    choroplethLayer.setStyle(choroStyle);
+    choroplethLayer.eachLayer((l) => onEachFeatureChoropleth(l.feature, l));
+    if (wasOn && !map.hasLayer(choroplethLayer)) choroplethLayer.addTo(map);
   }
 
   // ============================================================
@@ -13473,13 +13460,11 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
       return geojsonData;
     }
     try {
-      console.log('Đang tải bản đồ từ Supabase...');
       const { data, error } = await window.supabaseClient.storage
         .from('maps')
         .download('hcm_map.json');
       if (error) throw error;
-      const text = await data.text();
-      const json = JSON.parse(text);
+      const json = JSON.parse(await data.text());
       if (!json.features) throw new Error("File JSON thiếu 'features'.");
       window.appState.mapGeoData = json;
       geojsonData = json;
@@ -13493,120 +13478,125 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
   };
 
   // ============================================================
-  // 7. LỌC THEO TÊN + PHƯỜNG
+  // 7. FILTER (chỉ cập nhật NỘI DUNG layer, không tạo layer mới)
   // ============================================================
   function applyFilters() {
     const searchEl = document.getElementById('rrt-search');
     const wardEl = document.getElementById('wardFilter');
     if (!searchEl || !wardEl) return;
-
     const searchTerm = searchEl.value.toLowerCase().trim();
     const selectedMaXas = Array.from(wardEl.selectedOptions).map(
       (o) => o.value
     );
 
-    filteredData = companyData.filter((member) => {
-      const matchesSearch =
+    filteredData = companyData.filter((m) => {
+      const okSearch =
         !searchTerm ||
-        (member.fullName || member.full_name || member.email || '')
+        (m.fullName || m.full_name || m.email || '')
           .toLowerCase()
           .includes(searchTerm);
-      const matchesWard =
-        selectedMaXas.length === 0 ||
-        selectedMaXas.includes(String(member.ma_xa));
-      return matchesSearch && matchesWard;
+      const okWard =
+        selectedMaXas.length === 0 || selectedMaXas.includes(String(m.ma_xa));
+      return okSearch && okWard;
     });
 
-    renderMap();
+    // Cập nhật nội dung — KHÔNG remove/tạo lại layer
+    fillMembersLayer();
+    refreshChoropleth();
+    updateStatsControl();
 
-    // --- Tự động zoom theo kết quả ---
+    // Zoom theo kết quả
+    // Kiểm tra tọa độ có thực sự nằm trong vùng hợp lệ (VN, quanh TP.HCM)
+    const isValidCoord = (lat, lon) =>
+      !isNaN(lat) &&
+      !isNaN(lon) &&
+      lat !== 0 &&
+      lon !== 0 && // loại điểm 0,0 (ngoài khơi châu Phi)
+      lat >= 8 &&
+      lat <= 24 && // vĩ độ Việt Nam
+      lon >= 102 &&
+      lon <= 110; // kinh độ Việt Nam
+
+    // Zoom theo kết quả — CHỈ dùng tọa độ hợp lệ
     if (searchTerm && filteredData.length === 1) {
-      // Đúng 1 người -> bay đến người đó + mở tooltip
       const m = filteredData[0];
-      const lat = parseFloat(m.lat ?? m.latitude);
-      const lon = parseFloat(m.lon ?? m.longitude);
-      if (!isNaN(lat) && !isNaN(lon) && markersLayerGroupMap) {
-        const targetMarker = markersLayerGroupMap.get(`${lat},${lon}`);
-        if (targetMarker) {
-          currentHighlightedMarker = targetMarker;
-          map.setView(targetMarker.getLatLng(), 14);
-          targetMarker.openTooltip();
+      const lat = parseFloat(m.lat ?? m.latitude),
+        lon = parseFloat(m.lon ?? m.longitude);
+      if (isValidCoord(lat, lon)) {
+        const tm = membersMarkerMap.get(`${lat},${lon}`);
+        if (tm) {
+          map.setView(tm.getLatLng(), 14);
+          tm.openTooltip();
         }
+      } else {
+        // Thành viên tìm thấy nhưng tọa độ lỗi → báo, không zoom văng
+        if (typeof showToast === 'function')
+          showToast(
+            'Thành viên này chưa có tọa độ hợp lệ để định vị trên bản đồ.',
+            'warning'
+          );
       }
     } else if (
       filteredData.length > 1 &&
       (searchTerm || selectedMaXas.length > 0)
     ) {
-      // Nhiều kết quả -> khung nhìn ôm trọn các marker kết quả
       const pts = filteredData
         .map((m) => [
           parseFloat(m.lat ?? m.latitude),
           parseFloat(m.lon ?? m.longitude),
         ])
-        .filter((p) => !isNaN(p[0]) && !isNaN(p[1]));
-      if (pts.length > 0) map.fitBounds(L.latLngBounds(pts).pad(0.2));
-      currentHighlightedMarker = null;
-    } else {
-      currentHighlightedMarker = null;
+        .filter((p) => isValidCoord(p[0], p[1])); // ← lọc chặt
+      if (pts.length) {
+        map.fitBounds(L.latLngBounds(pts).pad(0.2));
+      }
+      // Nếu không có điểm hợp lệ nào → giữ nguyên khung nhìn (không văng)
     }
   }
 
   // ============================================================
-  // 8. DROPDOWN PHƯỜNG (value = ma_xa, hiển thị = ward)
+  // 8. DROPDOWN PHƯỜNG
   // ============================================================
   function initWardFilter() {
-    const selectElement = document.getElementById('wardFilter');
-    if (!selectElement) return;
-
-    // Hủy Select2 cũ trước khi build lại (tránh nhân bản UI)
+    const sel = document.getElementById('wardFilter');
+    if (!sel) return;
     if (
       window.$ &&
       $.fn.select2 &&
-      $(selectElement).hasClass('select2-hidden-accessible')
-    ) {
-      $(selectElement).select2('destroy');
-    }
-    selectElement.innerHTML = '';
-
+      $(sel).hasClass('select2-hidden-accessible')
+    )
+      $(sel).select2('destroy');
+    sel.innerHTML = '';
     const wardMap = new Map();
-    companyData.forEach((member) => {
-      if (member.ma_xa && member.ward && !wardMap.has(String(member.ma_xa))) {
-        wardMap.set(String(member.ma_xa), String(member.ward));
-      }
+    companyData.forEach((m) => {
+      if (m.ma_xa && m.ward && !wardMap.has(String(m.ma_xa)))
+        wardMap.set(String(m.ma_xa), String(m.ward));
     });
-
     Array.from(wardMap.entries())
       .sort((a, b) => a[1].localeCompare(b[1], 'vi'))
       .forEach(([maXa, wardName]) => {
-        const option = document.createElement('option');
-        option.value = maXa;
-        option.textContent = wardName;
-        selectElement.appendChild(option);
+        const o = document.createElement('option');
+        o.value = maXa;
+        o.textContent = wardName;
+        sel.appendChild(o);
       });
-
-    if (window.$ && $.fn.select2) {
-      $(selectElement).select2({ placeholder: 'Chọn...', allowClear: true });
-    }
+    if (window.$ && $.fn.select2)
+      $(sel).select2({ placeholder: 'Chọn...', allowClear: true });
   }
 
   // ============================================================
-  // 9. GẮN SỰ KIỆN (chỉ 1 lần — hết lỗi chồng listener & Select2 nuốt change)
+  // 9. GẮN SỰ KIỆN
   // ============================================================
   function bindMapEvents() {
     if (mapEventsBound) return;
     mapEventsBound = true;
-
     const searchEl = document.getElementById('rrt-search');
     if (searchEl) {
-      // Debounce 300ms: gõ mượt, không lọc dồn dập từng phím
-      const debouncedFilter =
+      const deb =
         typeof window.debounce === 'function'
           ? window.debounce(applyFilters, 300)
           : applyFilters;
-      searchEl.addEventListener('input', debouncedFilter);
+      searchEl.addEventListener('input', deb);
     }
-
-    // ✅ FIX GỐC: Select2 bắn sự kiện qua jQuery, addEventListener KHÔNG nghe được
     if (window.$ && $.fn) {
       $(document)
         .off('change.mapWard', '#wardFilter')
@@ -13615,19 +13605,25 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
       const wardEl = document.getElementById('wardFilter');
       if (wardEl) wardEl.addEventListener('change', applyFilters);
     }
-
-    // Checkbox tô màu theo phường: trước đây KHÔNG có listener
+    // Checkbox cũ #toggleFillMap giờ đồng bộ với control choropleth (tùy chọn)
     const toggleEl = document.getElementById('toggleFillMap');
-    if (toggleEl) toggleEl.addEventListener('change', renderMap);
+    if (toggleEl) {
+      toggleEl.addEventListener('change', function () {
+        if (this.checked) {
+          choroplethLayer.addTo(map);
+        } else {
+          map.removeLayer(choroplethLayer);
+        }
+      });
+    }
   }
 
   // ============================================================
-  // 10. PLUGIN (khai báo 1 lần duy nhất, chống add lặp)
+  // 10. PLUGIN
   // ============================================================
   function setupMapPlugins() {
     if (mapPluginsReady || !map) return;
     mapPluginsReady = true;
-
     if (typeof L.Control.Draw !== 'undefined') {
       const drawnItems = new L.FeatureGroup();
       map.addLayer(drawnItems);
@@ -13645,29 +13641,72 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
   }
 
   // ============================================================
-  // 11. LUỒNG CHÍNH
+  // 11. CONTROL LAYERS THỐNG NHẤT (tất cả lớp qua đây)
+  // ============================================================
+  async function setupLayersControl() {
+    // Lớp PXN: lấy từ module LabMapLayer (Bước 1). Nó tự tạo cluster group.
+    let labLayer = null;
+    if (window.LabMapLayer) {
+      const res = await window.LabMapLayer.attach(map, {
+        show: layerVisible.labs,
+        standalone: true,
+      });
+      labLayer = res?.layer || null;
+    }
+
+    const overlays = {
+      '🗺️ RRT-ers/ Phường': choroplethLayer,
+      '👥 RRT-ers': membersLayer,
+      '🚨 Sự kiện': incidentsLayer,
+    };
+    if (labLayer) overlays['🧪 Phòng xét nghiệm'] = labLayer;
+
+    if (layersControl) {
+      layersControl.remove();
+      layersControl = null;
+    }
+    layersControl = L.control
+      .layers(null, overlays, { collapsed: false, position: 'topright' })
+      .addTo(map);
+
+    // Đồng bộ layerVisible + legend khi bật/tắt lớp qua control
+    map.off('overlayadd.mapv2').on('overlayadd.mapv2', (e) => {
+      _setVisibleByLayer(e.layer, true);
+      refreshLegend();
+    });
+    map.off('overlayremove.mapv2').on('overlayremove.mapv2', (e) => {
+      _setVisibleByLayer(e.layer, false);
+      refreshLegend();
+    });
+
+    function _setVisibleByLayer(layer, on) {
+      if (layer === choroplethLayer) layerVisible.choropleth = on;
+      else if (layer === membersLayer) layerVisible.members = on;
+      else if (layer === incidentsLayer) layerVisible.incidents = on;
+      else if (labLayer && layer === labLayer) layerVisible.labs = on;
+    }
+  }
+
+  // ============================================================
+  // 12. LUỒNG CHÍNH
   // ============================================================
   async function renderMapPage() {
     if (typeof showLoadingSpinner === 'function') showLoadingSpinner();
     try {
-      if (!window.appState || !window.appState.mapGeoData) {
-        await loadGeoJSON();
-      }
+      if (!window.appState || !window.appState.mapGeoData) await loadGeoJSON();
       geojsonData = window.appState.mapGeoData;
 
-      // BƯỚC 1: TẢI PROFILES MỚI NHẤT
+      // Profiles
       const { data: profData, error: profErr } = await window.supabaseClient
         .from('profiles')
         .select(
           'email, full_name, team, department, ma_xa, latitude, longitude, ward'
         );
-
       if (!profErr && profData) {
         companyData = profData.map((u) => ({
           ...u,
           fullName: u.full_name || u.email,
           team: u.team || u.department,
-          // ✅ FIX GỐC: chuẩn hóa tọa độ về lat/lon dùng thống nhất toàn module
           lat: parseFloat(u.latitude),
           lon: parseFloat(u.longitude),
         }));
@@ -13677,7 +13716,7 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
       }
       filteredData = [...companyData];
 
-      // BƯỚC 2: TẢI INCIDENTS
+      // Incidents
       const { data: incData, error: incErr } = await window.supabaseClient
         .from('incidents')
         .select(
@@ -13685,7 +13724,7 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
         );
       incidentData = !incErr && incData ? [...incData] : [];
 
-      // BƯỚC 3: KHỞI TẠO / CẬP NHẬT BẢN ĐỒ
+      // Khởi tạo bản đồ (1 lần)
       if (!map) {
         map = L.map('containerMap', {
           center: [10.77, 106.7],
@@ -13700,17 +13739,25 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
           interactive: false,
         }).addTo(map);
         setupMapPlugins();
+        buildLayersOnce(); // tạo layer ổn định + bật mặc định
+        await setupLayersControl(); // control thống nhất (gồm PXN)
         addLegend();
+        updateStatsControl();
       } else {
+        // Quay lại trang: cập nhật nội dung, không tạo lại control
+        fillMembersLayer();
+        fillIncidentsLayer();
+        refreshChoropleth();
+        updateStatsControl();
+        refreshLegend();
         setTimeout(() => map.invalidateSize(), 200);
       }
 
-      renderMap();
       initWardFilter();
       bindMapEvents();
-      // trong renderMapPage(), sau khi render xong:
+
       const b = document.getElementById('btn-map-find-lab');
-      if (b) b.onclick = () => window.openDispatchModal();  // mở trống, admin tự nhập tọa độ
+      if (b) b.onclick = () => window.openDispatchModal();
     } catch (error) {
       console.error('Lỗi renderMapPage:', error);
       if (typeof showToast === 'function')
@@ -13718,9 +13765,10 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
     } finally {
       if (typeof hideLoadingSpinner === 'function') hideLoadingSpinner();
     }
-
   }
-
+  window._getLeafletMap = function () {
+    return map;
+  };
   // ====================================================================
   // LOGIC XỬ LÝ CHAT & BÁO CÁO (EVENT DOSSIER)
   // (Dán đoạn này vào cuối file script-js-RRT.txt)
