@@ -16,7 +16,6 @@
   --transparent: #00000000;
   --font-family: 'Ubuntu', sans-serif;
 
-
   /* ĐIỀU CHỈNH DUY NHẤT: Giảm size chữ 1 chút vì Bootstrap base font to hơn */
   --large-font-size: calc(2.2rem + 1vh); /* Gốc là 3rem -> giảm còn 2.2rem */
   --medium-font-size: min(calc(1rem + 0.725vh), 1.1rem);
@@ -4464,4 +4463,3 @@ html {
   height: auto;
   min-height: 38px;
 }
-
