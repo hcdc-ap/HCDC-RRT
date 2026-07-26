@@ -27,14 +27,24 @@
   // CẤU HÌNH
   // --------------------------------------------------------------------------
   const OSRM_BASE = 'https://router.project-osrm.org/route/v1/driving';
-  const OSRM_TIMEOUT_MS = 4000;   // quá 4s coi như OSRM chết → fallback
-  const OSRM_GAP_MS = 250;        // giãn cách giữa các request (né rate-limit)
+  const OSRM_TIMEOUT_MS = 4000; // quá 4s coi như OSRM chết → fallback
+  const OSRM_GAP_MS = 250; // giãn cách giữa các request (né rate-limit)
 
   // Preset trọng số (tổng = 1.0). 3 chiều: gần (near) / trống (free) / nhanh (fast)
   const PRESETS = {
-    urgent:   { near: 0.45, free: 0.10, fast: 0.45, label: '⚡ Khẩn — ưu tiên tốc độ' },
+    urgent: {
+      near: 0.45,
+      free: 0.1,
+      fast: 0.45,
+      label: '⚡ Khẩn — ưu tiên tốc độ',
+    },
     balanced: { near: 0.34, free: 0.33, fast: 0.33, label: '⚖️ Cân bằng' },
-    capacity: { near: 0.20, free: 0.60, fast: 0.20, label: '📦 Nhiều mẫu — ưu tiên công suất' },
+    capacity: {
+      near: 0.2,
+      free: 0.6,
+      fast: 0.2,
+      label: '📦 Nhiều mẫu — ưu tiên công suất',
+    },
   };
 
   // --------------------------------------------------------------------------
@@ -69,7 +79,8 @@
       clearTimeout(timer);
       if (!res.ok) throw new Error('OSRM HTTP ' + res.status);
       const data = await res.json();
-      if (data.code !== 'Ok' || !data.routes?.length) throw new Error('OSRM no route');
+      if (data.code !== 'Ok' || !data.routes?.length)
+        throw new Error('OSRM no route');
 
       const route = data.routes[0];
       return {
@@ -81,13 +92,18 @@
     } catch (err) {
       clearTimeout(timer);
       // FALLBACK: đường chim bay + ước tính thời gian (giả định ~30 km/h nội đô)
-      const km = +haversineKm(originLat, originLng, destLat, destLng).toFixed(2);
+      const km = +haversineKm(originLat, originLng, destLat, destLng).toFixed(
+        2
+      );
       return {
         km,
         minutes: Math.round((km / 30) * 60),
         geometry: {
           type: 'LineString',
-          coordinates: [[originLng, originLat], [destLng, destLat]], // đường thẳng
+          coordinates: [
+            [originLng, originLat],
+            [destLng, destLat],
+          ], // đường thẳng
         },
         source: 'haversine',
         _reason: err.message,
@@ -153,7 +169,8 @@
 
     // Xếp hạng: điểm tổng giảm dần; hòa điểm thì ưu tiên đủ công suất, rồi gần hơn
     scored.sort((a, b) => {
-      if (b.scores.total !== a.scores.total) return b.scores.total - a.scores.total;
+      if (b.scores.total !== a.scores.total)
+        return b.scores.total - a.scores.total;
       if ((b.is_enough ? 1 : 0) !== (a.is_enough ? 1 : 0))
         return (b.is_enough ? 1 : 0) - (a.is_enough ? 1 : 0);
       return (a.route.minutes || 0) - (b.route.minutes || 0);
@@ -191,20 +208,29 @@
     if (originLat == null || originLng == null)
       throw new Error('Thiếu tọa độ điểm sự cố (originLat/originLng)');
 
-    const weights = customWeights || PRESETS[preset]?.weights || PRESETS[preset] || PRESETS.balanced;
+    const weights =
+      customWeights ||
+      PRESETS[preset]?.weights ||
+      PRESETS[preset] ||
+      PRESETS.balanced;
 
     // [1] DB lọc BSL/năng lực/công suất + trả ~N PXN gần nhất (chim bay)
-    const { data: candidates, error } = await window.supabaseClient.rpc('find_candidate_labs', {
-      p_test_type_id: testTypeId,
-      p_sample_count: sampleCount,
-      p_lat: originLat,
-      p_lng: originLng,
-      p_limit: candidateLimit,
-      p_include_full: includeFull,
-    });
+    const { data: candidates, error } = await window.supabaseClient.rpc(
+      'find_candidate_labs',
+      {
+        p_test_type_id: testTypeId,
+        p_sample_count: sampleCount,
+        p_lat: originLat,
+        p_lng: originLng,
+        p_limit: candidateLimit,
+        p_include_full: includeFull,
+      }
+    );
     if (error) throw new Error('Lỗi RPC find_candidate_labs: ' + error.message);
 
-    let list = (candidates || []).filter((c) => !excludeLabIds.includes(c.lab_id));
+    let list = (candidates || []).filter(
+      (c) => !excludeLabIds.includes(c.lab_id)
+    );
 
     const meta = {
       totalCandidates: candidates?.length || 0,
@@ -220,7 +246,9 @@
 
     // [3] OSRM tính đường thật cho từng ứng viên (tuần tự, có fallback)
     const routed = await routeAll(originLat, originLng, list);
-    meta.osrmFailures = routed.filter((r) => r.route.source === 'haversine').length;
+    meta.osrmFailures = routed.filter(
+      (r) => r.route.source === 'haversine'
+    ).length;
 
     // [4] Chấm điểm & xếp hạng
     const ranked = scoreAndRank(routed, weights);
@@ -237,10 +265,12 @@
   // --------------------------------------------------------------------------
   window.LabDispatch = {
     findBestLabs,
-    routeOne,             // export để 2B vẽ lại 1 tuyến khi cần
+    routeOne, // export để 2B vẽ lại 1 tuyến khi cần
     haversineKm,
     PRESETS,
   };
 
-  console.log('[lab-dispatch-engine.js] ✅ Engine điều phối Phòng Xét nghiệm sẵn sàng. (window.LabDispatch)');
+  console.log(
+    '[lab-dispatch-engine.js] ✅ Engine điều phối Phòng Xét nghiệm sẵn sàng. (window.LabDispatch)'
+  );
 })();
