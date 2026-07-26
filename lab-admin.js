@@ -30,17 +30,25 @@
 (function () {
   'use strict';
 
-  let _labMap = null;          // instance Leaflet trong modal thêm/sửa PXN
-  let _labMarker = null;       // marker chọn tọa độ
-  let _editingLabId = null;    // id PXN đang sửa (null = thêm mới)
-  let _testTypesCache = [];    // cache danh mục loại XN
+  let _labMap = null; // instance Leaflet trong modal thêm/sửa PXN
+  let _labMarker = null; // marker chọn tọa độ
+  let _editingLabId = null; // id PXN đang sửa (null = thêm mới)
+  let _testTypesCache = []; // cache danh mục loại XN
 
   const esc = (s) =>
     window.escapeHtml
       ? window.escapeHtml(s)
-      : String(s ?? '').replace(/[&<>"']/g, (c) => ({
-          '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;',
-        }[c]));
+      : String(s ?? '').replace(
+          /[&<>"']/g,
+          (c) =>
+            ({
+              '&': '&amp;',
+              '<': '&lt;',
+              '>': '&gt;',
+              '"': '&quot;',
+              "'": '&#039;',
+            }[c])
+        );
 
   const LEVEL_LABELS = {
     trung_uong: 'Tuyến Trung ương',
@@ -133,30 +141,44 @@
           const statusBadge = lab.is_active
             ? '<span class="badge bg-success">Đang hoạt động</span>'
             : '<span class="badge bg-secondary">Tạm ngừng</span>';
-          const bslBadge = `<span class="badge bg-dark">BSL-${lab.bsl_level ?? '?'}</span>`;
+          const bslBadge = `<span class="badge bg-dark">BSL-${
+            lab.bsl_level ?? '?'
+          }</span>`;
           const hasCoord = lab.lat != null && lab.lng != null;
 
           rows += `
             <tr>
               <td>
                 <div class="fw-bold">${esc(lab.name)}</div>
-                <small class="text-muted">${esc(lab.address || 'Chưa có địa chỉ')}</small>
-                ${!hasCoord ? '<br><small class="text-danger"><i class="bx bx-error-circle"></i> Chưa có tọa độ</small>' : ''}
+                <small class="text-muted">${esc(
+                  lab.address || 'Chưa có địa chỉ'
+                )}</small>
+                ${
+                  !hasCoord
+                    ? '<br><small class="text-danger"><i class="bx bx-error-circle"></i> Chưa có tọa độ</small>'
+                    : ''
+                }
               </td>
               <td>${esc(LEVEL_LABELS[lab.level] || lab.level || '—')}</td>
               <td>${bslBadge}</td>
               <td class="text-center">
-                <span class="badge bg-info text-dark">${capCount} loại XN</span>
-                <button class="btn btn-sm btn-outline-primary ms-1" onclick="window.openCapabilityModal('${lab.id}')" title="Quản lý năng lực">
+                <span class="badge bg-info text-dark">${capCount} loại xét nghiệm</span>
+                <button class="btn btn-sm btn-outline-primary ms-1" onclick="window.openCapabilityModal('${
+                  lab.id
+                }')" title="Quản lý năng lực">
                   <i class='bx bx-list-plus'></i>
                 </button>
               </td>
               <td>${statusBadge}</td>
               <td class="text-nowrap">
-                <button class="btn btn-sm btn-outline-secondary" onclick="window.openLabModal('${lab.id}')" title="Sửa">
+                <button class="btn btn-sm btn-outline-secondary" onclick="window.openLabModal('${
+                  lab.id
+                }')" title="Sửa">
                   <i class='bx bx-edit'></i>
                 </button>
-                <button class="btn btn-sm btn-outline-danger" onclick="window.deleteLab('${lab.id}','${esc(lab.name).replace(/'/g, "\\'")}')" title="Xóa">
+                <button class="btn btn-sm btn-outline-danger" onclick="window.deleteLab('${
+                  lab.id
+                }','${esc(lab.name).replace(/'/g, "\\'")}')" title="Xóa">
                   <i class='bx bx-trash'></i>
                 </button>
               </td>
@@ -175,7 +197,7 @@
               <i class='bx bx-history'></i> Lịch sử điều phối mẫu
             </button>
             <button class="btn btn-outline-secondary" onclick="window.openTestTypeModal()">
-              <i class='bx bx-list-ul'></i> Danh mục loại XN
+              <i class='bx bx-list-ul'></i> Danh mục loại xét nghiệm
             </button>
             <button class="btn btn-primary" onclick="window.openLabModal()">
               <i class='bx bx-plus'></i> Thêm Phòng Xét nghiệm
@@ -199,7 +221,9 @@
         </div>`;
     } catch (e) {
       console.error('[lab-admin] Lỗi tải danh sách Phòng Xét nghiệm:', e);
-      container.innerHTML = `<div class="alert alert-danger m-3">Lỗi tải danh sách: ${esc(e.message)}</div>`;
+      container.innerHTML = `<div class="alert alert-danger m-3">Lỗi tải danh sách: ${esc(
+        e.message
+      )}</div>`;
     }
   }
 
@@ -209,28 +233,48 @@
   window.openLabModal = async function (labId) {
     _editingLabId = labId || null;
     let lab = {
-      name: '', address: '', phone: '', lat: '', lng: '',
-      level: 'xa_phuong', bsl_level: 2, is_active: true,
+      name: '',
+      address: '',
+      phone: '',
+      lat: '',
+      lng: '',
+      level: 'xa_phuong',
+      bsl_level: 2,
+      is_active: true,
     };
 
     if (labId) {
       try {
         const { data, error } = await window.supabaseClient
-          .from('laboratories').select('*').eq('id', labId).single();
+          .from('laboratories')
+          .select('*')
+          .eq('id', labId)
+          .single();
         if (error) throw error;
         lab = data;
       } catch (e) {
-        if (window.showToast) window.showToast('Lỗi tải Phòng Xét nghiệm: ' + e.message, 'error');
+        if (window.showToast)
+          window.showToast('Lỗi tải Phòng Xét nghiệm: ' + e.message, 'error');
         return;
       }
     }
 
-    const bslOptions = [1, 2, 3, 4].map((n) =>
-      `<option value="${n}" ${lab.bsl_level == n ? 'selected' : ''}>BSL-${n}</option>`
-    ).join('');
-    const levelOptions = Object.entries(LEVEL_LABELS).map(([v, label]) =>
-      `<option value="${v}" ${lab.level === v ? 'selected' : ''}>${label}</option>`
-    ).join('');
+    const bslOptions = [1, 2, 3, 4]
+      .map(
+        (n) =>
+          `<option value="${n}" ${
+            lab.bsl_level == n ? 'selected' : ''
+          }>BSL-${n}</option>`
+      )
+      .join('');
+    const levelOptions = Object.entries(LEVEL_LABELS)
+      .map(
+        ([v, label]) =>
+          `<option value="${v}" ${
+            lab.level === v ? 'selected' : ''
+          }>${label}</option>`
+      )
+      .join('');
 
     // Dựng modal (tạo mới mỗi lần mở để tránh state cũ)
     document.getElementById('lab-modal-wrapper')?.remove();
@@ -242,7 +286,9 @@
           <div class="modal-content">
             <div class="modal-header" style="background:#006a75;color:#fff;">
               <h5 class="modal-title">
-                <i class='bx bxs-flask'></i> ${labId ? 'Sửa' : 'Thêm'} Phòng xét nghiệm
+                <i class='bx bxs-flask'></i> ${
+                  labId ? 'Sửa' : 'Thêm'
+                } Phòng xét nghiệm
               </h5>
               <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
@@ -250,15 +296,21 @@
               <div class="row g-3">
                 <div class="col-md-8">
                   <label class="form-label">Tên Phòng Xét nghiệm <span class="text-danger">*</span></label>
-                  <input id="lab-name" class="form-control" value="${esc(lab.name)}" placeholder="VD: Viện Pasteur TP.HCM">
+                  <input id="lab-name" class="form-control" value="${esc(
+                    lab.name
+                  )}" placeholder="Trung tâm Kiểm soát bệnh tật TP.HCM">
                 </div>
                 <div class="col-md-4">
                   <label class="form-label">Điện thoại</label>
-                  <input id="lab-phone" class="form-control" value="${esc(lab.phone || '')}" placeholder="028...">
+                  <input id="lab-phone" class="form-control" value="${esc(
+                    lab.phone || ''
+                  )}" placeholder="028...">
                 </div>
                 <div class="col-12">
                   <label class="form-label">Địa chỉ</label>
-                  <input id="lab-address" class="form-control" value="${esc(lab.address || '')}" placeholder="Số nhà, đường, phường, quận...">
+                  <input id="lab-address" class="form-control" value="${esc(
+                    lab.address || ''
+                  )}" placeholder="Số nhà, đường, phường, quận...">
                 </div>
                 <div class="col-md-6">
                   <label class="form-label">Tuyến chuyên môn</label>
@@ -274,27 +326,40 @@
 
                 <div class="col-12"><hr class="my-1"></div>
                 <div class="col-12">
-                  <label class="form-label mb-1">Tọa độ <span class="text-danger">*</span></label>
-                  <div class="row g-2">
-                    <div class="col-md-4">
-                      <input id="lab-lat" class="form-control" value="${lab.lat ?? ''}" placeholder="Vĩ độ (lat)" oninput="window._updateLabMarkerFromInput()">
-                    </div>
-                    <div class="col-md-4">
-                      <input id="lab-lng" class="form-control" value="${lab.lng ?? ''}" placeholder="Kinh độ (lng)" oninput="window._updateLabMarkerFromInput()">
-                    </div>
-                    <div class="col-md-4">
-                      <button class="btn btn-outline-secondary w-100" onclick="window._locateLabToDevice()">
-                        <i class='bx bx-current-location'></i> Vị trí của tôi
-                      </button>
-                    </div>
+                <label class="form-label mb-1">Tọa độ <span class="text-danger">*</span></label>
+                <div class="input-group input-group-sm mb-2">
+                  <input id="lab-address-search" class="form-control" placeholder="Nhập địa chỉ để tìm tọa độ, VD: 366A Âu Dương Lân, phường Chánh Hưng, TP.HCM">
+                  <button class="btn btn-outline-primary" type="button" onclick="window._labGeocodeAddress()">
+                    <i class='bx bx-search'></i> Tìm tọa độ
+                  </button>
+                </div>
+                <div id="lab-geocode-hint" class="mb-2"></div>
+                <div class="row g-2">
+                  <div class="col-md-4">
+                    <input id="lab-lat" class="form-control" value="${
+                      lab.lat ?? ''
+                    }" placeholder="Vĩ độ (lat)" oninput="window._updateLabMarkerFromInput()">
                   </div>
-                  <small class="text-muted">Nhập tay hoặc bấm trực tiếp lên bản đồ để đặt điểm.</small>
+                  <div class="col-md-4">
+                    <input id="lab-lng" class="form-control" value="${
+                      lab.lng ?? ''
+                    }" placeholder="Kinh độ (lng)" oninput="window._updateLabMarkerFromInput()">
+                  </div>
+                  <div class="col-md-4">
+                    <button class="btn btn-outline-secondary w-100" onclick="window._locateLabToDevice()">
+                      <i class='bx bx-current-location'></i> Vị trí của tôi
+                    </button>
+                  </div>
+                </div>
+                <small class="text-muted">Nhập địa chỉ, nhập tay, hoặc bấm trực tiếp lên bản đồ để đặt điểm.</small>
                   <div id="lab-picker-map" style="height:300px;border-radius:8px;margin-top:8px;background:#eee;"></div>
                 </div>
 
                 <div class="col-12">
                   <div class="form-check form-switch">
-                    <input class="form-check-input" type="checkbox" id="lab-active" ${lab.is_active ? 'checked' : ''}>
+                    <input class="form-check-input" type="checkbox" id="lab-active" ${
+                      lab.is_active ? 'checked' : ''
+                    }>
                     <label class="form-check-label" for="lab-active">Phòng Xét nghiệm đang hoạt động (nhận điều phối mẫu)</label>
                   </div>
                 </div>
@@ -316,9 +381,13 @@
     modal.show();
 
     // Khởi tạo bản đồ sau khi modal hiển thị xong (Leaflet cần kích thước thật)
-    modalEl.addEventListener('shown.bs.modal', function () {
-      initLabPickerMap(lab.lat, lab.lng);
-    }, { once: true });
+    modalEl.addEventListener(
+      'shown.bs.modal',
+      function () {
+        initLabPickerMap(lab.lat, lab.lng);
+      },
+      { once: true }
+    );
   };
 
   function initLabPickerMap(lat, lng) {
@@ -328,11 +397,14 @@
       return;
     }
     const hasCoord = lat != null && lng != null && lat !== '' && lng !== '';
-    const center = hasCoord ? [parseFloat(lat), parseFloat(lng)] : [10.7769, 106.7009]; // mặc định TP.HCM
+    const center = hasCoord
+      ? [parseFloat(lat), parseFloat(lng)]
+      : [10.7769, 106.7009]; // mặc định TP.HCM
 
     _labMap = L.map('lab-picker-map').setView(center, hasCoord ? 15 : 12);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '© OpenStreetMap', maxZoom: 19,
+      attribution: '© OpenStreetMap',
+      maxZoom: 19,
     }).addTo(_labMap);
 
     if (hasCoord) placeLabMarker(center[0], center[1]);
@@ -368,11 +440,74 @@
       _labMap.setView([lat, lng], Math.max(_labMap.getZoom(), 14));
     }
   };
-
+  // Tìm tọa độ từ địa chỉ (Nominatim) cho form Thêm PXN
+  window._labGeocodeAddress = async function () {
+    const q = document.getElementById('lab-address-search')?.value.trim();
+    const hint = document.getElementById('lab-geocode-hint');
+    if (!q) {
+      if (window.showToast) window.showToast('Nhập địa chỉ cần tìm', 'warning');
+      return;
+    }
+    hint.innerHTML =
+      '<small class="text-muted"><span class="spinner-border spinner-border-sm"></span> Đang tìm...</small>';
+    try {
+      const url =
+        'https://nominatim.openstreetmap.org/search?format=json&limit=5&countrycodes=vn&q=' +
+        encodeURIComponent(q);
+      const res = await fetch(url, { headers: { 'Accept-Language': 'vi' } });
+      const data = await res.json();
+      if (!data || data.length === 0) {
+        hint.innerHTML =
+          '<small class="text-danger">Không tìm thấy. Thử thêm quận, thành phố.</small>';
+        return;
+      }
+      if (data.length === 1) {
+        _labApplyGeocode(data[0]);
+      } else {
+        window._labGeocodeResults = data;
+        hint.innerHTML = `<div class="list-group" style="max-height:150px;overflow:auto;">
+        <small class="text-muted px-2 py-1">Chọn địa điểm đúng:</small>
+        ${data
+          .map(
+            (
+              d,
+              i
+            ) => `<a href="#" class="list-group-item list-group-item-action py-1"
+            onclick='window._labPickGeocode(${i});return false;'><small>${esc(
+              d.display_name
+            )}</small></a>`
+          )
+          .join('')}
+      </div>`;
+      }
+    } catch (e) {
+      hint.innerHTML =
+        '<small class="text-danger">Lỗi tìm: ' + esc(e.message) + '</small>';
+    }
+  };
+  window._labPickGeocode = function (i) {
+    const d = window._labGeocodeResults?.[i];
+    if (d) _labApplyGeocode(d);
+  };
+  function _labApplyGeocode(d) {
+    const lat = parseFloat(d.lat),
+      lng = parseFloat(d.lon);
+    document.getElementById('lab-lat').value = lat.toFixed(6);
+    document.getElementById('lab-lng').value = lng.toFixed(6);
+    document.getElementById(
+      'lab-geocode-hint'
+    ).innerHTML = `<small class="text-success"><i class='bx bx-check-circle'></i> ${esc(
+      d.display_name
+    )}</small>`;
+    // Di chuyển marker + bản đồ theo tọa độ vừa tìm
+    if (typeof window._updateLabMarkerFromInput === 'function')
+      window._updateLabMarkerFromInput();
+  }
   // Lấy vị trí thiết bị
   window._locateLabToDevice = function () {
     if (!navigator.geolocation) {
-      if (window.showToast) window.showToast('Trình duyệt không hỗ trợ định vị', 'warning');
+      if (window.showToast)
+        window.showToast('Trình duyệt không hỗ trợ định vị', 'warning');
       return;
     }
     navigator.geolocation.getCurrentPosition(
@@ -384,7 +519,8 @@
         if (_labMap) _labMap.setView([latitude, longitude], 15);
       },
       (err) => {
-        if (window.showToast) window.showToast('Không lấy được vị trí: ' + err.message, 'warning');
+        if (window.showToast)
+          window.showToast('Không lấy được vị trí: ' + err.message, 'warning');
       },
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
     );
@@ -399,11 +535,16 @@
     const lng = parseFloat(document.getElementById('lab-lng').value);
 
     if (!name) {
-      if (window.showToast) window.showToast('Vui lòng nhập tên Phòng Xét nghiệm', 'warning');
+      if (window.showToast)
+        window.showToast('Vui lòng nhập tên Phòng Xét nghiệm', 'warning');
       return;
     }
     if (isNaN(lat) || isNaN(lng)) {
-      if (window.showToast) window.showToast('Vui lòng đặt tọa độ (nhập tay hoặc chọn trên bản đồ)', 'warning');
+      if (window.showToast)
+        window.showToast(
+          'Vui lòng đặt tọa độ (nhập tay hoặc chọn trên bản đồ)',
+          'warning'
+        );
       return;
     }
 
@@ -411,7 +552,8 @@
       name,
       address: document.getElementById('lab-address').value.trim() || null,
       phone: document.getElementById('lab-phone').value.trim() || null,
-      lat, lng,
+      lat,
+      lng,
       level: document.getElementById('lab-level').value,
       bsl_level: parseInt(document.getElementById('lab-bsl').value),
       is_active: document.getElementById('lab-active').checked,
@@ -421,15 +563,26 @@
       let error;
       if (_editingLabId) {
         ({ error } = await window.supabaseClient
-          .from('laboratories').update(payload).eq('id', _editingLabId));
+          .from('laboratories')
+          .update(payload)
+          .eq('id', _editingLabId));
       } else {
         ({ error } = await window.supabaseClient
-          .from('laboratories').insert([payload]));
+          .from('laboratories')
+          .insert([payload]));
       }
       if (error) throw error;
 
-      bootstrap.Modal.getInstance(document.getElementById('labFormModal'))?.hide();
-      if (window.showToast) window.showToast(_editingLabId ? 'Đã cập nhật Phòng Xét nghiệm' : 'Đã thêm Phòng Xét nghiệm', 'success');
+      bootstrap.Modal.getInstance(
+        document.getElementById('labFormModal')
+      )?.hide();
+      if (window.showToast)
+        window.showToast(
+          _editingLabId
+            ? 'Đã cập nhật Phòng Xét nghiệm'
+            : 'Đã thêm Phòng Xét nghiệm',
+          'success'
+        );
       await renderLabList();
     } catch (e) {
       console.error('[lab-admin] Lỗi lưu Phòng Xét nghiệm:', e);
@@ -441,13 +594,20 @@
   // XÓA PXN
   // ==========================================================================
   window.deleteLab = async function (labId, labName) {
-    if (!confirm(`Xóa Phòng Xét nghiệm "${labName}"?\n\nToàn bộ năng lực xét nghiệm đã gán cũng sẽ bị xóa. Nhật ký điều phối mẫu cũ được giữ lại.`))
+    if (
+      !confirm(
+        `Xóa Phòng Xét nghiệm "${labName}"?\n\nToàn bộ năng lực xét nghiệm đã gán cũng sẽ bị xóa. Nhật ký điều phối mẫu cũ được giữ lại.`
+      )
+    )
       return;
     try {
       const { error } = await window.supabaseClient
-        .from('laboratories').delete().eq('id', labId);
+        .from('laboratories')
+        .delete()
+        .eq('id', labId);
       if (error) throw error;
-      if (window.showToast) window.showToast('Đã xóa Phòng Xét nghiệm', 'success');
+      if (window.showToast)
+        window.showToast('Đã xóa Phòng Xét nghiệm', 'success');
       await renderLabList();
     } catch (e) {
       if (window.showToast) window.showToast('Lỗi xóa: ' + e.message, 'error');
@@ -461,15 +621,22 @@
     let lab, caps;
     try {
       const [labRes, capRes] = await Promise.all([
-        window.supabaseClient.from('laboratories').select('name,bsl_level').eq('id', labId).single(),
-        window.supabaseClient.from('lab_capabilities')
-          .select('*, test_types(name, required_bsl)').eq('lab_id', labId),
+        window.supabaseClient
+          .from('laboratories')
+          .select('name,bsl_level')
+          .eq('id', labId)
+          .single(),
+        window.supabaseClient
+          .from('lab_capabilities')
+          .select('*, test_types(name, required_bsl)')
+          .eq('lab_id', labId),
       ]);
       if (labRes.error) throw labRes.error;
       lab = labRes.data;
       caps = capRes.data || [];
     } catch (e) {
-      if (window.showToast) window.showToast('Lỗi tải năng lực: ' + e.message, 'error');
+      if (window.showToast)
+        window.showToast('Lỗi tải năng lực: ' + e.message, 'error');
       return;
     }
 
@@ -478,28 +645,44 @@
     const available = _testTypesCache.filter((t) => !usedIds.has(t.id));
 
     // Cảnh báo nếu năng lực đòi BSL cao hơn cấp của PXN (dữ liệu mâu thuẫn)
-    const capRows = caps.map((c) => {
-      const reqBsl = c.test_types?.required_bsl ?? '?';
-      const mismatch = c.test_types && c.test_types.required_bsl > lab.bsl_level;
-      return `
+    const capRows = caps
+      .map((c) => {
+        const reqBsl = c.test_types?.required_bsl ?? '?';
+        const mismatch =
+          c.test_types && c.test_types.required_bsl > lab.bsl_level;
+        return `
         <tr class="${mismatch ? 'table-danger' : ''}">
           <td>
             ${esc(c.test_types?.name || '(không rõ)')}
-            ${mismatch ? `<br><small class="text-danger"><i class="bx bx-error"></i> XN này cần BSL-${reqBsl} nhưng Phòng Xét nghiệm chỉ đạt BSL-${lab.bsl_level}</small>` : ''}
+            ${
+              mismatch
+                ? `<br><small class="text-danger"><i class="bx bx-error"></i> Xét nghiệm này cần BSL-${reqBsl} nhưng Phòng Xét nghiệm chỉ đạt BSL-${lab.bsl_level}</small>`
+                : ''
+            }
           </td>
           <td class="text-center">${c.max_capacity_per_day} mẫu/ngày</td>
-          <td class="text-center">${c.turnaround_hours != null ? c.turnaround_hours + 'h' : '—'}</td>
+          <td class="text-center">${
+            c.turnaround_hours != null ? c.turnaround_hours + 'h' : '—'
+          }</td>
           <td class="text-center">
-            <button class="btn btn-sm btn-outline-danger" onclick="window.removeCapability('${c.id}','${labId}')">
+            <button class="btn btn-sm btn-outline-danger" onclick="window.removeCapability('${
+              c.id
+            }','${labId}')">
               <i class='bx bx-trash'></i>
             </button>
           </td>
         </tr>`;
-    }).join('');
+      })
+      .join('');
 
-    const addOptions = available.map((t) =>
-      `<option value="${t.id}" data-bsl="${t.required_bsl}">${esc(t.name)} (cần BSL-${t.required_bsl})</option>`
-    ).join('');
+    const addOptions = available
+      .map(
+        (t) =>
+          `<option value="${t.id}" data-bsl="${t.required_bsl}">${esc(
+            t.name
+          )} (cần BSL-${t.required_bsl})</option>`
+      )
+      .join('');
 
     document.getElementById('cap-modal-wrapper')?.remove();
     const wrap = document.createElement('div');
@@ -509,8 +692,12 @@
         <div class="modal-dialog modal-lg">
           <div class="modal-content">
             <div class="modal-header" style="background:#006a75;color:#fff;">
-              <h5 class="modal-title"><i class='bx bx-list-plus'></i> Năng lực: ${esc(lab.name)}
-                <span class="badge bg-light text-dark ms-2">BSL-${lab.bsl_level}</span>
+              <h5 class="modal-title"><i class='bx bx-list-plus'></i> Năng lực: ${esc(
+                lab.name
+              )}
+                <span class="badge bg-light text-dark ms-2">BSL-${
+                  lab.bsl_level
+                }</span>
               </h5>
               <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
@@ -519,13 +706,17 @@
                 <thead class="table-light">
                   <tr><th>Loại xét nghiệm</th><th class="text-center">Công suất/ngày</th><th class="text-center">Trả Kết quả</th><th></th></tr>
                 </thead>
-                <tbody>${capRows || '<tr><td colspan="4" class="text-center text-muted py-3">Chưa gán năng lực nào.</td></tr>'}</tbody>
+                <tbody>${
+                  capRows ||
+                  '<tr><td colspan="4" class="text-center text-muted py-3">Chưa gán năng lực nào.</td></tr>'
+                }</tbody>
               </table>
               <hr>
               <h6 class="mb-2"><i class='bx bx-plus-circle'></i> Thêm năng lực</h6>
-              ${available.length === 0
-                ? '<div class="text-muted">Đã gán hết các loại XN trong danh mục.</div>'
-                : `<div class="row g-2 align-items-end">
+              ${
+                available.length === 0
+                  ? '<div class="text-muted">Đã gán hết các loại xét nghiệm trong danh mục.</div>'
+                  : `<div class="row g-2 align-items-end">
                     <div class="col-md-5">
                       <label class="form-label">Loại xét nghiệm</label>
                       <select id="cap-testtype" class="form-select">${addOptions}</select>
@@ -543,7 +734,8 @@
                         <i class='bx bx-plus'></i> Thêm
                       </button>
                     </div>
-                  </div>`}
+                  </div>`
+              }
             </div>
           </div>
         </div>
@@ -556,39 +748,48 @@
     const sel = document.getElementById('cap-testtype');
     const testTypeId = sel.value;
     const reqBsl = parseInt(sel.selectedOptions[0]?.dataset.bsl || '2');
-    const capacity = parseInt(document.getElementById('cap-capacity').value) || 0;
+    const capacity =
+      parseInt(document.getElementById('cap-capacity').value) || 0;
     const turnaround = document.getElementById('cap-turnaround').value;
 
     // Cảnh báo (không chặn) nếu gán XN đòi BSL cao hơn cấp Phòng Xét nghiệm — dữ liệu sẽ mâu thuẫn
     if (reqBsl > labBsl) {
       const ok = confirm(
-        `Cảnh báo an toàn sinh học:\n\nLoại XN này yêu cầu BSL-${reqBsl}, nhưng Phòng Xét nghiệm chỉ đạt BSL-${labBsl}.\n\n` +
-        `Nếu vẫn gán, khi điều phối mẫu hệ thống sẽ TỰ ĐỘNG LOẠI Phòng Xét nghiệm này khỏi gợi ý (vì không đủ cấp an toàn) — năng lực gán vào sẽ vô tác dụng.\n\n` +
-        `Bạn có chắc muốn tiếp tục? (Nên kiểm tra lại cấp BSL của Phòng Xét nghiệm)`
+        `Cảnh báo an toàn sinh học:\n\nLoại xét nghiệm này yêu cầu BSL-${reqBsl}, nhưng Phòng Xét nghiệm chỉ đạt BSL-${labBsl}.\n\n` +
+          `Nếu vẫn gán, khi điều phối mẫu hệ thống sẽ TỰ ĐỘNG LOẠI Phòng Xét nghiệm này khỏi gợi ý (vì không đủ cấp an toàn) — năng lực gán vào sẽ vô tác dụng.\n\n` +
+          `Bạn có chắc muốn tiếp tục? (Nên kiểm tra lại cấp BSL của Phòng Xét nghiệm)`
       );
       if (!ok) return;
     }
 
     try {
-      const { error } = await window.supabaseClient.from('lab_capabilities').insert([{
-        lab_id: labId,
-        test_type_id: testTypeId,
-        max_capacity_per_day: capacity,
-        turnaround_hours: turnaround === '' ? null : parseInt(turnaround),
-      }]);
+      const { error } = await window.supabaseClient
+        .from('lab_capabilities')
+        .insert([
+          {
+            lab_id: labId,
+            test_type_id: testTypeId,
+            max_capacity_per_day: capacity,
+            turnaround_hours: turnaround === '' ? null : parseInt(turnaround),
+          },
+        ]);
       if (error) throw error;
       if (window.showToast) window.showToast('Đã thêm năng lực', 'success');
-      window.openCapabilityModal(labId);   // reload modal
-      renderLabList();                       // cập nhật số đếm ở bảng chính
+      window.openCapabilityModal(labId); // reload modal
+      renderLabList(); // cập nhật số đếm ở bảng chính
     } catch (e) {
-      if (window.showToast) window.showToast('Lỗi thêm năng lực: ' + e.message, 'error');
+      if (window.showToast)
+        window.showToast('Lỗi thêm năng lực: ' + e.message, 'error');
     }
   };
 
   window.removeCapability = async function (capId, labId) {
     if (!confirm('Xóa năng lực này khỏi Phòng Xét nghiệm?')) return;
     try {
-      const { error } = await window.supabaseClient.from('lab_capabilities').delete().eq('id', capId);
+      const { error } = await window.supabaseClient
+        .from('lab_capabilities')
+        .delete()
+        .eq('id', capId);
       if (error) throw error;
       window.openCapabilityModal(labId);
       renderLabList();
@@ -602,12 +803,18 @@
   // ==========================================================================
   window.openTestTypeModal = async function () {
     await loadTestTypes();
-    const rows = _testTypesCache.map((t) => `
+    const rows = _testTypesCache
+      .map(
+        (t) => `
       <tr>
         <td>${esc(t.name)}</td>
         <td>${esc(t.category || '—')}</td>
-        <td class="text-center"><span class="badge bg-dark">BSL-${t.required_bsl}</span></td>
-      </tr>`).join('');
+        <td class="text-center"><span class="badge bg-dark">BSL-${
+          t.required_bsl
+        }</span></td>
+      </tr>`
+      )
+      .join('');
 
     document.getElementById('tt-modal-wrapper')?.remove();
     const wrap = document.createElement('div');
@@ -623,17 +830,20 @@
             <div class="modal-body">
               <div class="alert alert-warning py-2">
                 <small><i class='bx bx-info-circle'></i> Cấp BSL yêu cầu quyết định việc chặn điều phối mẫu.
-                Cần cán bộ an toàn sinh học của HCDC rà soát trước khi dùng thật.</small>
+                Cần cán bộ an toàn sinh học của HCDC rà soát.</small>
               </div>
               <table class="table table-sm align-middle">
-                <thead class="table-light"><tr><th>Tên loại XN</th><th>Nhóm</th><th class="text-center">BSL yêu cầu</th></tr></thead>
-                <tbody>${rows || '<tr><td colspan="3" class="text-center text-muted">Chưa có loại XN.</td></tr>'}</tbody>
+                <thead class="table-light"><tr><th>Tên loại xét nghiệm</th><th>Nhóm</th><th class="text-center">BSL yêu cầu</th></tr></thead>
+                <tbody>${
+                  rows ||
+                  '<tr><td colspan="3" class="text-center text-muted">Chưa có loại xét nghiệm.</td></tr>'
+                }</tbody>
               </table>
               <hr>
               <h6 class="mb-2"><i class='bx bx-plus-circle'></i> Thêm loại xét nghiệm</h6>
               <div class="row g-2 align-items-end">
                 <div class="col-md-5">
-                  <label class="form-label">Tên loại XN</label>
+                  <label class="form-label">Tên loại xét nghiệm</label>
                   <input id="tt-name" class="form-control" placeholder="VD: PCR Sốt rét">
                 </div>
                 <div class="col-md-3">
@@ -664,33 +874,44 @@
   window.addTestType = async function () {
     const name = document.getElementById('tt-name').value.trim();
     if (!name) {
-      if (window.showToast) window.showToast('Nhập tên loại XN', 'warning');
+      if (window.showToast)
+        window.showToast('Nhập tên loại xét nghiệm', 'warning');
       return;
     }
     try {
-      const { error } = await window.supabaseClient.from('test_types').insert([{
-        name,
-        category: document.getElementById('tt-category').value.trim() || null,
-        required_bsl: parseInt(document.getElementById('tt-bsl').value),
-      }]);
+      const { error } = await window.supabaseClient.from('test_types').insert([
+        {
+          name,
+          category: document.getElementById('tt-category').value.trim() || null,
+          required_bsl: parseInt(document.getElementById('tt-bsl').value),
+        },
+      ]);
       if (error) throw error;
-      if (window.showToast) window.showToast('Đã thêm loại XN', 'success');
-      window.openTestTypeModal();  // reload
+      if (window.showToast)
+        window.showToast('Đã thêm loại xét nghiệm', 'success');
+      window.openTestTypeModal(); // reload
     } catch (e) {
-      const msg = e.message?.includes('duplicate') ? 'Loại XN này đã tồn tại.' : e.message;
+      const msg = e.message?.includes('duplicate')
+        ? 'Loại xét nghiệm này đã tồn tại.'
+        : e.message;
       if (window.showToast) window.showToast('Lỗi: ' + msg, 'error');
     }
   };
 
-  // Mở lịch sử điều mẫu (không tham số = xem tất cả sự cố).
+  // Mở lịch sử điều phối mẫu (không tham số = xem tất cả sự cố).
   // Guard: hàm showDispatchHistory nằm ở lab-dispatch-actions.js.
   window._openDispatchHistorySafe = function () {
     if (typeof window.showDispatchHistory === 'function') {
-      window.showDispatchHistory();  // không tham số → xem tất cả
+      window.showDispatchHistory(); // không tham số → xem tất cả
     } else {
       if (window.showToast)
-        window.showToast('Chưa nạp module điều phối (lab-dispatch-actions.js).', 'warning');
-      console.warn('[lab-admin] showDispatchHistory chưa tồn tại — kiểm tra đã nhúng lab-dispatch-actions.js chưa.');
+        window.showToast(
+          'Chưa nạp module điều phối (lab-dispatch-actions.js).',
+          'warning'
+        );
+      console.warn(
+        '[lab-admin] showDispatchHistory chưa tồn tại — kiểm tra đã nhúng lab-dispatch-actions.js chưa.'
+      );
     }
   };
 
@@ -714,10 +935,18 @@ window.showConfirm = function (opts = {}) {
   return new Promise((resolve) => {
     document.getElementById('app-confirm-wrapper')?.remove();
 
-    const headerBg = variant === 'danger' ? '#dc3545'
-                   : variant === 'warning' ? '#f0ad4e' : '#006a75';
-    const btnClass = variant === 'danger' ? 'btn-danger'
-                   : variant === 'warning' ? 'btn-warning' : 'btn-primary';
+    const headerBg =
+      variant === 'danger'
+        ? '#dc3545'
+        : variant === 'warning'
+        ? '#f0ad4e'
+        : '#006a75';
+    const btnClass =
+      variant === 'danger'
+        ? 'btn-danger'
+        : variant === 'warning'
+        ? 'btn-warning'
+        : 'btn-primary';
 
     const wrap = document.createElement('div');
     wrap.id = 'app-confirm-wrapper';
@@ -726,12 +955,20 @@ window.showConfirm = function (opts = {}) {
         <div class="modal-dialog modal-dialog-centered">
           <div class="modal-content">
             <div class="modal-header" style="background:${headerBg};color:#fff;">
-              <h5 class="modal-title"><i class='bx ${icon}'></i> ${window.escapeHtml(title)}</h5>
+              <h5 class="modal-title"><i class='bx ${icon}'></i> ${window.escapeHtml(
+      title
+    )}</h5>
             </div>
-            <div class="modal-body" style="white-space:pre-line;">${window.escapeHtml(message)}</div>
+            <div class="modal-body" style="white-space:pre-line;">${window.escapeHtml(
+              message
+            )}</div>
             <div class="modal-footer">
-              <button class="btn btn-secondary" id="app-confirm-cancel">${window.escapeHtml(cancelText)}</button>
-              <button class="btn ${btnClass}" id="app-confirm-ok">${window.escapeHtml(confirmText)}</button>
+              <button class="btn btn-secondary" id="app-confirm-cancel">${window.escapeHtml(
+                cancelText
+              )}</button>
+              <button class="btn ${btnClass}" id="app-confirm-ok">${window.escapeHtml(
+      confirmText
+    )}</button>
             </div>
           </div>
         </div>
@@ -747,30 +984,36 @@ window.showConfirm = function (opts = {}) {
       if (settled) return;
       settled = true;
       result = val;
-      modal.hide();   // chỉ hide, việc dọn dẹp để 'hidden.bs.modal' lo
+      modal.hide(); // chỉ hide, việc dọn dẹp để 'hidden.bs.modal' lo
     };
 
     document.getElementById('app-confirm-ok').onclick = () => finish(true);
     document.getElementById('app-confirm-cancel').onclick = () => finish(false);
 
     // Khi modal đã ẩn HẲN → dọn dẹp + resolve
-    modalEl.addEventListener('hidden.bs.modal', () => {
-      // Xóa DOM của modal này
-      wrap.remove();
+    modalEl.addEventListener(
+      'hidden.bs.modal',
+      () => {
+        // Xóa DOM của modal này
+        wrap.remove();
 
-      // DỌN BACKDROP KẸT: nếu không còn modal nào đang mở, gỡ hết backdrop
-      // và trả body về trạng thái bình thường.
-      setTimeout(() => {
-        if (!document.querySelector('.modal.show')) {
-          document.querySelectorAll('.modal-backdrop').forEach((b) => b.remove());
-          document.body.classList.remove('modal-open');
-          document.body.style.overflow = '';
-          document.body.style.paddingRight = '';
-        }
-      }, 150);
+        // DỌN BACKDROP KẸT: nếu không còn modal nào đang mở, gỡ hết backdrop
+        // và trả body về trạng thái bình thường.
+        setTimeout(() => {
+          if (!document.querySelector('.modal.show')) {
+            document
+              .querySelectorAll('.modal-backdrop')
+              .forEach((b) => b.remove());
+            document.body.classList.remove('modal-open');
+            document.body.style.overflow = '';
+            document.body.style.paddingRight = '';
+          }
+        }, 150);
 
-      resolve(result);
-    }, { once: true });
+        resolve(result);
+      },
+      { once: true }
+    );
 
     modal.show();
   });
