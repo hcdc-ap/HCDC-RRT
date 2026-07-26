@@ -15,7 +15,7 @@
 //       window.openDispatchModal()
 //
 // Phân quyền nút hành động do lab-dispatch-actions.js (2C) quyết định:
-//   admin → "Chốt điều mẫu" · Leader → "Đề xuất" · khác → chỉ xem.
+//   admin → "Chốt điều phối mẫu" · Leader → "Đề xuất" · khác → chỉ xem.
 // ============================================================================
 
 (function () {
@@ -87,7 +87,7 @@
       _testTypes = data || [];
     } catch (e) {
       if (window.showToast)
-        window.showToast('Lỗi tải loại XN: ' + e.message, 'error');
+        window.showToast('Lỗi tải loại xét nghiệm: ' + e.message, 'error');
       return;
     }
 
@@ -427,6 +427,8 @@
         </div>`;
       if (typeof window.showPendingSuggestions === 'function')
         window.showPendingSuggestions(S.incidentId, S.testTypeId);
+      // Không tìm thấy PXN → xóa hình dispatch cũ trên bản đồ (nếu có)
+      if (window.LabDispatchMap) window.LabDispatchMap.clear();
       return;
     }
 
@@ -538,7 +540,7 @@
         <small class="text-muted"><i class='bx bx-info-circle'></i>
           Bấm <i class='bx bx-map'></i> xem tuyến · <i class='bx bx-x-circle'></i> loại Phòng xét nghiệm và xếp lại.</small>
         <button class="btn btn-sm btn-outline-secondary" onclick="window.showDispatchHistory(window._getDispatchState().incidentId)">
-          <i class='bx bx-history'></i> Lịch sử điều mẫu hôm nay
+          <i class='bx bx-history'></i> Lịch sử điều phối mẫu hôm nay
         </button>
       </div>`;
 
@@ -547,6 +549,20 @@
     }
     if (typeof window.showPendingSuggestions === 'function') {
       window.showPendingSuggestions(S.incidentId, S.testTypeId);
+    }
+    if (typeof window.renderDispatchActions === 'function') {
+      top.forEach((lab) => window.renderDispatchActions(lab, S));
+    }
+    if (typeof window.showPendingSuggestions === 'function') {
+      window.showPendingSuggestions(S.incidentId, S.testTypeId);
+    }
+    // Chiếu kết quả lên bản đồ nền (Bước 2) — CHỖ ĐÚNG: nhánh CÓ kết quả
+    if (window.LabDispatchMap && ranked.length) {
+      window.LabDispatchMap.project(result, {
+        lat: S.lat,
+        lng: S.lng,
+        name: S.incidentName || 'Điểm sự kiện',
+      });
     }
   }
   window._toggleDispatchHelp = function () {
