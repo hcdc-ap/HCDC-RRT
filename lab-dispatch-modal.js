@@ -35,7 +35,28 @@
               "'": '&#039;',
             }[c])
         );
+  // Danh sách ngày lễ VN cố định (dd-mm). Admin bổ sung ngày lễ âm lịch thủ công.
+  const VN_HOLIDAYS = [
+    '01-01', // Tết Dương lịch
+    '30-04', // Giải phóng miền Nam
+    '01-05', // Quốc tế Lao động
+    '02-09', // Quốc khánh
+    // Tết Nguyên đán, Giỗ Tổ (âm lịch) đổi hằng năm — thêm dạng 'dd-mm' của năm hiện tại nếu cần
+  ];
 
+  // Trả về chuỗi cảnh báo nếu hôm nay là T7/CN/lễ; '' nếu ngày thường
+  function getDayWarning() {
+    const now = new Date();
+    const dow = now.getDay(); // 0=CN, 6=T7
+    const dd = String(now.getDate()).padStart(2, '0');
+    const mm = String(now.getMonth() + 1).padStart(2, '0');
+    const isHoliday = VN_HOLIDAYS.includes(`${dd}-${mm}`);
+
+    if (isHoliday) return 'Hôm nay là ngày lễ';
+    if (dow === 0) return 'Hôm nay là Chủ nhật';
+    if (dow === 6) return 'Hôm nay là Thứ Bảy';
+    return '';
+  }
   // State phiên làm việc hiện tại của modal
   const S = {
     incidentId: null,
@@ -81,8 +102,7 @@
         .from('test_types')
         .select('*')
         .eq('is_active', true)
-        .order('required_bsl', { ascending: false })
-        .order('name');
+        .order('name', { ascending: true });
       if (error) throw error;
       _testTypes = data || [];
     } catch (e) {
@@ -260,6 +280,14 @@
 
     const modalEl = document.getElementById('dispatchModal');
     new bootstrap.Modal(modalEl).show();
+    // Biến dropdown loại XN thành ô tìm-gõ (Select2 — app đã có sẵn)
+    if (window.$ && $.fn.select2) {
+      $('#disp-testtype').select2({
+        dropdownParent: $('#dispatchModal'),   // QUAN TRỌNG: neo trong modal, không Select2 sẽ bị modal che
+        placeholder: 'Gõ để tìm loại xét nghiệm...',
+        width: '100%',
+      });
+    }
 
     // Dọn dẹp khi modal đóng: hủy map + gỡ backdrop kẹt
     modalEl.addEventListener(
@@ -272,6 +300,10 @@
           S.map = null;
           S.routeLayers = [];
         }
+      // Hủy Select2 của dropdown loại XN khi đóng modal
+      if (window.$ && $.fn.select2 && $('#disp-testtype').hasClass('select2-hidden-accessible')) {
+        $('#disp-testtype').select2('destroy');
+      }
         wrap.remove();
         setTimeout(() => {
           if (!document.querySelector('.modal.show')) {
@@ -414,8 +446,18 @@
 
     if (!ranked.length) {
       const tt = _testTypes.find((t) => t.id === S.testTypeId);
+      // Cảnh báo mềm nếu hôm nay T7/CN/lễ (đa số PXN nghỉ, chỉ vài PXN trực)
+      const dayWarn = getDayWarning();
+      const dayWarnHtml = dayWarn
+        ? `<div class="alert alert-warning py-2 mb-2">
+           <i class='bx bx-calendar-exclamation'></i> <b>${dayWarn}</b> — đa số Phòng xét nghiệm
+           có thể nghỉ. Vui lòng <b>gọi xác nhận</b> Phòng xét nghiệm còn trực trước khi điều phối mẫu.
+         </div>`
+        : '';
       el.innerHTML = `
-        <div id="disp-pending"></div>
+       <div id="disp-pending"></div>
+       ${dayWarnHtml}
+       ${osrmWarn}
         <div class="alert alert-warning">
           <i class='bx bx-error'></i> <strong>Không tìm thấy Phòng xét nghiệm phù hợp</strong> cho "${esc(
             tt?.name || ''
