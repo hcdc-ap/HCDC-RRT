@@ -34,6 +34,7 @@
   let _labMarker = null; // marker chọn tọa độ
   let _editingLabId = null; // id PXN đang sửa (null = thêm mới)
   let _testTypesCache = []; // cache danh mục loại XN
+  let _ttSort = { col: 'required_bsl', dir: 'desc' }; // cột + chiều sắp xếp bảng loại XN
 
   const esc = (s) =>
     window.escapeHtml
@@ -103,9 +104,7 @@
       const { data, error } = await window.supabaseClient
         .from('test_types')
         .select('*')
-        .eq('is_active', true)
-        .order('required_bsl', { ascending: false })
-        .order('name', { ascending: true });
+        .eq('is_active', true);
       if (error) throw error;
       _testTypesCache = data || [];
     } catch (e) {
@@ -803,7 +802,21 @@
   // ==========================================================================
   window.openTestTypeModal = async function () {
     await loadTestTypes();
-    const rows = _testTypesCache
+
+    // Sắp xếp theo cột + chiều đang chọn (_ttSort)
+    const _dir = _ttSort.dir === 'asc' ? 1 : -1;
+    const _sorted = [..._testTypesCache].sort((a, b) => {
+      let va = a[_ttSort.col],
+        vb = b[_ttSort.col];
+      if (_ttSort.col === 'required_bsl') {
+        // cột số
+        return ((va ?? 0) - (vb ?? 0)) * _dir;
+      }
+      // cột chữ (name, category) — so sánh tiếng Việt
+      return String(va ?? '').localeCompare(String(vb ?? ''), 'vi') * _dir;
+    });
+
+    const rows = _sorted
       .map(
         (t) => `
       <tr>
@@ -833,7 +846,17 @@
                 Cần cán bộ an toàn sinh học của HCDC rà soát.</small>
               </div>
               <table class="table table-sm align-middle">
-                <thead class="table-light"><tr><th>Tên loại xét nghiệm</th><th>Nhóm</th><th class="text-center">BSL yêu cầu</th></tr></thead>
+              <thead class="table-light"><tr>
+              <th style="cursor:pointer;" onclick="window.sortTestTypes('name')">
+                Tên loại Xét nghiệm ${_ttArrow('name')}
+              </th>
+              <th style="cursor:pointer;" onclick="window.sortTestTypes('category')">
+                Nhóm ${_ttArrow('category')}
+              </th>
+              <th class="text-center" style="cursor:pointer;" onclick="window.sortTestTypes('required_bsl')">
+                BSL yêu cầu ${_ttArrow('required_bsl')}
+              </th>
+            </tr></thead>
                 <tbody>${
                   rows ||
                   '<tr><td colspan="3" class="text-center text-muted">Chưa có loại xét nghiệm.</td></tr>'
@@ -871,6 +894,25 @@
     new bootstrap.Modal(document.getElementById('ttModal')).show();
   };
 
+  // Mũi tên chỉ chiều sắp xếp trên cột đang active
+  function _ttArrow(col) {
+    if (_ttSort.col !== col)
+      return '<i class="bx bx-sort-alt-2" style="opacity:.3;"></i>';
+    return _ttSort.dir === 'asc'
+      ? '<i class="bx bx-up-arrow-alt"></i>'
+      : '<i class="bx bx-down-arrow-alt"></i>';
+  }
+
+  // Bấm tiêu đề cột → đổi cột/chiều rồi vẽ lại bảng
+  window.sortTestTypes = function (col) {
+    if (_ttSort.col === col) {
+      _ttSort.dir = _ttSort.dir === 'asc' ? 'desc' : 'asc'; // cùng cột → đảo chiều
+    } else {
+      _ttSort.col = col;
+      _ttSort.dir = 'asc'; // cột mới → tăng dần
+    }
+    window.openTestTypeModal(); // vẽ lại modal với thứ tự mới
+  };
   window.addTestType = async function () {
     const name = document.getElementById('tt-name').value.trim();
     if (!name) {
