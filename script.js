@@ -458,7 +458,8 @@ window.onInitialDataSuccess = function (appStateData) {
   }
 
   // Kiểm tra quyền Admin để hiện nút xuất báo cáo
-  if (window.userSession && window.userSession.role?.includes('admin')) {
+
+  if (window.userSession && window.userSession.role === 'admin') {
     $('#btn-export-members').show();
     $('#btn-export-logistics').show();
   }
@@ -477,14 +478,39 @@ window.filterDataByRole = function (dataArray) {
   const userId = window.userSession?.id || window.userSession?.user?.id;
   const userEmail = window.userSession?.email;
 
-  // ✅ ADMIN: Xem tất cả
+  // ✅ ADMIN (thành phố): Xem tất cả
   if (userRole === 'admin') {
     return dataArray;
   }
 
-  // ✅ USER: Chỉ xem dữ liệu của chính mình
+  // ✅ WARD_ADMIN (tuyến cơ sở): Chỉ xem nhân sự CÙNG XÃ CÔNG TÁC + là tuyến cơ sở
+  if (userRole === 'ward_admin') {
+    const myWorkplace = String(window.userSession?.workplace_ward || '')
+      .toLowerCase()
+      .trim();
+    // 2 chuỗi tuyến cơ sở — KHỚP với is_grassroots_unit ở DB
+    const grassrootsUnits = [
+      'trạm y tế phường/xã/ đặc khu',
+      'ubnd phường/xã/ đặc khu',
+    ];
+    return dataArray.filter((item) => {
+      const itemWorkplace = String(item.workplace_ward || '')
+        .toLowerCase()
+        .trim();
+      const itemFax = String(item.fax || '')
+        .toLowerCase()
+        .trim();
+      // Chỉ thấy người: cùng xã công tác VÀ thuộc tuyến cơ sở
+      return (
+        itemWorkplace &&
+        itemWorkplace === myWorkplace &&
+        grassrootsUnits.includes(itemFax)
+      );
+    });
+  }
+
+  // ✅ USER thường: Chỉ xem dữ liệu của chính mình
   return dataArray.filter((item) => {
-    // Kiểm tra khớp theo ID, Email hoặc created_by
     return (
       item.id === userId ||
       item.user_id === userId ||
@@ -557,7 +583,7 @@ window.enterDashboard = async function () {
           let query = window.supabaseClient
             .from('profiles')
             .select(
-              'id, email, full_name, role, team, position, deployment_status, approval_status'
+              'id, email, full_name, role, team, position, deployment_status, approval_status, workplace_ma_xa, fax'
             );
 
           // FIX: User thường chỉ lấy profile của chính mình
@@ -575,7 +601,7 @@ window.enterDashboard = async function () {
           const { data, error } = await window.supabaseClient
             .from('incidents')
             .select(
-              'id, event_name, status, location_text, activation_time, members, declined_members, confirmations'
+              'id, event_name, status, location_text, ma_xa, activation_time, members, initial_selected_members, declined_members, confirmations'
             )
             .eq('status', 'active');
           if (error) throw error;
@@ -2190,7 +2216,7 @@ document.addEventListener('DOMContentLoaded', function () {
   document
     .getElementById('notificationIcon')
     .addEventListener('click', function (e) {
-      loadUserNotifications();
+      window.loadUserNotifications();
     });
 
   //SEARCH IF NOT USING DATATABLE
@@ -2652,53 +2678,40 @@ document.addEventListener('DOMContentLoaded', function () {
     $(document)
       .off('click.dropdownToggle')
       .on('click.dropdownToggle', '.notification, .profile', function (e) {
-        e.preventDefault(); // Ngăn reload nếu là thẻ <a>
-        e.stopPropagation(); // Ngăn click ngoài đóng ngay lập tức
+        e.preventDefault();
+        e.stopPropagation();
 
         const $wrapper = $(this);
+        let $menu;
 
-        // 🔍 Tìm menu: ưu tiên class cụ thể, fallback ul trực tiếp
-        let $menu = $wrapper.find(
-          '.notification-menu, .profile-menu, ul.dropdown-menu, .dropdown'
-        );
-
-        // Nếu menu là sibling (cùng cấp) thay vì child
-        if ($menu.length === 0) {
-          $menu = $wrapper.siblings(
-            '.notification-menu, .profile-menu, ul.dropdown-menu, .dropdown'
-          );
+        // 🎯 TÁCH RIÊNG RẠCH RÒI THEO TỪNG CLASS
+        if ($wrapper.hasClass('notification')) {
+          // Nếu bấm vào chuông: Chỉ tìm đúng notification-menu nằm kế bên
+          $menu = $wrapper.siblings('#notificationMenu, .notification-menu');
+          // Đóng menu profile lại ngay lập tức
+          $('.profile-menu').removeClass('show').hide();
+        } else if ($wrapper.hasClass('profile')) {
+          // Nếu bấm vào profile: Chỉ tìm đúng profile-menu nằm kế bên
+          $menu = $wrapper.siblings('#profileMenu, .profile-menu');
+          // Đóng menu notification lại ngay lập tức
+          $('.notification-menu').removeClass('show').hide();
         }
 
-        if ($menu.length === 0) {
-          console.warn('️ Không tìm thấy menu dropdown trong:', this);
-          console.log(
-            ' HTML cấu trúc:',
-            this.outerHTML.substring(0, 150) + '...'
-          );
+        if (!$menu || $menu.length === 0) {
+          console.warn('⚠️ Không tìm thấy menu dropdown tương ứng cho:', this);
           return;
         }
 
-        // Đóng các menu khác đang mở
-        $('.notification-menu, .profile-menu, ul.dropdown-menu, .dropdown')
-          .not($menu)
-          .removeClass('show');
+        // Toggle menu hiện tại (kết hợp cả class 'show' và style display để đồng bộ code cũ)
+        const isOpen = $menu.hasClass('show');
 
-        // Toggle menu hiện tại
-        $menu.toggleClass('show');
-        console.log(
-          '🔽 Dropdown state:',
-          $menu.hasClass('show') ? 'OPEN ✅' : 'CLOSED ❌'
-        );
-      });
+        // Đóng tất cả các menu khác trước
+        $('.notification-menu, .profile-menu').removeClass('show').hide();
 
-    // Đóng khi click ra ngoài
-    $(document)
-      .off('click.dropdownClose')
-      .on('click.dropdownClose', function (e) {
-        if (!$(e.target).closest('.notification, .profile').length) {
-          $(
-            '.notification-menu, .profile-menu, ul.dropdown-menu, .dropdown'
-          ).removeClass('show');
+        if (!isOpen) {
+          $menu.addClass('show').show(); // Mở lên
+        } else {
+          $menu.removeClass('show').hide(); // Đóng lại
         }
       });
 
@@ -2825,78 +2838,145 @@ document.addEventListener('DOMContentLoaded', function () {
 
   // 2. HÀM ĐIỀU PHỐI GIAO DIỆN CHÍNH
   // ============================================================
-  // PAGE-DASHBOARD (Đã nâng cấp: Tự động Fetch dữ liệu trực tiếp)
+  // PAGE-DASHBOARD (Phiên bản Hoàn thiện: 100% Real-time, No Cache, Bọc lót Regex)
   // ============================================================
   window.renderDashboard = async function (customShowLoading = true) {
     try {
-      // ✅ Show loading nếu cần
       if (customShowLoading && typeof window.customShowLoading === 'function') {
         window.customShowLoading(true);
       }
 
-      // ✅ Kiểm tra phân quyền
-      const isAdmin = window.isUserAdmin();
+      // =======================================================
+      // 1. CẬP NHẬT LOGIC PHÂN QUYỀN
+      // =======================================================
+      const isAdmin =
+        typeof window.isUserAdmin === 'function'
+          ? window.isUserAdmin()
+          : window.userSession?.role === 'admin';
+      const isWardAdmin =
+        (window.userSession?.role || '').toLowerCase() === 'ward_admin';
+
       const adminView = document.getElementById('dashboard-admin-view');
       const userView = document.getElementById('dashboard-user-view');
 
-      if (isAdmin) {
+      if (isAdmin || isWardAdmin) {
         // ===== ADMIN VIEW =====
         if (adminView) adminView.style.display = 'block';
         if (userView) userView.style.display = 'none';
 
-        // ✅ Fetch dữ liệu tươi (có thể dùng cache)
+        const myMaXa = String(window.userSession?.workplace_ma_xa || '').trim();
+
+        // ✅ TẢI PROFILES: Ward Admin chỉ tải lính của mình
         const fetchProfiles = async () => {
-          const { data, error } = await supabaseClient
+          let query = window.supabaseClient
             .from('profiles')
             .select(
-              'id, email, full_name, role, team, position, deployment_status, approval_status, updated_at'
+              'id, email, full_name, role, team, position, deployment_status, approval_status, updated_at, workplace_ma_xa, fax'
             )
             .order('updated_at', { ascending: false });
+
+          if (isWardAdmin && myMaXa) {
+            query = query.eq('workplace_ma_xa', myMaXa);
+          }
+
+          const { data, error } = await query;
           if (error) throw error;
           return data;
         };
 
-        const profiles =
-          typeof QueryCache !== 'undefined'
-            ? await QueryCache.fetch(
-                'profiles:dashboard',
-                fetchProfiles,
-                2 * 60 * 1000
-              ) // Cache 2 phút cho admin view
-            : await fetchProfiles();
+        // ✅ TẢI INCIDENTS: Tải 100 sự kiện mới nhất (Không lọc ma_xa để còn bắt được lính đi hỗ trợ phường khác)
+        const fetchIncidents = async () => {
+          const { data, error } = await window.supabaseClient
+            .from('incidents')
+            .select('id, initial_selected_members, members, created_at')
+            .order('created_at', { ascending: false })
+            .limit(100);
+
+          if (error) throw error;
+          return data;
+        };
+
+        // 🚨 GỠ BỎ HOÀN TOÀN CACHE ĐỂ DỮ LIỆU LUÔN TƯƠI 100%
+        const [profiles, incidents] = await Promise.all([
+          fetchProfiles(),
+          fetchIncidents(),
+        ]);
 
         const safeProfiles = profiles || [];
+        const safeIncidents = incidents || [];
 
-        // ✅ 1. Cập nhật KPI cards
-        const metrics = {
-          total: safeProfiles.length,
-          pending: safeProfiles.filter((p) => p.approval_status === 'pending')
-            .length,
-          approved: safeProfiles.filter((p) => p.approval_status === 'approved')
-            .length,
-          edit: safeProfiles.filter((p) => p.approval_status === 'edit').length,
-        };
-        if (typeof updateKpiCards === 'function') updateKpiCards(metrics);
+        // =======================================================
+        // 🔄 ĐỒNG BỘ TRẠNG THÁI XÁC NHẬN TỪ SỰ KIỆN GẦN NHẤT
+        // =======================================================
+        const updatedProfiles = safeProfiles.map((p) => ({
+          ...p,
+          approval_status: null,
+        }));
 
-        // ✅ 2. Cập nhật bảng báo cáo gần đây (5 người mới nhất)
+        safeIncidents.forEach((incident) => {
+          // Regex siêu bảo vệ: Cắt theo dấu phẩy, chấm phẩy, khoảng trắng, xuống dòng & Xóa dấu <>
+          const calledEmails = String(incident.initial_selected_members || '')
+            .split(/[,;\s\n]+/)
+            .map((e) => e.replace(/[<>]/g, '').trim().toLowerCase())
+            .filter(Boolean);
+
+          const confirmedEmails = String(incident.members || '')
+            .split(/[,;\s\n]+/)
+            .map((e) => e.replace(/[<>]/g, '').trim().toLowerCase())
+            .filter(Boolean);
+
+          const involvedEmails = [
+            ...new Set([...calledEmails, ...confirmedEmails]),
+          ];
+
+          involvedEmails.forEach((email) => {
+            const profileIndex = updatedProfiles.findIndex(
+              (p) => String(p.email || '').toLowerCase() === email
+            );
+
+            if (profileIndex !== -1) {
+              // KHÓA TRẠNG THÁI: Chỉ nhận diện sự kiện mới nhất có mặt người này
+              if (!updatedProfiles[profileIndex].approval_status) {
+                if (confirmedEmails.includes(email)) {
+                  updatedProfiles[profileIndex].approval_status = 'approved';
+                } else if (calledEmails.includes(email)) {
+                  updatedProfiles[profileIndex].approval_status = 'pending';
+                }
+              }
+            }
+          });
+        });
+
+        // Đưa người không đi sự kiện về mặc định
+        updatedProfiles.forEach((p) => {
+          if (!p.approval_status) p.approval_status = 'none';
+        });
+
+        // =======================================================
+        // 🚀 RENDER CÁC COMPONENT BÊN DƯỚI
+        // =======================================================
+
+        // 1. KPI Cards (Giờ KPI đã tự fetch data, ta cứ gọi lại để nó trigger chạy)
+        if (typeof updateKpiCards === 'function') {
+          updateKpiCards();
+        }
+
+        // 2. Bảng báo cáo gần đây
         if (typeof updateRecentReportsTable === 'function') {
-          updateRecentReportsTable(safeProfiles.slice(0, 10));
+          updateRecentReportsTable(updatedProfiles.slice(0, 10));
         }
 
-        // ✅ 3. Cập nhật todo list
+        // 3. Todo list
         if (typeof updateTodoList === 'function') {
-          updateTodoList(safeProfiles);
+          updateTodoList(updatedProfiles);
         }
 
-        // ✅ 4. Load notifications
+        // 4. Notifications
         if (typeof window.renderMessageTable === 'function') {
-          await window.renderMessageTable();
-        }
-        if (typeof window.loadUserNotifications === 'function') {
-          await window.loadUserNotifications();
+          window.renderMessageTable();
         }
 
-        // ✅ 5. Render analytics (nếu có)
+        // 5. Analytics
         if (typeof Highcharts !== 'undefined' && window.appState?.teamData) {
           if (typeof renderAnalytics === 'function') {
             renderAnalytics(window.appState.teamData, null, null);
@@ -2917,7 +2997,7 @@ document.addEventListener('DOMContentLoaded', function () {
         showToast('Không thể tải dữ liệu Dashboard: ' + e.message, 'error');
       }
     } finally {
-      // ✅ Tắt loading sau 150ms để UI mượt
+      // Tắt loading
       if (customShowLoading && typeof window.customShowLoading === 'function') {
         setTimeout(() => window.customShowLoading(false), 150);
       }
@@ -2925,64 +3005,142 @@ document.addEventListener('DOMContentLoaded', function () {
   };
 
   // 3. HÀM HIỂN THỊ DÀNH CHO USER BÌNH THƯỜNG
-  window.renderUserDashboard = function () {
+  window.renderUserDashboard = async function () {
     console.log('🚀 Bắt đầu render User Dashboard...');
 
+    // 1. CHUẨN HÓA ĐỊNH DANH
     const username = String(window.userSession?.username || '')
       .toLowerCase()
       .trim();
-    const email = String(window.userSession?.email || '')
+    const myEmail = String(window.userSession?.email || '')
       .toLowerCase()
       .trim();
 
-    // ✅ Lấy tên hiển thị
-    let displayName =
-      window.userSession?.full_name || window.userSession?.username || 'user';
-
-    if (window.appState?.profiles && Array.isArray(window.appState.profiles)) {
-      const member = window.appState.profiles.find(
-        (m) =>
-          (m.email && String(m.email).toLowerCase().trim() === email) ||
-          (m.full_name && String(m.full_name).toLowerCase().trim() === username)
-      );
-      if (member?.full_name) {
-        displayName = member.full_name;
-      }
+    const nameEl = document.getElementById('user-dash-name');
+    if (nameEl) {
+      nameEl.textContent =
+        window.userSession?.full_name ||
+        window.userSession?.username ||
+        'Thành viên';
     }
 
-    // ✅ Cập nhật tên người dùng
-    const userDashNameEl = document.getElementById('user-dash-name');
-    if (userDashNameEl) {
-      userDashNameEl.textContent = displayName;
-    }
-
-    // ✅ Xử lý cảnh báo sự cố
     const alertsContainer = document.getElementById('user-dash-alerts');
     if (!alertsContainer) return;
 
-    alertsContainer.innerHTML = '';
-
-    const incidents = window.appState?.incidents || [];
-    const myActiveIncidents = incidents.filter(
-      (inc) => inc.status === 'active'
-    );
-
-    if (myActiveIncidents.length === 0) {
+    if (!myEmail) {
       alertsContainer.innerHTML =
-        '<li class="list-group-item text-muted">Không có sự cố đang hoạt động.</li>';
+        '<li class="list-group-item text-muted text-center">Không xác định được tài khoản.</li>';
       return;
     }
 
-    myActiveIncidents.forEach((i) => {
-      const li = document.createElement('li');
-      li.className = 'list-group-item list-group-item-danger fw-bold';
-      li.innerHTML = `🚨 <a href="#" onclick="simulateSidebarClick('page-tracking'); return false;" class="text-decoration-none text-danger">
-        KÍCH HOẠT: ${
-          window.escapeHtml?.(i.event_name) || 'Sự cố'
-        } - Bấm để xem chi tiết!
-      </a>`;
-      alertsContainer.appendChild(li);
-    });
+    alertsContainer.innerHTML =
+      '<li class="list-group-item text-muted text-center"><span class="spinner-border spinner-border-sm me-2"></span>Đang tải...</li>';
+
+    try {
+      // 2. QUÉT TRẠNG THÁI THỰC TẾ TỪ BẢNG SỰ KIỆN (Tránh lỗi trôi thông báo)
+      const incidents = window.appState?.incidents || [];
+      const joinedIncidents = [];
+      const invitedIncidents = [];
+
+      const parseEmails = (str) =>
+        String(str || '')
+          .split(';')
+          .map((e) => e.trim().toLowerCase())
+          .filter(Boolean);
+
+      incidents.forEach((inc) => {
+        if (inc.status !== 'active') return;
+        const members = parseEmails(inc.members);
+        const initial = parseEmails(inc.initial_selected_members);
+        const declined = parseEmails(inc.declined_members);
+
+        if (members.includes(myEmail)) {
+          joinedIncidents.push(inc); // Đã xác nhận tham gia
+        } else if (initial.includes(myEmail) && !declined.includes(myEmail)) {
+          invitedIncidents.push(inc); // Đang bị gọi, chưa trả lời
+        }
+      });
+
+      // 3. ĐỒNG BỘ UI KHỐI TRẠNG THÁI (SẴN SÀNG / ĐANG LÀM NHIỆM VỤ)
+      // *LƯU Ý: Bạn cần bọc khối trạng thái trong HTML bằng id="user-dash-status-card"
+      const statusCard = document.getElementById('user-dash-status-card');
+      if (statusCard) {
+        if (joinedIncidents.length > 0) {
+          // Trạng thái: Đang bận
+          statusCard.innerHTML = `
+            <div class="text-center text-danger">
+                <i class='bx bx-error-circle' style="font-size: 3rem;"></i>
+                <h3 class="mt-2 text-white bg-danger d-inline-block px-3 py-1 rounded">Đang làm nhiệm vụ</h3>
+                <p class="text-muted mt-2">Bạn đang tham gia ${joinedIncidents.length} sự kiện khẩn cấp.</p>
+            </div>
+          `;
+        } else if (invitedIncidents.length > 0) {
+          // Trạng thái: Có lệnh triệu tập
+          statusCard.innerHTML = `
+            <div class="text-center text-warning">
+                <i class='bx bxs-bell-ring' style="font-size: 3rem;"></i>
+                <h3 class="mt-2 text-dark bg-warning d-inline-block px-3 py-1 rounded">Có Lệnh Triệu Tập</h3>
+                <p class="text-muted mt-2">Vui lòng phản hồi yêu cầu điều động bên cạnh.</p>
+            </div>
+          `;
+        } else {
+          // Trạng thái: Sẵn sàng (Mặc định)
+          statusCard.innerHTML = `
+            <div class="text-center text-success">
+                <i class='bx bx-check-circle' style="font-size: 3rem;"></i>
+                <h3 class="mt-2 text-white bg-primary d-inline-block px-3 py-1 rounded">Sẵn sàng</h3>
+                <p class="text-muted mt-2">Hiện không có nhiệm vụ khẩn cấp.</p>
+            </div>
+          `;
+        }
+      }
+
+      // 4. HIỂN THỊ DANH SÁCH ALERTS BÊN PHẢI (Kết hợp code cũ của bạn)
+      alertsContainer.innerHTML = '';
+
+      if (joinedIncidents.length === 0 && invitedIncidents.length === 0) {
+        alertsContainer.innerHTML =
+          '<li class="list-group-item text-muted text-center py-3">Bạn chưa được phân công vào sự kiện nào đang hoạt động.</li>';
+      } else {
+        // Nhóm 1: Ưu tiên báo gọi triệu tập
+        invitedIncidents.forEach((i) => {
+          const li = document.createElement('li');
+          li.className = 'list-group-item list-group-item-warning fw-bold py-3';
+
+          // Mã hóa dữ liệu sự kiện để truyền vào hàm
+          const incidentData = encodeURIComponent(JSON.stringify(i));
+
+          li.innerHTML = `
+            <div class="d-flex justify-content-between align-items-center">
+                <span>📨 KÍCH HOẠT KHẨN CẤP: ${
+                  window.escapeHtml?.(i.event_name) || 'Sự kiện khẩn cấp'
+                }</span>
+                <button onclick="simulateSidebarClick('page-tracking'); setTimeout(() => openDossierView('${incidentData}'), 300);" class="btn btn-warning btn-sm fw-bold">
+                    Phản hồi ngay
+                </button>
+            </div>`;
+          alertsContainer.appendChild(li);
+        });
+
+        // Nhóm 2: Sự kiện đang tham gia
+        joinedIncidents.forEach((i) => {
+          const li = document.createElement('li');
+          li.className = 'list-group-item list-group-item-danger fw-bold py-3';
+          li.innerHTML = `
+             <div class="d-flex justify-content-between align-items-center">
+                <span>🚨 ĐANG THAM GIA: ${
+                  window.escapeHtml?.(i.event_name) || 'Sự cố'
+                }</span>
+                <a href="#" onclick="simulateSidebarClick('page-tracking'); return false;" class="btn btn-danger btn-sm">Xem chi tiết</a>
+            </div>`;
+          alertsContainer.appendChild(li);
+        });
+      }
+    } catch (err) {
+      console.error('[renderUserDashboard] Lỗi:', err);
+      alertsContainer.innerHTML =
+        '<li class="list-group-item text-danger text-center">Lỗi tải dữ liệu.</li>';
+    }
   };
   // ============================================================
   // 3. XỬ LÝ LỊCH TRỰC (ROSTERS) VÀ THÔNG BÁO DASHBOARD
@@ -3534,7 +3692,11 @@ document.addEventListener('DOMContentLoaded', function () {
 
       console.log('📊 Updating KPI Cards...');
 
-      // Hàm hỗ trợ rút gọn danh sách tên hiển thị trên Card (Chống vỡ giao diện)
+      // 🚨 1. THÊM LOGIC PHÂN QUYỀN ĐỂ ĐẾM ĐÚNG NGƯỜI
+      const role = (window.userSession?.role || '').toLowerCase();
+      const isWardAdmin = role === 'ward_admin';
+      const myMaXa = String(window.userSession?.workplace_ma_xa || '').trim();
+
       const formatNameList = (arr) => {
         if (!arr || arr.length === 0) return 'Chưa có dữ liệu';
         const unique = [...new Set(arr)].filter(Boolean);
@@ -3549,13 +3711,25 @@ document.addEventListener('DOMContentLoaded', function () {
       };
 
       // ===========================================
-      // 1. FETCH TẤT CẢ PROFILES ĐỂ MAP TÊN
+      // 1. FETCH TẤT CẢ PROFILES ĐỂ MAP TÊN VÀ LỌC LÍNH
       // ===========================================
-      // Lấy sẵn toàn bộ profile để tra cứu tên cho nhanh, thay vì hiển thị Email hay UUID
-      const { data: allProfiles } = await window.supabaseClient
+      let profileQuery = window.supabaseClient
         .from('profiles')
-        .select('id, email, full_name');
+        .select('id, email, full_name, workplace_ma_xa');
+
+      // WARD ADMIN: Chỉ kéo danh sách lính của phường mình
+      if (isWardAdmin && myMaXa) {
+        profileQuery = profileQuery.eq('workplace_ma_xa', myMaXa);
+      }
+
+      const { data: allProfiles } = await profileQuery;
       const profiles = allProfiles || [];
+      const validUserIds = profiles.map((p) => p.id);
+      const validEmails = profiles.map((p) =>
+        String(p.email || '')
+          .toLowerCase()
+          .trim()
+      );
 
       const getNameById = (id) => {
         const p = profiles.find((x) => x.id === id);
@@ -3576,18 +3750,21 @@ document.addEventListener('DOMContentLoaded', function () {
       const { data: assignmentsData, error: rErr } = await window.supabaseClient
         .from('roster_assignments')
         .select(
-          `
-          assignment_status,
-          user_id,
-          roster_schedules!inner (duty_date, team_name)
-        `
+          `assignment_status, user_id, roster_schedules!inner (duty_date, team_name)`
         )
         .gte('roster_schedules.duty_date', today.toISOString())
         .lte('roster_schedules.duty_date', sevenDaysLater.toISOString());
 
       if (rErr) console.warn('⚠️ Lỗi tải roster_assignments:', rErr);
 
-      const rosterItems = assignmentsData || [];
+      let rosterItems = assignmentsData || [];
+
+      // LỌC KPI: Ward Admin chỉ đếm lịch trực của nhân sự trạm mình
+      if (isWardAdmin) {
+        rosterItems = rosterItems.filter((r) =>
+          validUserIds.includes(r.user_id)
+        );
+      }
 
       let rConfNames = [],
         rDecNames = [],
@@ -3601,7 +3778,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
         if (r.assignment_status === 'confirmed') rConfNames.push(name);
         else if (r.assignment_status === 'declined') rDecNames.push(name);
-        else rPendNames.push(name); // assigned, pending
+        else rPendNames.push(name);
       });
 
       const rTotal = rosterItems.length;
@@ -3612,14 +3789,30 @@ document.addEventListener('DOMContentLoaded', function () {
       const { data: incidentsData, error: incidentsErr } =
         await window.supabaseClient
           .from('incidents')
-          .select('id, event_name, activation_time, members, declined_members')
+          .select(
+            'id, event_name, activation_time, members, initial_selected_members, declined_members'
+          )
           .gte('activation_time', today.toISOString())
           .lte('activation_time', sevenDaysLater.toISOString());
 
       if (incidentsErr) console.warn('⚠️ Lỗi tải incidents:', incidentsErr);
 
-      const incidents = incidentsData || [];
-      const incidentIds = incidents.map((i) => i.id);
+      let incidents = incidentsData || [];
+
+      // LỌC SỰ KIỆN GIỐNG TRÊN BẢN ĐỒ: Chỉ tính sự kiện phường mình hoặc có lính mình bị gọi
+      if (isWardAdmin) {
+        incidents = incidents.filter((inc) => {
+          const isMyWard =
+            myMaXa !== '' && String(inc.ma_xa || '').trim() === myMaXa;
+          const rawCalled = String(
+            inc.initial_selected_members || ''
+          ).toLowerCase();
+          const isMyStaffCalled = validEmails.some((email) =>
+            rawCalled.includes(email)
+          );
+          return isMyWard || isMyStaffCalled;
+        });
+      }
 
       let iConfNames = [],
         iDecNames = [],
@@ -3627,7 +3820,6 @@ document.addEventListener('DOMContentLoaded', function () {
       let latestActivation = 'Chưa có sự kiện';
 
       if (incidents.length > 0) {
-        // Sắp xếp lấy sự kiện mới nhất để hiển thị thời gian
         const sortedIncidents = [...incidents].sort(
           (a, b) => new Date(b.activation_time) - new Date(a.activation_time)
         );
@@ -3636,40 +3828,44 @@ document.addEventListener('DOMContentLoaded', function () {
           'vi-VN'
         )} ${latestTime.toLocaleDateString('vi-VN')}`;
 
-        // Lấy danh sách Pending từ Notifications
-        const { data: notifs } = await window.supabaseClient
-          .from('notifications')
-          .select('user_email, response_status')
-          .in('incident_id', incidentIds)
-          .eq('response_status', 'pending');
+        // 🚨 THUẬT TOÁN ĐẾM KPI MỚI: Bọc lót mọi định dạng chuỗi
+        incidents.forEach((inc) => {
+          const called = String(inc.initial_selected_members || '')
+            .split(/[,;\s\n]+/)
+            .map((e) => e.replace(/[<>]/g, '').trim().toLowerCase())
+            .filter(Boolean);
+          const confirmed = String(inc.members || '')
+            .split(/[,;\s\n]+/)
+            .map((e) => e.replace(/[<>]/g, '').trim().toLowerCase())
+            .filter(Boolean);
+          const declined = String(inc.declined_members || '')
+            .split(/[,;\s\n]+/)
+            .map((e) => e.replace(/[<>]/g, '').trim().toLowerCase())
+            .filter(Boolean);
 
-        const pendingNotifs = notifs || [];
-        pendingNotifs.forEach((n) =>
-          iPendNames.push(getNameByEmail(n.user_email))
-        );
-      }
+          // Hàm phụ: Đảm bảo Ward Admin chỉ xem thông số KPI của LÍNH MÌNH (Không đếm nhầm người phường khác đi hỗ trợ cùng)
+          const filterMyStaff = (email) =>
+            !isWardAdmin || validEmails.includes(email);
 
-      // Tách chuỗi Email thành Tên đối với những người đã Xác nhận/Từ chối
-      incidents.forEach((inc) => {
-        if (inc.members) {
-          inc.members
-            .split(';')
-            .filter(Boolean)
+          confirmed
+            .filter(filterMyStaff)
             .forEach((email) => iConfNames.push(getNameByEmail(email)));
-        }
-        if (inc.declined_members) {
-          inc.declined_members
-            .split(';')
-            .filter(Boolean)
+          declined
+            .filter(filterMyStaff)
             .forEach((email) => iDecNames.push(getNameByEmail(email)));
-        }
-      });
+
+          // PENDING = Số người Bị Gọi trừ đi (Số người Xác Nhận + Số người Từ Chối)
+          called.filter(filterMyStaff).forEach((email) => {
+            if (!confirmed.includes(email) && !declined.includes(email)) {
+              iPendNames.push(getNameByEmail(email));
+            }
+          });
+        });
+      }
 
       // ===========================================
       // 4. BƠM DỮ LIỆU VÀO GIAO DIỆN HTML (DOM)
       // ===========================================
-
-      // --- Dòng 1: Lịch Trực ---
       setHtml('#schedule-total-count', rTotal);
       setHtml('#schedule-confirmed-count', rConfNames.length);
       setHtml('#schedule-declined-count', rDecNames.length);
@@ -3690,7 +3886,6 @@ document.addEventListener('DOMContentLoaded', function () {
       setHtml('#schedule-declined-members', formatNameList(rDecNames));
       setHtml('#schedule-pending-members', formatNameList(rPendNames));
 
-      // --- Dòng 2: Kích Hoạt Khẩn Cấp ---
       setHtml('#emergency-activations-count', incidents.length);
       setHtml('#emergency-confirmed-count', iConfNames.length);
       setHtml('#emergency-declined-count', iDecNames.length);
@@ -3701,16 +3896,107 @@ document.addEventListener('DOMContentLoaded', function () {
       setHtml('#emergency-declined-members', formatNameList(iDecNames));
       setHtml('#emergency-pending-members', formatNameList(iPendNames));
 
-      // --- Animation & Badges (Nếu có thẻ khai báo ở ngoài) ---
-      if (typeof handleCounterAnimation === 'function')
+      // TRẢ LẠI HÀM NÀY ĐỂ CÁC THẺ KPI (BẢNG TRỰC, SỰ KIỆN) CÓ HIỆU ỨNG NHẢY SỐ
+      if (typeof handleCounterAnimation === 'function') {
         handleCounterAnimation();
+      }
     } catch (error) {
       console.error('❌ Lỗi updateKpiCards:', error);
       if (typeof showToast === 'function')
         showToast('Lỗi cập nhật Dashboard: ' + error.message, 'error');
     }
+  }; // <--- KẾT THÚC HÀM updateKpiCards Ở ĐÂY
+  // KHAI BÁO HÀM ĐẾM VIEW ĐỘC LẬP
+  window.handleCounterAnimation = function () {
+    // Nếu có hàm animateCounters từ thư viện ngoài thì dùng
+    if (typeof animateCounters === 'function') {
+      animateCounters();
+      return;
+    }
+
+    // Mở rộng vùng quét: Tìm h3, h4 trong .card, HOẶC các thẻ ID kết thúc bằng "-count"
+    $('.card h3, .card h4, [id$="-count"]').each(function () {
+      const $this = $(this);
+      const val = parseInt($this.text().replace(/\./g, ''));
+
+      // Điều kiện 1: Phải là một số hợp lệ lớn hơn 0
+      // Điều kiện 2: Tránh animate lại nếu con số KHÔNG THAY ĐỔI (chống giật lag khi realtime)
+      if (!isNaN(val) && val > 0 && $this.data('current-val') !== val) {
+        // Lưu lại giá trị mục tiêu để lần cập nhật sau biết đường đối chiếu
+        $this.data('current-val', val);
+
+        $({ Counter: 0 }).animate(
+          { Counter: val },
+          {
+            duration: 1000, // Thời gian chạy hiệu ứng (1 giây)
+            easing: 'swing',
+            step: function (now) {
+              $this.text(Math.ceil(now));
+            },
+          }
+        );
+      }
+    });
+  };
+  function animateCounters() {
+    $('.box-info h3').each(function () {
+      const $this = $(this);
+      const countTo = parseInt($this.text());
+      $({ countNum: 0 }).animate(
+        {
+          countNum: countTo,
+        },
+        {
+          duration: 1000,
+          easing: 'swing',
+          step: function () {
+            $this.text(Math.floor(this.countNum));
+          },
+          complete: function () {
+            $this.text(this.countNum);
+          },
+        }
+      );
+    });
+  }
+  window.renderWebViewCount = async function () {
+    try {
+      const $viewBadge = $('#web-view-count');
+      if (!$viewBadge.length) return;
+
+      // 🚀 GỌI HÀM RPC TRÊN SUPABASE
+      const { data: currentViews, error } = await window.supabaseClient.rpc(
+        'increment_page_view'
+      );
+
+      if (error) {
+        console.error('Lỗi từ Supabase RPC:', error.message);
+        throw error;
+      }
+
+      // 🎯 Chạy hiệu ứng nhảy số
+      $({ Counter: 0 }).animate(
+        { Counter: currentViews || 0 },
+        {
+          duration: 1500,
+          easing: 'swing',
+          step: function (now) {
+            $viewBadge.text(Math.ceil(now).toLocaleString('vi-VN'));
+          },
+        }
+      );
+    } catch (err) {
+      console.warn('⚠️ Lỗi đếm lượt truy cập:', err);
+      $('#web-view-count').text('---');
+    }
   };
 
+  // 🚨 KÍCH HOẠT HÀM NGAY KHI TRANG WEB TẢI XONG
+  $(document).ready(function () {
+    if (typeof window.renderWebViewCount === 'function') {
+      window.renderWebViewCount();
+    }
+  });
   // ========================================================================
   // AUTO-REFRESH KPI (Mỗi 30 giây)
   // ========================================================================
@@ -3727,29 +4013,6 @@ document.addEventListener('DOMContentLoaded', function () {
       window.updateKpiCards();
     }
   });
-
-  function handleCounterAnimation() {
-    if (typeof animateCounters === 'function') {
-      animateCounters();
-      return;
-    }
-    $('.card h3, .card h4').each(function () {
-      const $this = $(this);
-      const val = parseInt($this.text().replace(/\./g, ''));
-      if (!isNaN(val) && val > 0) {
-        $({ Counter: 0 }).animate(
-          { Counter: val },
-          {
-            duration: 1000,
-            easing: 'swing',
-            step: function (now) {
-              $this.text(Math.ceil(now));
-            },
-          }
-        );
-      }
-    });
-  }
 
   // ==========================================
   // XỬ LÝ SỰ KIỆN ENTER CHO CHAT
@@ -4611,28 +4874,6 @@ document.addEventListener('DOMContentLoaded', function () {
 
   // --- Helper Functions for UI Updates (Client-side) ---
 
-  function animateCounters() {
-    $('.box-info h3').each(function () {
-      const $this = $(this);
-      const countTo = parseInt($this.text());
-      $({ countNum: 0 }).animate(
-        {
-          countNum: countTo,
-        },
-        {
-          duration: 1000,
-          easing: 'swing',
-          step: function () {
-            $this.text(Math.floor(this.countNum));
-          },
-          complete: function () {
-            $this.text(this.countNum);
-          },
-        }
-      );
-    });
-  }
-
   function updateRecentReportsTable(reports) {
     const tbody = document.getElementById('recent-report-body');
     tbody.innerHTML = '';
@@ -4893,6 +5134,7 @@ document.addEventListener('DOMContentLoaded', function () {
     switch (targetId) {
       case 'page-dashboard':
         if (typeof renderDashboard === 'function') renderDashboard();
+
         if (typeof startDashboardPoller === 'function') startDashboardPoller();
         break;
       case 'page-map':
@@ -4901,6 +5143,10 @@ document.addEventListener('DOMContentLoaded', function () {
         break;
       case 'page-lab-admin':
         renderLabAdminPage();
+        break;
+      case 'page-notification':
+        renderMessageTable();
+
         break;
       case 'page-library':
         if (typeof renderLibraryPage === 'function') renderLibraryPage();
@@ -4977,7 +5223,9 @@ document.addEventListener('DOMContentLoaded', function () {
 
       const currentUserId = authData.user.id;
       const isAdmin = window.isUserAdmin?.() || false;
-
+      const isWardAdmin =
+        (window.userSession?.role || '').toLowerCase() === 'ward_admin';
+      const canApprove = isAdmin || isWardAdmin; // cả 2 đều duyệt được
       // =========================================================
       // 2. TẢI DỮ LIỆU TỪ SUPABASE - CHỈ LẤY CỘT CẦN THIẾT
       // =========================================================
@@ -4987,7 +5235,7 @@ document.addEventListener('DOMContentLoaded', function () {
           `
           id, email, full_name, phone, role, team, position,
           department, deployment_status, approval_status,
-          updated_at, created_at
+          updated_at, created_at, workplace_ward, fax
         `
         )
         .order('updated_at', { ascending: false });
@@ -5049,10 +5297,8 @@ document.addEventListener('DOMContentLoaded', function () {
         // === Cột Status ===
         const statusCol = isAdmin
           ? `
-           <select class="form-select form-select-sm update-status" 
-               data-report-id="${recordId}" 
-               id="status-select-${recordId}" 
-               name="status-select-${recordId}"
+           <select class="form-select form-select-sm update-status"
+               data-report-id="${recordId}"
                onchange="window.updateApprovalStatus('${recordId}', this.value)">
                <option value="pending" ${
                  status === 'pending' ? 'selected' : ''
@@ -5063,19 +5309,30 @@ document.addEventListener('DOMContentLoaded', function () {
                <option value="approved" ${
                  status === 'approved' ? 'selected' : ''
                }>Đã duyệt</option>
-           </select>
-          `
+           </select>`
+          : isWardAdmin
+          ? `
+           <select class="form-select form-select-sm update-status"
+               data-report-id="${recordId}"
+               onchange="window.updateApprovalStatus('${recordId}', this.value)">
+               <option value="pending" ${
+                 status === 'pending' ? 'selected' : ''
+               }>Chờ duyệt</option>
+               <option value="approved" ${
+                 status === 'approved' ? 'selected' : ''
+               }>Đã duyệt</option>
+           </select>`
           : `<span class="badge ${statusUI.badgeClass}">${statusUI.text}</span>`;
 
         // === Cột Actions ===
         const actions = isAdmin
           ? `<div class="d-flex justify-content-around">
-             <i class="bx bx-show bx-sm text-primary view-icon" onclick="viewReport('${recordId}')" style="cursor:pointer;" title="Xem/Sửa hồ sơ"></i>
-             <i class="bx bx-trash bx-sm text-danger delete-report" onclick="window.deleteProfile('${recordId}', '${
+             <i class="bx bx-show bx-sm text-primary" onclick="viewReport('${recordId}')" style="cursor:pointer;" title="Xem/Sửa hồ sơ"></i>
+             <i class="bx bx-trash bx-sm text-danger" onclick="window.deleteProfile('${recordId}', '${
               window.escapeHtml?.(profile.full_name) || profile.full_name
             }')" style="cursor:pointer;" title="Xóa"></i>
            </div>`
-          : `<div class="text-center"><i class="bx bx-show bx-sm text-primary view-icon" onclick="viewReport('${recordId}')" style="cursor:pointer;" title="Xem hồ sơ"></i></div>`;
+          : `<div class="text-center"><i class="bx bx-show bx-sm text-primary" onclick="viewReport('${recordId}')" style="cursor:pointer;" title="Xem hồ sơ"></i></div>`;
 
         // Xử lý an toàn các giá trị null/undefined
         const dateText =
@@ -5194,16 +5451,20 @@ document.addEventListener('DOMContentLoaded', function () {
   let teamAndDateFilterFn = null;
 
   function applyTeamAndDateFilter(selectedTeams, startDate, endDate) {
-    // Xóa bộ lọc cũ để tránh bị đè
+    // Xóa bộ lọc cũ để tránh bị chồng chéo
     if (teamAndDateFilterFn) {
       const idx = $.fn.dataTable.ext.search.indexOf(teamAndDateFilterFn);
       if (idx > -1) $.fn.dataTable.ext.search.splice(idx, 1);
     }
 
+    // Chuẩn hóa danh sách đội chọn thành mảng an toàn
+    const teamArray = Array.isArray(selectedTeams)
+      ? selectedTeams
+      : [selectedTeams];
     const isTeamFiltering =
-      selectedTeams &&
-      selectedTeams.length > 0 &&
-      !selectedTeams.includes('all');
+      teamArray.length > 0 &&
+      !teamArray.includes('all') &&
+      !teamArray.includes('');
     const isDateFiltering = startDate || endDate;
 
     if (!isTeamFiltering && !isDateFiltering) {
@@ -5211,39 +5472,32 @@ document.addEventListener('DOMContentLoaded', function () {
       return;
     }
 
-    // Đổi ngày thành timestamp để so sánh chuẩn xác
+    // Chuyển ngày thành timestamp để so sánh khoảng thời gian
     const from = startDate ? new Date(startDate).setHours(0, 0, 0, 0) : 0;
     const to = endDate ? new Date(endDate).setHours(23, 59, 59, 999) : Infinity;
 
     teamAndDateFilterFn = function (settings, data, dataIndex) {
       if (settings.nTable.id !== 'team-table') return true;
 
-      // 1. LỌC TEAM (Nằm ở cột số 7 - tính từ 0)
+      // Lấy trực tiếp object dữ liệu gốc của dòng thông qua dataIndex (Không cần quét HTML)
+      const record = window.currentScopedTeamData?.[dataIndex];
+      if (!record) return true;
+
+      // 1. LỌC THEO ĐỘI
       let passTeam = true;
       if (isTeamFiltering) {
-        const teamHTML = data[7];
-        const $div = $('<div>').html(teamHTML);
-        const teamText =
-          $div.find('select').val() || $div.text().trim() || 'No team';
-        passTeam = selectedTeams.includes(teamText);
+        const teamName = record.team ? String(record.team).trim() : 'No team';
+        passTeam = teamArray.includes(teamName);
       }
 
-      // 2. LỌC NGÀY (Nằm ở cột số 5)
+      // 2. LỌC THEO NGÀY CẬP NHẬT
       let passDate = true;
       if (isDateFiltering) {
-        const row = settings.aoData[dataIndex];
-        const dateStr = row?._aData?.[5];
-        if (!dateStr) return false;
-
-        // Quét định dạng dd/mm/yyyy
-        const match = String(dateStr).match(/(\d{2})\/(\d{2})\/(\d{4})/);
-        if (!match) passDate = false;
-        else {
-          const rowTime = new Date(
-            +match[3],
-            +match[2] - 1,
-            +match[1]
-          ).getTime();
+        const dateSource = record.updated_at || record.created_at;
+        if (!dateSource) {
+          passDate = false;
+        } else {
+          const rowTime = new Date(dateSource).getTime();
           passDate = rowTime >= from && rowTime <= to;
         }
       }
@@ -5251,6 +5505,7 @@ document.addEventListener('DOMContentLoaded', function () {
       return passTeam && passDate;
     };
 
+    // Đẩy hàm lọc vào hệ thống DataTable và vẽ lại bảng
     $.fn.dataTable.ext.search.push(teamAndDateFilterFn);
     if (dataTableInstance) dataTableInstance.draw();
   }
@@ -5259,24 +5514,43 @@ document.addEventListener('DOMContentLoaded', function () {
   // ==========================================
 
   // 1. Nút Lọc (Team + Date)
-  $('#btn-filter-team')
+  $('#btn-filter-team, #filter-btn')
     .off('click')
     .on('click', function () {
       const startDate = $('#filter-date-start-team').val();
       const endDate = $('#filter-date-end-team').val();
-      const selectedTeams = $('#filter-team-select').val() || [];
 
-      // Lọc bảng
-      applyTeamAndDateFilter(selectedTeams, startDate, endDate);
+      // 🎯 Ép kiểu cực kỳ an toàn: Dù Select2 trả về chuỗi hay mảng thì selectedTeams vẫn luôn LÀ MẢNG
+      const rawTeamVal = $('#filter-team-select').val();
+      const selectedTeams = Array.isArray(rawTeamVal)
+        ? rawTeamVal
+        : rawTeamVal
+        ? [rawTeamVal]
+        : [];
+
+      console.log(
+        '🔍 Dữ liệu lọc Team:',
+        selectedTeams,
+        '| Từ ngày:',
+        startDate,
+        '| Đến ngày:',
+        endDate
+      );
+
+      // Gọi hàm lọc DataTable
+      if (typeof applyTeamAndDateFilter === 'function') {
+        applyTeamAndDateFilter(selectedTeams, startDate, endDate);
+      }
 
       // Lọc biểu đồ (Dùng dữ liệu từ appState)
-      let chartData = window.appState.teamData || [];
+      let chartData = window.appState?.teamData || [];
       if (selectedTeams.length > 0 && !selectedTeams.includes('all')) {
         chartData = chartData.filter((m) =>
           selectedTeams.includes(m.team || 'No team')
         );
       }
-      // Gọi lại hàm vẽ biểu đồ với data đã lọc
+
+      // Vẽ lại biểu đồ với data đã lọc
       if (typeof renderAnalytics_Member === 'function') {
         renderAnalytics_Member(chartData, startDate, endDate, selectedTeams);
       }
@@ -5321,41 +5595,280 @@ document.addEventListener('DOMContentLoaded', function () {
       updateTeamData(userId, newTeam, newPos, $tr, dataTableInstance);
     }
   });
+  // Handler riêng cho ward_admin (đội xã + position không-Leader)
+  $('#team-table').off('change', '.update-team-ward, .update-position-ward');
+  $('#team-table').on(
+    'change',
+    '.update-team-ward, .update-position-ward',
+    function () {
+      const $tr = $(this).closest('tr');
+      const userId = $(this).data('id');
+      const $teamSel = $tr.find('.update-team-ward');
+      const $posSel = $tr.find('.update-position-ward');
+
+      // Nếu chọn "Tạo đội mới..."
+      if (
+        $(this).hasClass('update-team-ward') &&
+        $teamSel.val() === '__NEW__'
+      ) {
+        // Tìm số thứ tự lớn nhất hiện có → +1
+        let maxNum = 0;
+        wardTeams.forEach((t) => {
+          const m = t.match(/(\d+)\s*$/);
+          if (m) maxNum = Math.max(maxNum, parseInt(m[1], 10));
+        });
+        const nextNum = String(maxNum + 1).padStart(2, '0');
+        const newTeamName = `Team ${myWorkplaceWard} ${nextNum}`;
+        // Xác nhận với ward_admin
+        if (confirm(`Tạo đội mới: "${newTeamName}" và gán người này vào?`)) {
+          // Thêm vào wardTeams để lần sau có trong list
+          if (!wardTeams.includes(newTeamName)) wardTeams.push(newTeamName);
+          // Thêm option + chọn nó
+          const opt = new Option(newTeamName, newTeamName, true, true);
+          $(this).find('option[value="__NEW__"]').before(opt);
+          $teamSel.val(newTeamName);
+        } else {
+          $teamSel.val('No team'); // hủy → về chưa có đội
+          return;
+        }
+      }
+
+      const newTeam = $teamSel.val() || 'No team';
+      let newPos = $posSel.val() || 'No position';
+      // Chặn ward_admin phong Leader (kể cả nếu lách)
+      if (
+        newPos === 'Leader' &&
+        (window.userSession?.role || '').toLowerCase() === 'ward_admin'
+      ) {
+        // giữ nguyên position cũ trong DB, không cho set Leader
+        showToast(
+          'Bạn không có quyền phong Đội trưởng. Vui lòng liên hệ quản trị cấp trên.',
+          'warning'
+        );
+        return;
+      }
+      if (typeof updateTeamData === 'function') {
+        updateTeamData(userId, newTeam, newPos, $tr, dataTableInstance);
+      }
+    }
+  );
   // Cầu nối giúp menu sidebar nhận diện được trang Team
+  // ============================================================================
+  // 1. HÀM TIỆN ÍCH DÙNG CHUNG TOÀN CỤC (GLOBAL HELPERS)
+  // ============================================================================
+  window.getAllAvailableTeams = function (role, userWorkplaceMaXa) {
+    const teamData = window.appState?.teamData || [];
+    let baseTeams = Array.from({ length: 10 }, (_, n) => `Team ${n + 1}`);
+    const allDatabaseTeams = [
+      ...new Set(
+        teamData.map((m) => m.team).filter((t) => t && t !== 'No team')
+      ),
+    ];
+
+    if (role === 'ward_admin') {
+      const myMaXa = String(userWorkplaceMaXa || '').trim();
+      const gu = ['trạm y tế phường/xã/ đặc khu', 'ubnd phường/xã/ đặc khu'];
+      const wardMembers = teamData.filter((m) => {
+        const mMaXa = String(m.workplace_ma_xa || '').trim();
+        const mFax = String(m.fax || '')
+          .toLowerCase()
+          .trim();
+        return myMaXa && mMaXa === myMaXa && gu.includes(mFax);
+      });
+      const wardTeams = [
+        ...new Set(
+          wardMembers.map((m) => m.team).filter((t) => t && t !== 'No team')
+        ),
+      ];
+      return wardTeams.sort();
+    } else {
+      // Admin: Gộp toàn bộ Team 1-10 và TẤT CẢ các đội tuyến phường phát sinh trong data
+      const combined = [...new Set([...baseTeams, ...allDatabaseTeams])];
+      return combined.sort();
+    }
+  };
+
+  window.buildTeamOptionsUniversal = function (
+    currentTeam,
+    role = 'admin',
+    userWorkplaceMaXa = ''
+  ) {
+    const availableTeams = window.getAllAvailableTeams(role, userWorkplaceMaXa);
+    const esc = (s) =>
+      window.escapeHtml ? window.escapeHtml(String(s ?? '')) : String(s ?? '');
+
+    let options = `<option value="No team" ${
+      !currentTeam || currentTeam === 'No team' ? 'selected' : ''
+    }>Chưa có đội</option>`;
+
+    availableTeams.forEach((t) => {
+      options += `<option value="${esc(t)}" ${
+        currentTeam === t ? 'selected' : ''
+      }>${esc(t)}</option>`;
+    });
+
+    if (role === 'ward_admin') {
+      options += `<option value="__NEW__">➕ Tạo đội mới...</option>`;
+    }
+
+    if (
+      currentTeam &&
+      currentTeam !== 'No team' &&
+      !availableTeams.includes(currentTeam) &&
+      currentTeam !== '__NEW__'
+    ) {
+      options += `<option value="${esc(currentTeam)}" selected>${esc(
+        currentTeam
+      )}</option>`;
+    }
+
+    return options;
+  };
+
+  const posOptionsFull = (sel) => `
+    <option value="No position" ${
+      !sel || sel === 'No position' ? 'selected' : ''
+    }>Chưa có vị trí</option>
+    <option value="Leader" ${
+      sel === 'Leader' ? 'selected' : ''
+    }>Đội trưởng</option>
+    <option value="Epidemic" ${
+      sel === 'Epidemic' ? 'selected' : ''
+    }>Cán bộ Dịch tễ</option>
+    <option value="Member" ${
+      sel === 'Member' ? 'selected' : ''
+    }>Cán bộ Lấy mẫu</option>
+    <option value="Engineer" ${
+      sel === 'Engineer' ? 'selected' : ''
+    }>Cán bộ Xử lý môi trường</option>
+    <option value="Media" ${
+      sel === 'Media' ? 'selected' : ''
+    }>Cán bộ Truyền thông</option>
+    <option value="Logistic" ${
+      sel === 'Logistic' ? 'selected' : ''
+    }>Hậu cần</option>
+    <option value="Driver" ${
+      sel === 'Driver' ? 'selected' : ''
+    }>Lái xe</option>`;
+
+  const posOptionsWard = (sel) => {
+    const leaderKeep =
+      sel === 'Leader'
+        ? `<option value="Leader" selected>Đội trưởng</option>`
+        : '';
+    return (
+      leaderKeep +
+      `
+    <option value="No position" ${
+      !sel || sel === 'No position' ? 'selected' : ''
+    }>Chưa có vị trí</option>
+    <option value="Epidemic" ${
+      sel === 'Epidemic' ? 'selected' : ''
+    }>Cán bộ Dịch tễ</option>
+    <option value="Member" ${
+      sel === 'Member' ? 'selected' : ''
+    }>Cán bộ Lấy mẫu</option>
+    <option value="Engineer" ${
+      sel === 'Engineer' ? 'selected' : ''
+    }>Cán bộ Xử lý môi trường</option>
+    <option value="Media" ${
+      sel === 'Media' ? 'selected' : ''
+    }>Cán bộ Truyền thông</option>
+    <option value="Logistic" ${
+      sel === 'Logistic' ? 'selected' : ''
+    }>Hậu cần</option>
+    <option value="Driver" ${
+      sel === 'Driver' ? 'selected' : ''
+    }>Lái xe</option>`
+    );
+  };
+  // ============================================================================
+  // 2. HÀM RENDER TRANG VÀ BẢNG ĐỘI (renderTeamTable)
+  // ============================================================================
   window.renderTeamPage = function () {
     if (typeof window.renderTeamTable === 'function') window.renderTeamTable();
   };
-  // =========================
-  // RENDER TABLE + TẢI DỮ LIỆU TỪ SUPABASE (BẢN AN TOÀN TUYỆT ĐỐI)
-  // =========================
+
   window.renderTeamTable = async function () {
     console.log('🚀 Bắt đầu tải trang Team...');
     try {
       if (typeof showLoadingSpinner === 'function') showLoadingSpinner(true);
 
-      // 1. Kéo dữ liệu từ Supabase
       const [profilesRes, qualRes] = await Promise.all([
         supabaseClient.from('profiles').select('*'),
         supabaseClient.from('rrt_qualifications').select('*'),
       ]);
-
       if (profilesRes.error) throw profilesRes.error;
+
       const fullTeamData = profilesRes.data || [];
       const allQuals = qualRes.data || [];
 
-      console.log('✅ Đã kéo dữ liệu từ DB:', fullTeamData.length, 'người.');
+      const _role = (window.userSession?.role || '').toLowerCase();
+      const isAdmin = _role === 'admin';
+      const isWardAdmin = _role === 'ward_admin';
+      const myWorkplaceWard = String(
+        window.userSession?.workplace_ward || ''
+      ).trim();
+      const myMaXa = String(window.userSession?.workplace_ma_xa || '').trim();
+      const grassrootsUnits = [
+        'trạm y tế phường/xã/ đặc khu',
+        'ubnd phường/xã/ đặc khu',
+      ];
 
       window.appState = window.appState || {};
       window.appState.teamData = fullTeamData;
 
-      if (fullTeamData.length === 0) {
+      let scopedTeamData = fullTeamData;
+      if (isWardAdmin) {
+        scopedTeamData = fullTeamData.filter((m) => {
+          const mMaXa = String(m.workplace_ma_xa || '').trim();
+          const mFax = String(m.fax || '')
+            .toLowerCase()
+            .trim();
+          return myMaXa && mMaXa === myMaXa && grassrootsUnits.includes(mFax);
+        });
+      }
+
+      let wardTeams = isWardAdmin
+        ? [
+            ...new Set(
+              scopedTeamData
+                .map((m) => m.team)
+                .filter((t) => t && t !== 'No team')
+            ),
+          ].sort()
+        : [];
+
+      if (scopedTeamData.length === 0) {
         $('#team-table tbody').html(
-          "<tr><td colspan='9' class='text-center'>Chưa có dữ liệu đội.</td></tr>"
+          "<tr><td colspan='9' class='text-center'>Chưa có dữ liệu đội thuộc phạm vi của bạn.</td></tr>"
         );
+        if (typeof hideLoadingSpinner === 'function') hideLoadingSpinner();
         return;
       }
 
-      // --- HÀM TIỆN ÍCH AN TOÀN ---
+      // --- CẬP NHẬT BỘ LỌC ĐỘI ĐỘNG (DYNAMIC FILTER) ---
+      const $filterSelect = $('#filter-team-select');
+      $filterSelect
+        .find('option:not([value="all"]):not([value="No team"])')
+        .remove();
+
+      if (isAdmin) {
+        // Admin thấy TẤT CẢ đội (Team 1..10 + Đội phường)
+        const allAdminTeams = window.getAllAvailableTeams('admin');
+        allAdminTeams.forEach((teamName) => {
+          $filterSelect.append(new Option(teamName, teamName));
+        });
+      } else if (isWardAdmin) {
+        wardTeams.forEach((teamName) => {
+          $filterSelect.append(new Option(teamName, teamName));
+        });
+      }
+
+      if ($filterSelect.hasClass('select2-hidden-accessible')) {
+        $filterSelect.trigger('change.select2');
+      }
+
       const safeEscapeHtml = (str) => {
         if (!str) return '';
         return String(str).replace(
@@ -5370,67 +5883,53 @@ document.addEventListener('DOMContentLoaded', function () {
             }[match])
         );
       };
-
-      const isAdmin = window.userSession?.role?.toLowerCase().includes('admin');
-
-      // 2. Chế biến dữ liệu cho DataTable
-      const dataForTable = fullTeamData.map((r, i) => {
+      window.currentScopedTeamData = scopedTeamData; // 👈 CẦN THIẾT!
+      const dataForTable = scopedTeamData.map((r, i) => {
         const qual = allQuals.find((q) => q.profile_id === r.id) || {};
-        r.qualifications = qual; // Đính kèm để dùng sau này nếu cần
+        r.qualifications = qual;
 
-        const teamCell = isAdmin
-          ? `<span class="team-hidden" style="display:none">${safeEscapeHtml(
-              r.team || 'No team'
-            )}</span>
+        let teamCell;
+        const userMaXa = window.userSession?.workplace_ma_xa || '';
+
+        if (isAdmin) {
+          teamCell = `<span class="team-hidden" style="display:none">${safeEscapeHtml(
+            r.team || 'No team'
+          )}</span>
              <select class="form-select form-select-sm update-team" data-id="${
                r.id
-             }">
-               <option value="No team" ${
-                 !r.team || r.team === 'No team' ? 'selected' : ''
-               }>Chưa có đội</option>
-               ${Array.from({ length: 10 }, (_, n) => n + 1)
-                 .map(
-                   (n) =>
-                     `<option value="Team ${n}" ${
-                       r.team === `Team ${n}` ? 'selected' : ''
-                     }>Team ${n}</option>`
-                 )
-                 .join('')}
-             </select>`
-          : safeEscapeHtml(r.team || 'Chưa có đội');
+             }">${window.buildTeamOptionsUniversal(
+            r.team,
+            'admin',
+            userMaXa
+          )}</select>`;
+        } else if (isWardAdmin) {
+          teamCell = `<span class="team-hidden" style="display:none">${safeEscapeHtml(
+            r.team || 'No team'
+          )}</span>
+             <select class="form-select form-select-sm update-team-ward" data-id="${
+               r.id
+             }">${window.buildTeamOptionsUniversal(
+            r.team,
+            'ward_admin',
+            userMaXa
+          )}</select>`;
+        } else {
+          teamCell = safeEscapeHtml(r.team || 'Chưa có đội');
+        }
 
-        const posCell = isAdmin
-          ? `<select class="form-select form-select-sm update-position" data-id="${
-              r.id
-            }">
-               <option value="No position" ${
-                 !r.position || r.position === 'No position' ? 'selected' : ''
-               }>Chưa có vị trí</option>
-               <option value="Leader" ${
-                 r.position === 'Leader' ? 'selected' : ''
-               }>Đội trưởng</option>
-               <option value="Epidemic" ${
-                 r.position === 'Epidemic' ? 'selected' : ''
-               }>Cán bộ Dịch tễ</option>
-               <option value="Member" ${
-                 r.position === 'Member' ? 'selected' : ''
-               }>Cán bộ Lấy mẫu</option>
-               <option value="Engineer" ${
-                 r.position === 'Engineer' ? 'selected' : ''
-               }>Cán bộ Xử lý môi trường</option>
-               <option value="Media" ${
-                 r.position === 'Media' ? 'selected' : ''
-               }>Cán bộ Truyền thông</option>
-               <option value="Logistic" ${
-                 r.position === 'Logistic' ? 'selected' : ''
-               }>Hậu cần</option>
-               <option value="Driver" ${
-                 r.position === 'Driver' ? 'selected' : ''
-               }>Lái xe</option>
-             </select>`
-          : safeEscapeHtml(r.position || 'Chưa có vị trí');
+        let posCell;
+        if (isAdmin) {
+          posCell = `<select class="form-select form-select-sm update-position" data-id="${
+            r.id
+          }">${posOptionsFull(r.position)}</select>`;
+        } else if (isWardAdmin) {
+          posCell = `<select class="form-select form-select-sm update-position-ward" data-id="${
+            r.id
+          }">${posOptionsWard(r.position)}</select>`;
+        } else {
+          posCell = safeEscapeHtml(r.position || 'Chưa có vị trí');
+        }
 
-        // BỌC THÉP HÀM TÍNH ĐIỂM (Chống sập bảng nếu code cũ bị lỗi)
         let rankHtml = '<span class="badge bg-secondary">N/A</span>';
         try {
           if (typeof window.calculateRRTLevel === 'function') {
@@ -5458,14 +5957,9 @@ document.addEventListener('DOMContentLoaded', function () {
         ];
       });
 
-      console.log('✅ Đã xử lý xong dữ liệu, bắt đầu vẽ bảng...');
-
-      // 3. Xóa bảng cũ và Vẽ DataTable mới
       if ($.fn.DataTable.isDataTable('#team-table')) {
         $('#team-table').DataTable().clear().destroy();
-        // Không dùng .empty() ở đây vì DataTables cần giữ lại cấu trúc thead nếu có
       }
-
       dataTableInstance = $('#team-table').DataTable({
         data: dataForTable,
         destroy: true,
@@ -5517,99 +6011,204 @@ document.addEventListener('DOMContentLoaded', function () {
           'print',
           { extend: 'colvis', text: 'Columns' },
         ],
-        language: {
-          search: 'Tìm kiếm:',
-          lengthMenu: 'Hiển thị _MENU_ dòng',
-          info: 'Hiển thị _START_ đến _END_ của _TOTAL_ hồ sơ',
-          paginate: {
-            first: 'Đầu',
-            last: 'Cuối',
-            next: 'Sau',
-            previous: 'Trước',
-          },
-        },
       });
 
-      console.log('✅ Bảng DataTable đã vẽ thành công!');
-
-      // 4. Vẽ lại các biểu đồ bên dưới
       if (typeof renderAnalytics_Member === 'function') {
-        renderAnalytics_Member(fullTeamData, null, null);
+        renderAnalytics_Member(scopedTeamData, null, null);
       }
 
-      // 5. Gắn sự kiện (Event Listener) Cập nhật đội
+      // --- GẮN SỰ KIỆN CHANGE AN TOÀN TRÁNH MẤT TEAM KHI ĐỔI VỊ TRÍ ---
       $('#team-table').off('change', '.update-team, .update-position');
       $('#team-table').on(
         'change',
         '.update-team, .update-position',
         function () {
           const $tr = $(this).closest('tr');
-          // Vì class gắn trực tiếp trên thẻ select, ta gọi $(this).data('id') luôn cho an toàn
           const userId = $(this).data('id');
-          const newTeam = $tr.find('.update-team').val() || '';
-          const newPos = $tr.find('.update-position').val() || '';
+
+          const currentMember = (window.appState.teamData || []).find(
+            (m) => m.id === userId
+          );
+          const newTeam =
+            $tr.find('.update-team').val() || currentMember?.team || 'No team';
+          const newPos =
+            $tr.find('.update-position').val() ||
+            currentMember?.position ||
+            'No position';
 
           if (typeof updateTeamData === 'function') {
-            updateTeamData(userId, newTeam, newPos, $tr, dataTableInstance);
+            updateTeamData(userId, newTeam, newPos, $tr, dataTableInstance, {
+              role: 'admin',
+            });
           }
         }
       );
+
+      $('#team-table').off(
+        'change',
+        '.update-team-ward, .update-position-ward'
+      );
+      $('#team-table').on(
+        'change',
+        '.update-team-ward, .update-position-ward',
+        function () {
+          const $tr = $(this).closest('tr');
+          const userId = $(this).data('id');
+          const $teamSel = $tr.find('.update-team-ward');
+          const $posSel = $tr.find('.update-position-ward');
+
+          const doSaveWard = (teamName) => {
+            const currentMember = (window.appState.teamData || []).find(
+              (m) => m.id === userId
+            );
+            const newTeam =
+              teamName || $teamSel.val() || currentMember?.team || 'No team';
+            const newPos =
+              $posSel.val() || currentMember?.position || 'No position';
+
+            if (newPos === 'Leader') {
+              if (typeof showToast === 'function')
+                showToast(
+                  'Bạn không có quyền phong Đội trưởng. Vui lòng liên hệ quản trị cấp trên.',
+                  'warning'
+                );
+              $posSel.val(
+                currentMember?.position === 'Leader'
+                  ? 'Leader'
+                  : currentMember?.position || 'No position'
+              );
+              return;
+            }
+
+            if (typeof updateTeamData === 'function') {
+              updateTeamData(userId, newTeam, newPos, $tr, dataTableInstance, {
+                role: 'ward_admin',
+                wardTeams: wardTeams,
+              });
+            }
+          };
+
+          if (
+            $(this).hasClass('update-team-ward') &&
+            $teamSel.val() === '__NEW__'
+          ) {
+            let maxNum = 0;
+            wardTeams.forEach((t) => {
+              const m = String(t).match(/(\d+)\s*$/);
+              if (m) maxNum = Math.max(maxNum, parseInt(m[1], 10));
+            });
+            const nextNum = String(maxNum + 1).padStart(2, '0');
+            const newTeamName = `Team ${myWorkplaceWard} ${nextNum}`;
+
+            const applyNewTeam = () => {
+              $teamSel.val(newTeamName);
+              doSaveWard(newTeamName);
+              setTimeout(() => {
+                if (typeof window.renderTeamTable === 'function') {
+                  window.renderTeamTable();
+                }
+              }, 300);
+            };
+
+            if (typeof window.showToastConfirm === 'function') {
+              window.showToastConfirm(
+                `Tạo đội mới: <strong>${newTeamName}</strong> và gán người này vào đội?`,
+                applyNewTeam,
+                () => {
+                  $teamSel.val('No team');
+                }
+              );
+            } else {
+              applyNewTeam();
+            }
+            return;
+          }
+
+          doSaveWard();
+        }
+      );
     } catch (err) {
-      console.error('❌ Lỗi chết hàm renderTeamTable:', err);
-      showToast('Lỗi hiển thị bảng Đội. Xem F12 để biết chi tiết.', 'error');
+      console.error('❌ Lỗi renderTeamTable:', err);
+      showToast('Lỗi hiển thị bảng Đội.', 'error');
     } finally {
       if (typeof hideLoadingSpinner === 'function') hideLoadingSpinner();
     }
   };
 
-  // ==========================================
-  // CẬP NHẬT THÔNG TIN ĐỘI (GỌI TRỰC TIẾP ID LÊN SUPABASE)
-  // ==========================================
-  async function updateTeamData(userId, newTeam, newPosition, $tr, table) {
+  // ============================================================================
+  // 3. HÀM CẬP NHẬT DỮ LIỆU (updateTeamData)
+  // ============================================================================
+  async function updateTeamData(
+    userId,
+    newTeam,
+    newPosition,
+    $tr,
+    table,
+    opts
+  ) {
     if (!userId) return;
+    const role = (opts && opts.role) || 'admin';
+    const userWorkplaceMaXa =
+      opts?.userWorkplaceMaXa || window.userSession?.workplace_ma_xa;
 
     try {
-      // Dùng Khóa chính 'id' để update sẽ an toàn 100%
+      const oldMember = (window.appState?.teamData || []).find(
+        (m) => m.id === userId
+      );
+
+      const finalTeam =
+        newTeam !== undefined && newTeam !== null && newTeam !== ''
+          ? newTeam
+          : oldMember?.team || 'No team';
+
+      const finalPos =
+        newPosition !== undefined && newPosition !== null && newPosition !== ''
+          ? newPosition
+          : oldMember?.position || 'No position';
+
       const { error } = await supabaseClient
         .from('profiles')
         .update({
-          team: newTeam,
-          position: newPosition,
+          team: finalTeam,
+          position: finalPos,
           updated_at: new Date().toISOString(),
         })
         .eq('id', userId);
-
       if (error) throw error;
 
-      // Update Local State để biểu đồ nhảy theo
-      if (window.appState && window.appState.teamData) {
-        const member = window.appState.teamData.find((m) => m.id === userId);
-        if (member) {
-          member.team = newTeam;
-          member.position = newPosition;
-        }
+      let isTeamChanged = false;
+      let isPosChanged = false;
+
+      if (oldMember) {
+        isTeamChanged = oldMember.team !== finalTeam;
+        isPosChanged = oldMember.position !== finalPos;
+
+        oldMember.team = finalTeam;
+        oldMember.position = finalPos;
       }
 
-      // Update lại giao diện DataTable
+      const esc = (s) =>
+        window.escapeHtml
+          ? window.escapeHtml(String(s ?? ''))
+          : String(s ?? '');
+
       if (table && $tr.length) {
         const rowData = table.row($tr).data();
         if (rowData) {
-          // Xây dựng lại HTML cho Cột 7 (Team)
-          let teamOptions = `<option value="No team" ${
-            newTeam === 'No team' ? 'selected' : ''
-          }>Chưa có đội</option>`;
-          for (let n = 1; n <= 10; n++) {
-            teamOptions += `<option value="Team ${n}" ${
-              newTeam === `Team ${n}` ? 'selected' : ''
-            }>Team ${n}</option>`;
-          }
-          rowData[7] = `<span class="team-hidden" style="display:none">${window.escapeHtml(
-            newTeam
-          )}</span>
-                        <select class="form-select form-select-sm update-team" data-id="${userId}">${teamOptions}</select>`;
+          const teamOptions = window.buildTeamOptionsUniversal(
+            finalTeam,
+            role,
+            userWorkplaceMaXa
+          );
+          const selectClass =
+            role === 'ward_admin' ? 'update-team-ward' : 'update-team';
 
-          // Xây dựng lại HTML cho Cột 8 (Position)
-          const posMap = {
+          rowData[7] = `<span class="team-hidden" style="display:none">${esc(
+            finalTeam
+          )}</span>
+          <select class="form-select form-select-sm ${selectClass}" data-id="${userId}">${teamOptions}</select>`;
+
+          const posMapFull = {
             'No position': 'Chưa có vị trí',
             Leader: 'Đội trưởng',
             Epidemic: 'Cán bộ Dịch tễ',
@@ -5619,41 +6218,73 @@ document.addEventListener('DOMContentLoaded', function () {
             Logistic: 'Hậu cần',
             Driver: 'Lái xe',
           };
-          let posOptions = '';
-          for (const [key, label] of Object.entries(posMap)) {
-            posOptions += `<option value="${key}" ${
-              newPosition === key ? 'selected' : ''
-            }>${label}</option>`;
+
+          if (role === 'ward_admin') {
+            const posMapWard = { ...posMapFull };
+            delete posMapWard.Leader;
+            let posOptions =
+              finalPos === 'Leader'
+                ? `<option value="Leader" selected>Đội trưởng</option>`
+                : '';
+            for (const [key, label] of Object.entries(posMapWard)) {
+              posOptions += `<option value="${key}" ${
+                finalPos === key ? 'selected' : ''
+              }>${label}</option>`;
+            }
+            rowData[8] = `<select class="form-select form-select-sm update-position-ward" data-id="${userId}">${posOptions}</select>`;
+          } else {
+            let posOptions = '';
+            for (const [key, label] of Object.entries(posMapFull)) {
+              posOptions += `<option value="${key}" ${
+                finalPos === key ? 'selected' : ''
+              }>${label}</option>`;
+            }
+            rowData[8] = `<select class="form-select form-select-sm update-position" data-id="${userId}">${posOptions}</select>`;
           }
-          rowData[8] = `<select class="form-select form-select-sm update-position" data-id="${userId}">${posOptions}</select>`;
 
           table.row($tr).data(rowData).invalidate();
         }
       }
 
-      // Vẽ lại biểu đồ phân tích bên dưới
       if (typeof renderAnalytics_Member === 'function') {
         const startDate = $('#filter-date-start-team').val();
         const endDate = $('#filter-date-end-team').val();
         const selectedTeams = $('#filter-team-select').val() || [];
-        renderAnalytics_Member(
-          window.appState.teamData,
-          startDate,
-          endDate,
-          selectedTeams
-        );
+        let chartData = window.appState.teamData || [];
+        if (role === 'ward_admin') {
+          const myMaXa = String(
+            window.userSession?.workplace_ma_xa || ''
+          ).trim();
+          const gu = [
+            'trạm y tế phường/xã/ đặc khu',
+            'ubnd phường/xã/ đặc khu',
+          ];
+          chartData = chartData.filter((m) => {
+            const mMaXa = String(m.workplace_ma_xa || '').trim();
+            const mFax = String(m.fax || '')
+              .toLowerCase()
+              .trim();
+            return myMaXa && mMaXa === myMaXa && gu.includes(mFax);
+          });
+        }
+        renderAnalytics_Member(chartData, startDate, endDate, selectedTeams);
       }
 
-      showToast('Đã phân công Đội thành công!', 'success');
+      // Hiển thị toast thông báo chính xác tùy theo thao tác
+      if (isTeamChanged && isPosChanged) {
+        showToast('Đã cập nhật Đội và Vị trí thành công!', 'success');
+      } else if (isTeamChanged) {
+        showToast('Đã phân công Đội thành công!', 'success');
+      } else if (isPosChanged) {
+        showToast('Đã cập nhật Vị trí thành công!', 'success');
+      } else {
+        showToast('Cập nhật thành công!', 'success');
+      }
     } catch (err) {
-      console.error('Lỗi cập nhật Đội:', err);
-      showToast('Lỗi khi phân công: ' + err.message, 'error');
+      console.error('Lỗi cập nhật thông tin:', err);
+      showToast('Lỗi khi cập nhật: ' + err.message, 'error');
     }
   }
-  /**
-   * (ĐÃ SỬA LỖI LỌC NGÀY BIỂU ĐỒ)
-   * Hàm này sẽ nhận dữ liệu (đã lọc team) VÀ tự lọc theo ngày
-   */
 
   // === BIẾN MÀU (colors) - BẮT BUỘC ĐỊNH NGHĨA TRƯỚC KHI GỌI HÀM ===
   const colors = {
@@ -6506,21 +7137,40 @@ document.addEventListener('DOMContentLoaded', function () {
 
     let incidents = window.appState.trackingIncidents;
 
-    // 2. Logic Phân quyền
-    const isAdmin = (window.userSession?.role || '').toLowerCase() === 'admin';
+    // 2. Logic Phân quyền xem sự cố
+    // 2. Logic Phân quyền xem sự cố
+    const role = (window.userSession?.role || '').toLowerCase();
     const myEmail = String(window.userSession?.email || '')
       .toLowerCase()
       .trim();
+    const myMaXa = String(window.userSession?.workplace_ma_xa || '').trim();
 
-    if (!isAdmin) {
+    if (role === 'admin') {
+      // admin: thấy tất cả — không lọc
+    } else {
+      // Gom chung logic cho ward_admin và user thường
       incidents = incidents.filter((inc) => {
-        const allParticipants = (
+        // Điều kiện 1: Xảy ra trên địa bàn quản lý (Chỉ áp dụng cho ward_admin)
+        const isMyWard =
+          role === 'ward_admin' &&
+          myMaXa &&
+          String(inc.ma_xa || '').trim() === myMaXa;
+
+        // Điều kiện 2: Tài khoản có tên trong danh sách tham gia hoặc được mời
+        const members = String(inc.members || '').toLowerCase();
+        const initial = String(
           inc.initial_selected_members || ''
         ).toLowerCase();
-        return allParticipants.includes(myEmail);
+        const declined = String(inc.declined_members || '').toLowerCase();
+
+        const hasJoined = members.includes(myEmail);
+        const isInvited =
+          initial.includes(myEmail) && !declined.includes(myEmail);
+
+        // HIỂN THỊ NẾU: Là sự cố địa phương HOẶC được đích thân điều động
+        return isMyWard || hasJoined || isInvited;
       });
     }
-
     // 3. Logic tìm kiếm & ngày tháng (Giữ nguyên)
     const searchKey = (
       document.getElementById('tracking-search-input')?.value || ''
@@ -7089,6 +7739,10 @@ document.addEventListener('DOMContentLoaded', function () {
         actionBar.style.display = 'none';
       }
     }
+    // Quét và mở khóa lại các nút chức năng sau khi HTML vừa được vẽ xong
+    if (typeof window.applyRolePermissions === 'function') {
+      window.applyRolePermissions();
+    }
   };
 
   /**
@@ -7286,18 +7940,25 @@ document.addEventListener('DOMContentLoaded', function () {
     const tbody = document.getElementById('message-table-body');
     if (!tbody) return;
 
-    // 1. Kiểm tra session
-    if (!window.userSession || !window.userSession.email) {
-      tbody.innerHTML = `<tr><td colspan="4" class="text-center text-danger">Lỗi: Không tìm thấy thông tin phiên đăng nhập.</td></tr>`;
+    // 1. SỬA LỖI: Kiểm tra session linh hoạt (Chấp nhận cả Email HOẶC Username)
+    const session = window.userSession;
+    if (!session || (!session.email && !session.username && !session.id)) {
+      tbody.innerHTML = `<tr><td colspan="4" class="text-center text-danger">Lỗi: Không tìm thấy thông tin định danh của phiên đăng nhập.</td></tr>`;
       return;
     }
 
     // 2. Fetch dữ liệu trực tiếp từ Supabase
     try {
+      // SỬA LỖI: Gom tất cả định danh có thể có của người dùng vào 1 mảng (lọc bỏ các giá trị rỗng)
+      const identifiers = [session.email, session.username, session.id].filter(
+        Boolean
+      );
+
       const { data: notifications, error } = await window.supabaseClient
         .from('notifications')
         .select('*')
-        .eq('user_email', window.userSession.email) // Chỉ lấy thông báo của user này
+        // Dùng .in() để đối chiếu mảng. Cột 'user_email' trong DB giờ sẽ khớp nếu chứa email HOẶC username
+        .in('user_email', identifiers)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -7366,48 +8027,54 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   };
 
-  /**
-   * @param {string} recordId - ID (UUID) của record trong bảng 'notifications'
-   * @param {HTMLElement} btn - Nút bấm để cập nhật giao diện
-   */
-  window.markNotificationAsRead = async function (notificationId, btnElement) {
-    if (!notificationId) return;
+  // ============================================================
+  // PATCH 3: markNotificationAsRead – xóa item khỏi list mượt mà
+  // ============================================================
 
-    // 1. Hiển thị trạng thái đang xử lý trên nút bấm
-    const originalContent = btnElement.innerHTML;
-    btnElement.innerHTML =
-      '<span class="spinner-border spinner-border-sm"></span>';
-    btnElement.disabled = true;
+  window.markNotificationAsRead = async function (notifId, btn) {
+    if (!notifId) return;
+    const li = btn?.closest('li');
+    if (btn) btn.disabled = true;
+    if (li) li.style.opacity = '0.5';
 
     try {
-      // 2. Cập nhật Database
       const { error } = await window.supabaseClient
         .from('notifications')
         .update({ is_read: true })
-        .eq('id', notificationId);
+        .eq('id', notifId);
 
       if (error) throw error;
 
-      showToast('Đã đánh dấu là đã đọc', 'success');
-
-      // 3. ĐỒNG BỘ GIAO DIỆN (CỐT LÕI CỦA VẤN ĐỀ)
-      // Gọi lại tất cả các hàm render để chúng tự lấy dữ liệu mới nhất
-
-      // Cập nhật bảng thông báo chính
-      if (typeof window.renderMessageTable === 'function') {
-        await window.renderMessageTable();
+      // Animation xóa khỏi list
+      if (li) {
+        li.style.transition = 'max-height .3s, opacity .3s';
+        li.style.maxHeight = li.offsetHeight + 'px';
+        li.style.overflow = 'hidden';
+        requestAnimationFrame(() => {
+          li.style.maxHeight = '0';
+          li.style.opacity = '0';
+          setTimeout(() => {
+            li.remove();
+            const container = document.getElementById('user-dash-alerts');
+            if (container && container.children.length === 0) {
+              container.innerHTML =
+                '<li class="list-group-item text-muted text-center py-3">' +
+                'Không có thông báo mới.</li>';
+            }
+          }, 310);
+        });
       }
 
-      // Cập nhật menu thông báo (dropdown chuông)
+      // Cập nhật số chuông
       if (typeof window.loadUserNotifications === 'function') {
-        await window.loadUserNotifications();
+        window.loadUserNotifications();
       }
     } catch (err) {
-      console.error('Lỗi khi đánh dấu đã đọc:', err);
-      showToast('Lỗi cập nhật: ' + err.message, 'error');
-      // Hoàn tác trạng thái nút
-      btnElement.innerHTML = originalContent;
-      btnElement.disabled = false;
+      console.error('[markNotificationAsRead] Lỗi:', err);
+      if (btn) btn.disabled = false;
+      if (li) li.style.opacity = '1';
+      if (typeof showToast === 'function')
+        showToast('Lỗi: ' + err.message, 'error');
     }
   };
   // --- Cập nhật badge chuông mượt mà ---
@@ -7423,17 +8090,25 @@ document.addEventListener('DOMContentLoaded', function () {
   // ==========================================
   // PATCH 13: loadUserNotifications – chỉ hiện thông báo CHƯA đọc
   window.loadUserNotifications = async function () {
-    if (!window.userSession?.email) return;
+    // 1. SỬA LỖI: Kiểm tra session linh hoạt (Chấp nhận cả Email, Username, ID)
+    const session = window.userSession;
+    if (!session || (!session.email && !session.username && !session.id))
+      return;
 
     const list = document.getElementById('notification-list');
     const numEl = document.querySelector('.notification .num');
 
     try {
+      // 2. SỬA LỖI: Tạo mảng định danh để vét cạn thông báo
+      const identifiers = [session.email, session.username, session.id].filter(
+        Boolean
+      );
+
       const { data: notifications, error } = await window.supabaseClient
         .from('notifications')
         .select('*')
-        .eq('user_email', window.userSession.email)
-        .eq('is_read', false) // ← THÊM DÒNG NÀY
+        .in('user_email', identifiers) // <-- Dùng .in() thay vì .eq()
+        .eq('is_read', false)
         .order('created_at', { ascending: false })
         .limit(10);
 
@@ -7482,30 +8157,6 @@ document.addEventListener('DOMContentLoaded', function () {
       console.error('[loadUserNotifications] Lỗi:', err);
     }
   };
-  // Sự kiện mở/đóng menu chuông notification
-  document
-    .getElementById('notificationIcon')
-    .addEventListener('click', function (e) {
-      e.preventDefault();
-      const menu = document.getElementById('notificationMenu');
-      loadUserNotifications();
-      menu.style.display = 'block';
-      e.stopPropagation();
-    });
-  // Close menu khi click ra ngoài
-  document.addEventListener('click', function (e) {
-    const menu = document.getElementById('notificationMenu');
-    const icon = document.getElementById('notificationIcon');
-    if (!menu.contains(e.target) && !icon.contains(e.target)) {
-      menu.style.display = 'none';
-    }
-  });
-  // Không đóng menu khi click trong menu
-  document
-    .getElementById('notificationMenu')
-    .addEventListener('click', function (e) {
-      e.stopPropagation();
-    });
 
   // ========================================================================
   // XỬ LÝ SỰ KIỆN KHI ĐỔI TRẠNG THÁI TRÊN BẢNG DATA (APPROVAL STATUS)
@@ -7955,26 +8606,13 @@ document.addEventListener('DOMContentLoaded', function () {
               (h.action_type === 'deployed' || h.action_type === 'replaced') &&
               h.confirmed_at;
 
-            let actionBadge;
-            if (h.action_type === 'declined') {
-              actionBadge = '<span class="badge bg-danger">❌ Từ chối</span>';
-            } else if (!isParticipated) {
-              actionBadge =
-                '<span class="badge bg-warning text-dark">⏳ Chờ xác nhận</span>';
-            } else if (incidentStatus === 'active') {
-              actionBadge =
-                '<span class="badge bg-success">🔥 Đang tham gia</span>';
-            } else {
-              actionBadge =
-                '<span class="badge bg-primary">🏁 Hoàn thành</span>';
-            }
             const notes = h.reason || '';
             const startDate = h.created_at
               ? new Date(h.created_at).toLocaleDateString('vi-VN')
               : 'N/A';
-
             const incidentStatus = (incInfo.status || '').toLowerCase();
 
+            let actionBadge;
             if (h.action_type === 'declined') {
               actionBadge = '<span class="badge bg-danger">❌ Từ chối</span>';
             } else if (!isParticipated) {
@@ -8046,7 +8684,7 @@ document.addEventListener('DOMContentLoaded', function () {
           department, deployment_status, approval_status,
           updated_at, created_at, academic, academic_level,
           languages, languages_level, employeestatus,
-          ward, address, dob, gender, fax, edit_comment
+          ward, address, dob, gender, fax, edit_comment, workplace_ward
         `
           )
           .eq('id', profileId)
@@ -8113,7 +8751,9 @@ document.addEventListener('DOMContentLoaded', function () {
       // ✅ 9. CACHE LAST VALUES FOR DROPDOWNS
       window.lastwardValue = profile.ward || '';
       window.lastfaxValue = profile.fax || '';
+      window.lastworkplaceWardValue = profile.workplace_ward || ''; // ← THÊM
       window.lastdepartmentValue = profile.department || '';
+      window.lastemployeeStatusValue = profile.employeestatus || '';
       window.lastacademicValue = qual.academic || profile.academic || '';
       window.lastacademicLevelValue =
         qual.academic_level || profile.academic_level || '';
@@ -8451,6 +9091,7 @@ document.addEventListener('DOMContentLoaded', function () {
         window.lastacademicValue = '';
         window.lastacademicLevelValue = '';
         window.lastfaxValue = '';
+        window.lastworkplaceWardValue = ''; // ← THÊM
         createWardDropdown();
       }
 
@@ -8544,6 +9185,7 @@ document.addEventListener('DOMContentLoaded', function () {
           latitude: userLoc.lat,
           longitude: userLoc.lng,
           fax: getVal('fax'),
+          workplace_ward: getVal('workplace_ward'), // ← THÊM: tên xã nơi công tác (null nếu không phải tuyến cơ sở)
           department: getVal('department'),
           employeestatus: getVal('employeeStatus'),
           academic: getVal('academic'),
@@ -8817,22 +9459,70 @@ document.addEventListener('DOMContentLoaded', function () {
   // Thay thế việc gọi server bằng cách lấy dữ liệu sẵn có
   window.getMembersForEmergency = function () {
     return new Promise((resolve, reject) => {
-      // Kiểm tra quyền
-      if (!window.userSession || !window.userSession.role.includes('admin')) {
-        showToast('Bạn không có quyền xem danh sách này!', 'error');
+      // Ép kiểu an toàn để tránh lỗi undefined
+      const role = String(window.userSession?.role || '').toLowerCase();
+
+      // Gộp cả admin cũ và city_admin mới (nếu có) vào quyền HCDC Admin
+      const isAdmin = role === 'admin' || role === 'city_admin';
+      const isWardAdmin = role === 'ward_admin';
+
+      // 1. Kiểm tra quyền chặn từ cửa
+      if (!isAdmin && !isWardAdmin) {
+        if (typeof showToast === 'function')
+          showToast('Bạn không có quyền xem danh sách này!', 'error');
         reject(new Error('No permission'));
         return;
       }
 
-      // Kiểm tra appState
       if (!window.appState || !window.appState.users) {
-        showToast('Dữ liệu nhân sự chưa được tải!', 'error');
+        if (typeof showToast === 'function')
+          showToast('Dữ liệu nhân sự chưa được tải!', 'error');
         reject(new Error('Data not loaded'));
         return;
       }
 
-      // Trả về danh sách ngay lập tức
-      resolve(window.appState.users);
+      // 2. LỌC BỎ LÃNH ĐẠO KHỎI DANH SÁCH ĐIỀU ĐỘNG
+      // Lệnh này đảm bảo HCDC Admin hay Ward Admin khi chọn quân đi dập dịch
+      // sẽ không vô tình chọn nhầm vào tài khoản của sếp hoặc tài khoản hệ thống.
+      const rrtMembersOnly = window.appState.users.filter((u) => {
+        const uRole = String(u.role || 'user').toLowerCase();
+        // Chỉ giữ lại cán bộ (user) chờ phân công
+        return uRole === 'user' || uRole === 'member';
+      });
+
+      // 3. Phân luồng dữ liệu hiển thị
+      if (isAdmin) {
+        // Admin HCDC: Thấy tất cả nhân sự (đã lọc bỏ lãnh đạo) toàn thành phố
+        resolve(rrtMembersOnly);
+        return;
+      }
+
+      if (isWardAdmin) {
+        const myMaXa = String(window.userSession?.workplace_ma_xa || '').trim();
+
+        // Chặn lỗi: Nếu tài khoản Ward Admin bị lỗi thiếu mã xã, trả về rỗng ngay lập tức
+        if (!myMaXa) {
+          resolve([]);
+          return;
+        }
+
+        const grassrootsUnits = [
+          'trạm y tế phường/xã/ đặc khu',
+          'ubnd phường/xã/ đặc khu',
+        ];
+
+        // Ward Admin: Chỉ thấy nhân sự (đã lọc bỏ lãnh đạo) cùng Mã Xã Công Tác
+        const filtered = rrtMembersOnly.filter((u) => {
+          const uMaXa = String(u.workplace_ma_xa || '').trim();
+          const uFax = String(u.fax || '')
+            .toLowerCase()
+            .trim();
+
+          return uMaXa === myMaXa && grassrootsUnits.includes(uFax);
+        });
+
+        resolve(filtered);
+      }
     });
   };
   // A global variable to store the list of members
@@ -8888,7 +9578,25 @@ document.addEventListener('DOMContentLoaded', function () {
       // Nếu tải xong mà hệ thống vẫn không có Đội nào (database trống), thì dừng
       if (teamData.length === 0) return;
     }
-
+    // ==========================================
+    // LỌC THEO QUYỀN: ward_admin chỉ thấy người xã mình + tuyến cơ sở
+    // ==========================================
+    const _role = (window.userSession?.role || '').toLowerCase();
+    if (_role === 'ward_admin') {
+      const myMaXa = String(window.userSession?.workplace_ma_xa || '').trim();
+      const grassrootsUnits = [
+        'trạm y tế phường/xã/ đặc khu',
+        'ubnd phường/xã/ đặc khu',
+      ];
+      teamData = teamData.filter((m) => {
+        const mMaXa = String(m.workplace_ma_xa || '').trim();
+        const mFax = String(m.fax || '')
+          .toLowerCase()
+          .trim();
+        return myMaXa && mMaXa === myMaXa && grassrootsUnits.includes(mFax);
+      });
+    }
+    // (admin: giữ nguyên teamData — thấy tất cả)
     // ==========================================
     // 2. Logic kiểm tra Lịch trực Hôm nay (ĐÃ BỌC THÉP MÚI GIỜ)
     // ==========================================
@@ -9457,6 +10165,17 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     if (type === 'new') {
+      // Ẩn ô chọn xã với ward_admin — server tự gắn xã của họ
+      const role = (window.userSession?.role || '').toLowerCase();
+      if (role === 'ward_admin') {
+        const wardInput = document.getElementById('incidentWard');
+        if (wardInput) {
+          const wardRow =
+            wardInput.closest('.form-group') || wardInput.parentElement;
+          if (wardRow) wardRow.style.display = 'none';
+        }
+      }
+
       groupNew.style.display = 'block';
       groupAdd.style.display = 'none';
       replacementInfo.style.display = 'none';
@@ -10049,6 +10768,14 @@ document.addEventListener('DOMContentLoaded', function () {
               `⚠️ ${missingEmails.length} thành viên không có hồ sơ, không ghi được lịch sử điều động!`,
               'warning'
             );
+        }
+        // Cảnh báo nếu ward_admin lỡ chọn người khác xã (bị loại âm thầm)
+        const filteredOut = rpcResult.filtered_out || [];
+        if (filteredOut.length > 0) {
+          showToast(
+            `${filteredOut.length} người không thuộc xã bạn quản lý đã bị loại khỏi lệnh điều động.`,
+            'warning'
+          );
         }
 
         // Lệnh trùng (bấm đúp / retry): server KHÔNG tạo bản ghi mới
@@ -11680,6 +12407,17 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
     else if (typeof showLoadingSpinner === 'function')
       showLoadingSpinner(false);
   }
+  // Đặt gần đầu file, sau các helper khác
+  window.isMyWardTeam = function (teamName) {
+    const role = (window.userSession?.role || '').toLowerCase();
+    if (role !== 'ward_admin') return true; // admin/user: không giới hạn ở đây
+    const myWard = String(window.userSession?.workplace_ward || '').trim();
+    if (!myWard) return false;
+    const prefix = `Team ${myWard}`;
+    return String(teamName || '')
+      .trim()
+      .startsWith(prefix);
+  };
   // ============================================================
   // LOGIC ROSTER WIZARD (SMART REPLACEMENT - SUPABASE VERSION)
   // ============================================================
@@ -12045,7 +12783,9 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
         // [LOGIC CA TRỰC] - Lấy danh sách rảnh
         const { data, error } = await window.supabaseClient
           .from('profiles')
-          .select('id, email, full_name, team, position, deployment_status')
+          .select(
+            'id, email, full_name, team, position, deployment_status, workplace_ma_xa, fax'
+          )
           .eq('deployment_status', 'Sẵn sàng')
           .neq('approval_status', 'pending');
 
@@ -12077,6 +12817,24 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
           }
           return true;
         });
+        // ward_admin: người thay thế cũng phải cùng xã + tuyến cơ sở
+        const _role = (window.userSession?.role || '').toLowerCase();
+        if (_role === 'ward_admin') {
+          const myMaXa = String(
+            window.userSession?.workplace_ma_xa || ''
+          ).trim();
+          const gu = [
+            'trạm y tế phường/xã/ đặc khu',
+            'ubnd phường/xã/ đặc khu',
+          ];
+          finalCandidates = finalCandidates.filter((u) => {
+            const uMaXa = String(u.workplace_ma_xa || '').trim();
+            const uFax = String(u.fax || '')
+              .toLowerCase()
+              .trim();
+            return myMaXa && uMaXa === myMaXa && gu.includes(uFax);
+          });
+        }
       } else {
         // [LOGIC AI ĐIỀU ĐỘNG KHẨN CẤP]
         if (!wizardData.oldEmail)
@@ -12416,12 +13174,68 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
 
   let currentCalDate = new Date();
 
-  window.renderRosterPage = function () {
+  window.renderRosterPage = async function () {
     const teamSelect = document.getElementById('new-shift-team');
-    if (teamSelect && teamSelect.options.length <= 1) {
+    const role = (window.userSession?.role || '').toLowerCase();
+    if (teamSelect) {
       let opts = '<option value="">-- Chọn Đội --</option>';
-      for (let i = 1; i <= 10; i++) {
-        opts += `<option value="Team ${i}">Team ${i}</option>`;
+      if (role === 'ward_admin') {
+        // Đội của xã mình: quét distinct team của người cùng workplace_ma_xa
+        const myMaXa = String(window.userSession?.workplace_ma_xa || '').trim();
+        const gu = ['trạm y tế phường/xã/ đặc khu', 'ubnd phường/xã/ đặc khu'];
+        let wardTeams = [];
+        try {
+          const { data } = await window.supabaseClient
+            .from('profiles')
+            .select('team, workplace_ma_xa, fax')
+            .eq('workplace_ma_xa', myMaXa);
+          wardTeams = [
+            ...new Set(
+              (data || [])
+                .filter((m) =>
+                  gu.includes(
+                    String(m.fax || '')
+                      .toLowerCase()
+                      .trim()
+                  )
+                )
+                .map((m) => m.team)
+                .filter((t) => t && t !== 'No team')
+            ),
+          ].sort();
+        } catch (e) {
+          console.warn('Lỗi tải đội xã:', e);
+        }
+        if (wardTeams.length === 0) {
+          opts +=
+            '<option value="" disabled>(Xã chưa có đội nào — tạo đội ở tab Thành viên trước)</option>';
+        } else {
+          wardTeams.forEach((t) => {
+            opts += `<option value="${window.escapeHtml(
+              t
+            )}">${window.escapeHtml(t)}</option>`;
+          });
+        }
+      } else {
+        // admin: MỌI đội (Team 1-10 luôn có + Team Phường... quét từ profiles)
+        const adminTeams = new Set();
+        for (let i = 1; i <= 10; i++) adminTeams.add(`Team ${i}`);
+        try {
+          const { data } = await window.supabaseClient
+            .from('profiles')
+            .select('team');
+          (data || []).forEach((p) => {
+            const t = String(p.team || '').trim();
+            if (t && t !== 'No team') adminTeams.add(t);
+          });
+        } catch (e) {
+          console.warn('Lỗi quét đội cho admin:', e);
+        }
+        [...adminTeams].sort().forEach((t) => {
+          opts += `<option value="${window.escapeHtml(t)}">${window.escapeHtml(
+            t
+          )}</option>`;
+        });
       }
       teamSelect.innerHTML = opts;
     }
@@ -12575,25 +13389,84 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
       document.getElementById('detail-roster-id').textContent =
         shift.note || '';
 
-      const [profilesRes, assignmentsRes] = await Promise.all([
-        window.supabaseClient
-          .from('profiles')
-          .select('*')
-          .eq('team', shift.team_name),
-        window.supabaseClient
-          .from('roster_assignments')
-          .select('*')
-          .eq('schedule_id', shift.id),
-      ]);
+      // ==========================================
+      // PHÂN LUỒNG TÌM KIẾM THÀNH VIÊN
+      // ==========================================
+      let teamMembers = [];
+      let assignments = [];
+      const isIncident = shift.shift_type === 'incident';
 
-      const teamMembers = profilesRes.data || [];
-      const assignments = assignmentsRes.data || [];
+      if (!isIncident) {
+        // TRƯỜNG HỢP 1: LỊCH TRỰC ĐỊNH KỲ (ROSTER)
+        const [profilesRes, assignmentsRes] = await Promise.all([
+          window.supabaseClient
+            .from('profiles')
+            .select('*')
+            .eq('team', shift.team_name),
+          window.supabaseClient
+            .from('roster_assignments')
+            .select('*')
+            .eq('schedule_id', shift.id),
+        ]);
+        teamMembers = profilesRes.data || [];
+        assignments = assignmentsRes.data || [];
+      } else {
+        // TRƯỜNG HỢP 2: SỰ CỐ KHẨN CẤP (INCIDENT)
+        const { data: incidentData } = await window.supabaseClient
+          .from('incidents')
+          .select('members, declined_members')
+          .eq('id', shift.incident_id)
+          .single();
+
+        if (incidentData) {
+          // Tách chuỗi email thành mảng
+          const confirmedEmails = (incidentData.members || '')
+            .split(';')
+            .map((e) => e.trim().toLowerCase())
+            .filter(Boolean);
+          const declinedEmails = (incidentData.declined_members || '')
+            .split(';')
+            .map((e) => e.trim().toLowerCase())
+            .filter(Boolean);
+
+          // Gộp tất cả email để truy vấn
+          const allEmails = [
+            ...new Set([...confirmedEmails, ...declinedEmails]),
+          ];
+
+          if (allEmails.length > 0) {
+            const { data: profilesData } = await window.supabaseClient
+              .from('profiles')
+              .select('*')
+              .in('email', allEmails);
+
+            teamMembers = profilesData || [];
+
+            // Giả lập cấu trúc assignments để tái sử dụng logic render bên dưới
+            assignments = teamMembers.map((member) => {
+              const email = (member.email || '').toLowerCase();
+              let status = 'pending';
+              if (confirmedEmails.includes(email)) status = 'confirmed';
+              else if (declinedEmails.includes(email)) status = 'declined';
+
+              return {
+                user_id: member.id,
+                assignment_status: status,
+              };
+            });
+          }
+        }
+      }
+
+      // ==========================================
+      // RENDER DANH SÁCH RA GIAO DIỆN
+      // ==========================================
       const container = document.getElementById('detail-roster-members');
       container.innerHTML = '';
 
       if (teamMembers.length === 0) {
         container.innerHTML =
-          '<div class="text-center text-muted p-3">Đội này hiện chưa có thành viên nào trong hệ thống.</div>';
+          '<div class="text-center text-muted p-3">Đội/Sự kiện này hiện chưa có thành viên nào trong hệ thống.</div>';
       } else {
         let confirmedCount = 0;
 
@@ -12621,21 +13494,21 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
           container.insertAdjacentHTML(
             'beforeend',
             `
-                  <div class="list-group-item border-0 border-bottom d-flex align-items-center p-2" style="opacity: ${opacity};">
-                      <div class="me-3 d-flex align-items-center justify-content-center shadow-sm" style="width: 40px; height: 40px; background-color: #f0f2f5; border-radius: 50%; font-weight: bold;">
-                          ${name.charAt(0).toUpperCase()}
-                      </div>
-                      <div class="flex-grow-1">
-                          <div class="fw-bold text-dark" style="font-size: 14px;">${
-                            window.escapeHtml ? window.escapeHtml(name) : name
-                          }</div>
-                          <div class="text-muted small">${
-                            window.escapeHtml ? window.escapeHtml(role) : role
-                          }</div>
-                      </div>
-                      <div>${statusHtml}</div>
+              <div class="list-group-item border-0 border-bottom d-flex align-items-center p-2" style="opacity: ${opacity};">
+                  <div class="me-3 d-flex align-items-center justify-content-center shadow-sm" style="width: 40px; height: 40px; background-color: #f0f2f5; border-radius: 50%; font-weight: bold;">
+                      ${name.charAt(0).toUpperCase()}
                   </div>
-              `
+                  <div class="flex-grow-1">
+                      <div class="fw-bold text-dark" style="font-size: 14px;">${
+                        window.escapeHtml ? window.escapeHtml(name) : name
+                      }</div>
+                      <div class="text-muted small">${
+                        window.escapeHtml ? window.escapeHtml(role) : role
+                      }</div>
+                  </div>
+                  <div>${statusHtml}</div>
+              </div>
+            `
           );
         });
 
@@ -12649,39 +13522,53 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
         }
       }
 
+      // ==========================================
+      // XỬ LÝ NÚT XÓA
+      // ==========================================
       const btnDelete = document.getElementById('btn-delete-roster');
       if (btnDelete) {
         btnDelete.onclick = null;
-        if (window.userSession?.role?.toLowerCase() === 'admin') {
-          btnDelete.style.display = 'block';
-          btnDelete.onclick = async function () {
-            document.activeElement.blur();
-            showToastConfirm(
-              `Xóa ca trực ngày ${displayDate}?`,
-              async function () {
-                if (typeof showLoadingSpinner === 'function')
-                  showLoadingSpinner(true);
-                try {
-                  const { error } = await window.supabaseClient
-                    .from('roster_schedules')
-                    .delete()
-                    .eq('id', shift.id);
-                  if (error) throw error;
-                  showToast('Đã xóa thành công!', 'success');
-                  if (typeof window.closeModal === 'function')
-                    window.closeModal('modal-roster-detail');
-                  window.reloadData({ showSpinner: false, refreshUI: true });
-                } catch (err) {
-                  showToast('Lỗi xóa: ' + err.message, 'error');
-                } finally {
-                  if (typeof hideLoadingSpinner === 'function')
-                    hideLoadingSpinner();
-                }
-              }
-            );
-          };
-        } else {
+
+        // Không cho phép xóa Sự cố (Incident) từ màn hình Lịch trực
+        if (isIncident) {
           btnDelete.style.display = 'none';
+        } else {
+          const _role = (window.userSession?.role || '').toLowerCase();
+          const canDelete =
+            _role === 'admin' ||
+            (_role === 'ward_admin' && window.isMyWardTeam(shift.team_name));
+
+          if (canDelete) {
+            btnDelete.style.display = 'block';
+            btnDelete.onclick = async function () {
+              document.activeElement.blur();
+              showToastConfirm(
+                `Xóa ca trực ngày ${displayDate}?`,
+                async function () {
+                  if (typeof showLoadingSpinner === 'function')
+                    showLoadingSpinner(true);
+                  try {
+                    const { error } = await window.supabaseClient
+                      .from('roster_schedules')
+                      .delete()
+                      .eq('id', shift.id);
+                    if (error) throw error;
+                    showToast('Đã xóa thành công!', 'success');
+                    if (typeof window.closeModal === 'function')
+                      window.closeModal('modal-roster-detail');
+                    window.reloadData({ showSpinner: false, refreshUI: true });
+                  } catch (err) {
+                    showToast('Lỗi xóa: ' + err.message, 'error');
+                  } finally {
+                    if (typeof hideLoadingSpinner === 'function')
+                      hideLoadingSpinner();
+                  }
+                }
+              );
+            };
+          } else {
+            btnDelete.style.display = 'none';
+          }
         }
       }
 
@@ -12737,9 +13624,10 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
 
       // 2. Sự cố khẩn cấp — LẤY THEO incident.status, KHÔNG theo activity
       try {
+        // THÊM ma_xa VÀO SELECT QUERY
         const { data: incidents, error: incErr } = await window.supabaseClient
           .from('incidents')
-          .select('id, event_name, status, activation_time')
+          .select('id, event_name, status, activation_time, ma_xa')
           .eq('status', 'active'); // ← Chỉ cần incident còn active
         if (incErr) throw incErr;
 
@@ -12779,6 +13667,7 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
                 note: 'Điều động khẩn cấp' + progressText,
                 shift_type: 'incident',
                 incident_id: inc.id,
+                ma_xa: inc.ma_xa, // GẮN ma_xa VÀO OBJECT
               };
             })
             .filter(Boolean);
@@ -12787,6 +13676,23 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
         }
       } catch (e) {
         console.warn('⚠️ Bỏ qua dữ liệu Sự cố:', e.message);
+      }
+
+      // ward_admin: chỉ giữ ca trực của đội xã mình (roster định kỳ)
+      // VÀ sự cố thuộc xã của mình
+      const _role = (window.userSession?.role || '').toLowerCase();
+      if (_role === 'ward_admin') {
+        const myMaXa = String(window.userSession?.workplace_ma_xa || '').trim();
+
+        combinedData = combinedData.filter((r) => {
+          if (r.shift_type === 'incident') {
+            // sự cố: Lọc theo mã xã của ward_admin
+            const incidentMaXa = String(r.ma_xa || '').trim();
+            return myMaXa && incidentMaXa === myMaXa;
+          }
+          // roster định kỳ: giữ nếu đội thuộc xã mình
+          return window.isMyWardTeam(r.team_name);
+        });
       }
 
       window.appState = window.appState || {};
@@ -12821,7 +13727,14 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
 
     if (!date || !team)
       return showToast('Vui lòng chọn ngày và đội.', 'warning');
-
+    // ward_admin: chỉ được tạo ca cho đội thuộc xã mình
+    const _role = (window.userSession?.role || '').toLowerCase();
+    if (_role === 'ward_admin' && !window.isMyWardTeam(team)) {
+      return showToast(
+        'Bạn chỉ được tạo lịch trực cho đội thuộc xã mình.',
+        'error'
+      );
+    }
     showLoadingSpinner();
 
     try {
@@ -13260,20 +14173,27 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
 
   function fillIncidentsLayer() {
     incidentsLayer.clearLayers();
+
+    // Dùng trực tiếp dữ liệu đã được Radar quét chuẩn xác ở trên
+    const visibleIncidents = incidentData || [];
     const usedCoords = new Set();
-    (incidentData || []).forEach((inc) => {
+
+    visibleIncidents.forEach((inc) => {
       let lat = parseFloat(inc.latitude ?? inc.lat);
       let lon = parseFloat(inc.longitude ?? inc.lon);
       if (isNaN(lat) || isNaN(lon)) return;
+
       const coordKey = `${lat.toFixed(4)},${lon.toFixed(4)}`;
       if (usedCoords.has(coordKey)) {
         lat += (Math.random() - 0.5) * 0.003;
         lon += (Math.random() - 0.5) * 0.003;
       }
       usedCoords.add(coordKey);
+
       const isActive = ['active', 'pending', 'monitoring'].includes(
         (inc.status || '').toLowerCase()
       );
+
       const icon = L.divIcon({
         className: isActive
           ? 'incident-marker-active'
@@ -13281,23 +14201,27 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
         iconSize: isActive ? [16, 16] : [10, 10],
         iconAnchor: isActive ? [8, 8] : [5, 5],
       });
+
+      // Dịch email thành tên hiển thị
       let membersListHtml =
         '<span style="color:#9ca3af;font-style:italic;">Chưa có nhân sự</span>';
       if (inc.members) {
-        const emails = inc.members
-          .split(';')
-          .map((e) => e.trim())
+        // Cắt chuỗi bằng cả dấu phẩy, chấm phẩy, khoảng trắng, xuống dòng
+        const emails = String(inc.members)
+          .split(/[,;\s\n]+/)
+          .map((e) => e.replace(/[<>]/g, '').trim())
           .filter(Boolean);
+
         if (emails.length) {
           membersListHtml = emails
             .map((email) => {
               const key = email.toLowerCase();
-              const u = companyData.find(
-                (x) =>
-                  (x.email && x.email.toLowerCase() === key) ||
-                  (x.email && x.email.split('@')[0].toLowerCase() === key) ||
-                  (x.username && x.username.toLowerCase() === key)
-              );
+              const u =
+                window.globalUserMap?.get(key) ||
+                (window.companyData || []).find(
+                  (x) => String(x.email || '').toLowerCase() === key
+                );
+
               if (u) {
                 const name = u.full_name || u.fullName || email;
                 const team =
@@ -13308,11 +14232,13 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
                     : '';
                 return `• <b>${escMap(name)}</b>${team}`;
               }
-              return `• ${escMap(email)}`;
+              // Giấu bớt các từ khóa không phải email rác lọt vào
+              return email.includes('@') ? `• ${escMap(email)}` : '';
             })
             .join('<br/>');
         }
       }
+
       const marker = L.marker([lat, lon], { icon });
       marker.bindPopup(`
         <div style="min-width:250px;font-family:'Inter',sans-serif;">
@@ -13340,10 +14266,12 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
             ${membersListHtml}
           </div>
         </div>`);
+
       marker.bindTooltip(
         `${isActive ? '🚨' : '✅'} ${escMap(inc.event_name || 'Sự cố')}`,
         { direction: 'top', offset: L.point(0, -10) }
       );
+
       incidentsLayer.addLayer(marker);
     });
   }
@@ -13697,32 +14625,143 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
       geojsonData = window.appState.mapGeoData;
 
       // Profiles
+      // Lấy thông tin phân quyền và định danh cá nhân của người dùng
+      const role = (window.userSession?.role || '').toLowerCase();
+      const isAdmin = role === 'admin';
+      const isWardAdmin = role === 'ward_admin';
+      const myMaXa = String(window.userSession?.workplace_ma_xa || '').trim();
+      const myEmail = String(window.userSession?.email || '')
+        .toLowerCase()
+        .trim();
+
+      // =================================================================
+      // 1. KÉO VÀ LỌC DỮ LIỆU NHÂN SỰ (PROFILES)
+      // =================================================================
+      // 🚨 Bổ sung gọi thêm 'workplace_ma_xa' để không bị sót thành viên
       const { data: profData, error: profErr } = await window.supabaseClient
         .from('profiles')
         .select(
-          'email, full_name, team, department, ma_xa, latitude, longitude, ward'
+          'email, full_name, team, department, ma_xa, latitude, longitude, ward, workplace_ma_xa, fax'
         );
+
+      // Tạo từ điển toàn cục để dịch tên Nhân sự tham gia sự cố
+      // (Giúp dịch tên được cả những người từ HCDC hoặc phường khác xuống chi viện)
+      window.globalUserMap = new Map();
+
       if (!profErr && profData) {
-        companyData = profData.map((u) => ({
-          ...u,
-          fullName: u.full_name || u.email,
-          team: u.team || u.department,
-          lat: parseFloat(u.latitude),
-          lon: parseFloat(u.longitude),
-        }));
+        let allUsers = profData.map((u) => {
+          const email = String(u.email || '')
+            .toLowerCase()
+            .trim();
+          const parsedUser = {
+            ...u,
+            fullName: u.full_name || u.email,
+            team: u.team || u.department,
+            lat: parseFloat(u.latitude),
+            lon: parseFloat(u.longitude),
+          };
+          if (email) window.globalUserMap.set(email, parsedUser);
+          return parsedUser;
+        });
+
+        if (!isAdmin) {
+          allUsers = allUsers.filter((u) => {
+            const isMe =
+              myEmail !== '' && String(u.email || '').toLowerCase() === myEmail;
+
+            // Ưu tiên đối chiếu workplace_ma_xa (địa bàn công tác thực tế) để đồng bộ với trang Thành viên
+            const uMaXa = String(u.workplace_ma_xa || u.ma_xa || '').trim();
+            const isMyWard = myMaXa !== '' && uMaXa === myMaXa;
+
+            return isMe || isMyWard;
+          });
+        }
+        companyData = allUsers;
       } else {
         console.error('Không lấy được profiles:', profErr);
         companyData = window.appState.users || [];
       }
       filteredData = [...companyData];
 
-      // Incidents
+      // =================================================================
+      // 1. KÉO VÀ LỌC DỮ LIỆU NHÂN SỰ (PROFILES) - Giữ nguyên như bạn vừa sửa
+      // =================================================================
+      // ... [Đoạn code kéo Profiles của bạn ở đây] ...
+
+      // 🚨 BƯỚC ĐỆM QUAN TRỌNG: Lấy danh sách email của TẤT CẢ nhân sự thuộc trạm/phường mình
+      // (Vì companyData lúc này đã được lọc chỉ chứa người của phường mình)
+      const myStaffEmails = companyData
+        .map((u) =>
+          String(u.email || '')
+            .toLowerCase()
+            .trim()
+        )
+        .filter(Boolean);
+
+      // =================================================================
+      // 🚨 KIỂM TRA MÔI TRƯỜNG & DANH SÁCH LÍNH TRƯỚC KHI LỌC
+      // =================================================================
+      // Nới lỏng điều kiện role để phòng hờ lỗi đánh máy trong Database
+
+      console.log('👉 [X-RAY] QUYỀN HẠN:', {
+        role,
+        isAdmin,
+        isWardAdmin,
+        myMaXa,
+      });
+      console.log('👉 [X-RAY] DANH SÁCH EMAIL LÍNH CỦA TÔI:', myStaffEmails);
+
+      // =================================================================
+      // 2. KÉO VÀ LỌC DỮ LIỆU SỰ CỐ (INCIDENTS) - CÓ BÁO CÁO CHI TIẾT
+      // =================================================================
       const { data: incData, error: incErr } = await window.supabaseClient
         .from('incidents')
         .select(
-          'id, event_name, location_text, latitude, longitude, status, activation_time, members'
+          'id, event_name, location_text, ma_xa, latitude, longitude, status, activation_time, members'
         );
-      incidentData = !incErr && incData ? [...incData] : [];
+
+      let allIncidents = !incErr && incData ? [...incData] : [];
+
+      if (!isAdmin) {
+        allIncidents = allIncidents.filter((inc) => {
+          const rawMembersString = String(inc.members || '').toLowerCase();
+          const isAssignedToMe =
+            myEmail !== '' && rawMembersString.includes(myEmail);
+
+          if (isWardAdmin) {
+            const isMyWard =
+              myMaXa !== '' && String(inc.ma_xa || '').trim() === myMaXa;
+            const isMyStaffAssigned = myStaffEmails.some((staffEmail) =>
+              rawMembersString.includes(staffEmail)
+            );
+
+            const isAccepted = isMyWard || isMyStaffAssigned || isAssignedToMe;
+
+            // IN BÁO CÁO CHO NHỮNG SỰ KIỆN BỊ LOẠI
+            if (!isAccepted) {
+              console.log(`❌ ĐÃ LOẠI SỰ KIỆN: "${inc.event_name}"`, {
+                ma_xa_su_kien: inc.ma_xa,
+                du_lieu_members: inc.members,
+                ly_do: 'Khác mã xã VÀ không có email lính nào khớp',
+              });
+            } else {
+              console.log(`✅ ĐÃ GIỮ SỰ KIỆN: "${inc.event_name}"`, {
+                isMyWard,
+                isMyStaffAssigned,
+                isAssignedToMe,
+              });
+            }
+
+            return isAccepted;
+          } else {
+            return isAssignedToMe;
+          }
+        });
+      }
+      incidentData = allIncidents;
+
+      // Đặt thêm console.log ở đây để bạn kiểm chứng xem sự kiện HCDC đã lọt qua lưới lọc chưa
+      console.log('🎯 SỰ KIỆN SAU KHI LỌC QUYỀN:', incidentData);
 
       // Khởi tạo bản đồ (1 lần)
       if (!map) {
@@ -15575,7 +16614,8 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
   // ============================================================
 
   // 1. Mở Modal & Tự động nhận diện Đội cũ
-  window.openTeamRotationModal = function () {
+  // 1. Mở Modal & Tự động nhận diện Đội cũ
+  window.openTeamRotationModal = async function () {
     const modal = document.getElementById('modal-team-rotate');
     const oldDisplay = document.getElementById('rot-old-team-display');
     const oldValue = document.getElementById('rot-old-team-value');
@@ -15583,53 +16623,126 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
     const btnConfirm = document.getElementById('btn-confirm-rotate');
     const newSel = document.getElementById('rot-new-team');
 
-    // Điền danh sách team vào dropdown (nếu chưa có)
-    if (newSel.options.length <= 1) {
-      let opts = '<option value="">-- Chọn đội --</option>';
-      for (let i = 1; i <= 10; i++)
-        opts += `<option value="Team ${i}">Team ${i}</option>`;
-      newSel.innerHTML = opts;
-    }
+    // Bật hiệu ứng loading để trải nghiệm mượt mà
+    if (typeof showLoadingSpinner === 'function') showLoadingSpinner(true);
 
-    // Lấy thông tin sự cố hiện tại
-    const incidentId = window.currentDossierId;
-    const incident = window.appState.trackingIncidents.find(
-      (i) => i.id === incidentId
-    );
+    try {
+      const role = (window.userSession?.role || '').toLowerCase();
+      let availableTeams = [];
 
-    if (incident) {
-      // Ưu tiên lấy từ cột Main_Team (nếu có)
-      let currentTeam = incident.main_team;
+      if (role === 'ward_admin') {
+        const myMaXa = String(window.userSession?.workplace_ma_xa || '').trim();
+        const myWard = String(window.userSession?.workplace_ward || '').trim();
 
-      // Nếu không có Main_Team, thử đoán từ tên sự kiện hoặc danh sách thành viên (Logic đơn giản)
-      if (!currentTeam || currentTeam === '') {
-        // (Ở đây ta tạm thời để trống nếu không có dữ liệu Main_Team chuẩn)
-        currentTeam = 'Mixed/Unknown';
-      }
+        // =========================================================
+        // VÉT CẠN DỮ LIỆU TỪ SUPABASE (Chống lỗi Cache bộ nhớ)
+        // =========================================================
+        // 1. Quét từ bảng profiles
+        let profileTeams = [];
+        if (myMaXa || myWard) {
+          const { data } = await window.supabaseClient
+            .from('profiles')
+            .select('team')
+            .or(`workplace_ma_xa.eq.${myMaXa},ward.eq.${myWard}`);
+          if (data) profileTeams = data.map((p) => p.team);
+        }
 
-      oldDisplay.value = currentTeam;
-      oldValue.value = currentTeam;
+        // 2. Quét từ bảng lịch trực (đề phòng có đội từng trực nhưng đang trống người)
+        let rosterTeams = [];
+        if (myWard) {
+          const { data } = await window.supabaseClient
+            .from('roster_schedules')
+            .select('team_name')
+            .ilike('team_name', `Team ${myWard}%`);
+          if (data) rosterTeams = data.map((r) => r.team_name);
+        }
 
-      // Kiểm tra hợp lệ
-      if (currentTeam.startsWith('Team')) {
-        // Hợp lệ
-        warning.style.display = 'none';
-        btnConfirm.disabled = false;
+        // 3. Gom từ bộ nhớ tạm (dự phòng)
+        const cacheTeams = (window.appState?.users || []).map((u) => u.team);
+
+        // Gộp tất cả và xóa trùng lặp
+        let combined = [...profileTeams, ...rosterTeams, ...cacheTeams];
+        combined = [
+          ...new Set(
+            combined.map((t) => String(t || '').trim()).filter(Boolean)
+          ),
+        ];
+
+        // Lọc qua lớp bảo vệ isMyWardTeam của bạn
+        availableTeams = combined.filter((t) =>
+          typeof window.isMyWardTeam === 'function'
+            ? window.isMyWardTeam(t)
+            : true
+        );
+
+        // =========================================================
+        // CƠ CHẾ BẢO VỆ (FAILSAFE): Luôn đảm bảo có tối thiểu 2 đội
+        // =========================================================
+        if (availableTeams.length < 2 && myWard) {
+          availableTeams.push(`Team ${myWard} 01`);
+          availableTeams.push(`Team ${myWard} 02`);
+          // Xóa trùng một lần nữa
+          availableTeams = [...new Set(availableTeams)];
+        }
       } else {
-        // Không phải Team chuẩn -> Cảnh báo dùng thay lẻ
-        warning.style.display = 'block';
-        btnConfirm.disabled = true; // Khóa nút thực hiện
+        // Admin HCDC: Trả về mặc định 10 Đội
+        for (let i = 1; i <= 10; i++) availableTeams.push(`Team ${i}`);
       }
+
+      // Render danh sách Đội vào dropdown
+      let opts = '<option value="">-- Chọn đội --</option>';
+      // Sort theo A-Z cho đẹp mắt
+      availableTeams.sort().forEach((t) => {
+        opts += `<option value="${
+          window.escapeHtml ? window.escapeHtml(t) : t
+        }">${t}</option>`;
+      });
+      newSel.innerHTML = opts;
+
+      // =========================================================
+      // XỬ LÝ ĐỘI CŨ
+      // =========================================================
+      const incidentId = window.currentDossierId;
+      const incident = (window.appState?.trackingIncidents || []).find(
+        (i) => i.id === incidentId
+      );
+
+      if (incident) {
+        let currentTeam = incident.main_team;
+        if (!currentTeam || currentTeam === '') {
+          currentTeam = 'Mixed/Unknown';
+        }
+
+        oldDisplay.value = currentTeam;
+        oldValue.value = currentTeam;
+
+        if (currentTeam !== 'Mixed/Unknown') {
+          warning.style.display = 'none';
+        } else {
+          // Vẫn hiện cảnh báo cho Admin biết đây là đội hỗn hợp
+          warning.style.display = 'block';
+        }
+
+        // MỞ KHÓA NÚT: Bất kể là đội cũ hay Mixed, đều cho phép Ward Admin chọn đội mới để gán vào
+        btnConfirm.disabled = false;
+      }
+
+      // Reset các trường khác
+      document.getElementById('rot-suggestion-text').textContent = '';
+      newSel.value = '';
+
+      if (modal) modal.style.display = 'flex';
+    } catch (err) {
+      console.error('Lỗi lấy danh sách đội:', err);
+      if (typeof showToast === 'function')
+        showToast('Có lỗi xảy ra khi tải danh sách Đội', 'error');
+    } finally {
+      if (typeof hideLoadingSpinner === 'function') hideLoadingSpinner();
     }
-
-    // Reset các trường khác
-    document.getElementById('rot-suggestion-text').textContent = '';
-    newSel.value = '';
-
-    if (modal) modal.style.display = 'flex';
   };
 
   // 1. Gợi ý Đội Mới
+  // 1. Gợi ý Đội Mới (Nút đũa thần trong Modal)
   window.suggestNewTeam = async function () {
     const textEl = document.getElementById('rot-suggestion-text');
     textEl.innerHTML =
@@ -15639,7 +16752,7 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
 
     try {
       // Query: Lấy các đội đang làm việc hôm nay
-      const { data: busyTeams, error } = await supabaseClient
+      const { data: busyTeams, error } = await window.supabaseClient
         .from('roster_schedules')
         .select('team_name')
         .eq('duty_date', today);
@@ -15648,13 +16761,24 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
 
       const busyTeamNames = busyTeams.map((t) => t.team_name);
 
-      // Giả sử bạn có 1 danh sách tất cả các đội (có thể lưu trong helpers hoặc 1 biến hằng số)
-      const allTeams = ['Đội A', 'Đội B', 'Đội C', 'Đội D']; // Thay bằng danh sách thực tế của bạn
+      // =========================================================
+      // SỬA LỖI: LẤY DANH SÁCH ĐỘI TỪ DROPDOWN VỪA TẠO Ở TRÊN
+      // =========================================================
+      const newSel = document.getElementById('rot-new-team');
+      let allTeams = [];
+      if (newSel && newSel.options) {
+        // Nhặt tất cả các lựa chọn (bỏ qua option '-- Chọn đội --')
+        allTeams = Array.from(newSel.options)
+          .map((opt) => opt.value)
+          .filter(Boolean);
+      }
+      // =========================================================
+
       const availableTeams = allTeams.filter((t) => !busyTeamNames.includes(t));
 
       if (availableTeams.length > 0) {
         const bestMatch = availableTeams[0]; // Chọn đội đầu tiên rảnh
-        document.getElementById('rot-new-team').value = bestMatch;
+        newSel.value = bestMatch; // Tự động set giá trị cho dropdown
         textEl.innerHTML = `<span class="text-success"><i class='bx bx-check'></i> Đề xuất: <b>${bestMatch}</b> (Đang rảnh)</span>`;
       } else {
         textEl.innerHTML =
@@ -15667,6 +16791,7 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
   };
 
   // 2. Submit Thay thế Đội
+  // 2. Submit Thay thế Đội (Ghi chuẩn vào bảng deployment_history)
   window.submitTeamRotation = function () {
     const oldTeam = document.getElementById('rot-old-team-value').value;
     const newTeam = document.getElementById('rot-new-team').value;
@@ -15682,39 +16807,105 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
     }
 
     showToastConfirm(
-      `Xác nhận thay toàn bộ <strong>${oldTeam}</strong> bằng <strong>${newTeam}</strong>?`,
+      `Xác nhận luân chuyển: Đưa <strong>${newTeam}</strong> vào tiếp quản sự kiện?`,
       async function () {
-        showLoadingSpinner();
+        if (typeof showLoadingSpinner === 'function') showLoadingSpinner(true);
         try {
-          // Update bảng incidents
-          const { error } = await supabaseClient
+          // BƯỚC 1: Lấy danh sách thành viên Đội mới
+          const { data: newTeamMembers, error: errNew } =
+            await window.supabaseClient
+              .from('profiles')
+              .select('id, email, full_name')
+              .eq('team', newTeam)
+              .eq('deployment_status', 'Sẵn sàng'); // Tùy chọn lọc người rảnh
+
+          if (errNew) throw errNew;
+
+          if (!newTeamMembers || newTeamMembers.length === 0) {
+            throw new Error(
+              `Đội ${newTeam} chưa có thành viên sẵn sàng trong hệ thống.`
+            );
+          }
+
+          // BƯỚC 2: Lấy danh sách nhân sự đang có mặt trong sự kiện để ráp vào 'replaced_by'
+          let oldTeamUsers = [];
+          const { data: activeDeployments } = await window.supabaseClient
+            .from('deployment_history')
+            .select('user_id')
+            .eq('incident_id', incidentId)
+            // Lọc ra những người đang active/mobilize để thay thế
+            .in('action_type', ['mobilize', 'deployed', 'active']);
+
+          if (activeDeployments) {
+            // Loại bỏ trùng lặp nếu 1 user có nhiều dòng lịch sử
+            oldTeamUsers = [
+              ...new Set(activeDeployments.map((d) => d.user_id)),
+            ];
+          }
+
+          // BƯỚC 3: Xây dựng Payload chèn vào deployment_history theo đúng Schema
+          const deploymentPayloads = newTeamMembers.map((newMem, index) => {
+            const oldUserId = oldTeamUsers[index]; // Map 1-1 theo thứ tự (có thể null nếu đội mới đông hơn)
+
+            return {
+              incident_id: incidentId,
+              user_id: newMem.id, // UUID người mới
+              profile_id: newMem.id, // Cột profile_id (theo constraint foreign key)
+              action_type: oldUserId ? 'replace_in' : 'mobilize', // Dùng đúng Check Constraint
+              replaced_by: oldUserId || null, // UUID người cũ bị thay (null nếu là thêm mới)
+              reason: `Luân chuyển đội: ${oldTeam} -> ${newTeam}`,
+            };
+          });
+
+          // Thực thi Insert vào deployment_history
+          if (deploymentPayloads.length > 0) {
+            const { error: deployErr } = await window.supabaseClient
+              .from('deployment_history')
+              .insert(deploymentPayloads);
+            if (deployErr) throw deployErr;
+          }
+
+          // BƯỚC 4: (Tùy chọn) Cập nhật lại chuỗi email trong incidents để UI bản đồ/danh sách đồng bộ ngay
+          const newEmailsStr = newTeamMembers
+            .map((m) => m.email)
+            .filter(Boolean)
+            .join(';');
+          const { error: updateErr } = await window.supabaseClient
             .from('incidents')
-            .update({ team_name: newTeam }) // Giả sử bạn lưu team trong bảng incidents
+            .update({
+              initial_selected_members: newEmailsStr,
+            })
             .eq('id', incidentId);
 
-          if (error) throw error;
+          if (updateErr) console.warn('Lỗi đồng bộ UI incidents:', updateErr);
 
+          // BƯỚC 5: Ghi thông báo vào Log chat của sự kiện
+          const currentUserId =
+            window.getCurrentUserId?.() || window.userSession?.id;
+          await window.supabaseClient.from('incident_logs').insert([
+            {
+              incident_id: incidentId,
+              log_type: 'Report',
+              content: `🔄 <b>LUÂN CHUYỂN ĐỘI:</b> Hệ thống đã ghi nhận <b>${newTeam}</b> (${newTeamMembers.length} thành viên) vào lịch sử tiếp quản sự kiện.`,
+              user_id: currentUserId,
+              attachment_url: null,
+            },
+          ]);
+
+          // Hoàn tất
           showToast('Thay thế đội thành công!', 'success');
+
           if (typeof window.closeModal === 'function')
             window.closeModal('modal-team-rotate');
-
-          // Reload toàn bộ
           if (typeof window.enterDashboard === 'function')
             await window.enterDashboard();
-
-          // Refresh Dossier view
-          if (window.currentDossierId && window.appState.incidents) {
-            const updatedInc = window.appState.incidents.find(
-              (i) => i.id === incidentId
-            );
-            if (updatedInc && typeof openDossierView === 'function') {
-              openDossierView(encodeURIComponent(JSON.stringify(updatedInc)));
-            }
-          }
+          if (typeof window.renderTrackingPage === 'function')
+            window.renderTrackingPage(true);
         } catch (err) {
+          console.error('Lỗi luân chuyển đội:', err);
           showToast('Lỗi: ' + err.message, 'error');
         } finally {
-          hideLoadingSpinner();
+          if (typeof hideLoadingSpinner === 'function') hideLoadingSpinner();
         }
       }
     );
@@ -18154,15 +19345,27 @@ window.createWardDropdown = async function () {
         .sort();
     });
     window.departmentMap = departmentMap;
+    // Tạo map Đơn vị -> Chức vụ (employeeStatus giờ phụ thuộc đơn vị như Khoa/phòng)
+    const employeeStatusData = helpersData.filter(
+      (h) => h.category === 'employeeStatus'
+    );
+    const employeeStatusMap = {};
+    units.forEach((unit) => {
+      employeeStatusMap[unit] = employeeStatusData
+        .filter((h) => h.parent_name === unit)
+        .map((h) => h.name)
+        .sort();
+    });
+    window.employeeStatusMap = employeeStatusMap;
 
     // Điền dữ liệu vào các Dropdown tĩnh
     populateDropdown('ward', wards, 'lastwardValue', true);
-    populateDropdown(
-      'employeeStatus',
-      employeeStatuses,
-      'lastemployeeStatusValue',
-      true
-    );
+
+    // Đổ danh sách xã vào dropdown workplace_ward (cùng nguồn với ward)
+    const workplaceWardSelect = $('#workplace_ward');
+    workplaceWardSelect.empty().append('<option value="">Chọn</option>');
+    wards.forEach((w) => workplaceWardSelect.append(new Option(w, w)));
+
     populateDropdown('academic', academicList, 'lastacademicValue', true);
     populateDropdown(
       'academicLevel',
@@ -18187,20 +19390,47 @@ window.createWardDropdown = async function () {
     // Sự kiện khi Đơn vị thay đổi
     faxSelect.off('change').on('change', function () {
       const selectedDonVi = $(this).val();
-      departmentSelect.empty().append('<option value="">Chọn</option>');
 
+      departmentSelect.empty().append('<option value="">Chọn</option>');
       if (selectedDonVi && departmentMap[selectedDonVi]) {
         departmentMap[selectedDonVi].forEach((khoaPhong) => {
           departmentSelect.append(new Option(khoaPhong, khoaPhong));
         });
       }
       departmentSelect.trigger('change.select2');
+      // Đổ Chức vụ theo đơn vị (MỚI)
+      const employeeStatusSelect = $('#employeeStatus');
+      employeeStatusSelect.empty().append('<option value="">Chọn</option>');
+      if (selectedDonVi && employeeStatusMap[selectedDonVi]) {
+        employeeStatusMap[selectedDonVi].forEach((cv) => {
+          employeeStatusSelect.append(new Option(cv, cv));
+        });
+      }
+      employeeStatusSelect.trigger('change.select2');
+      // --- Ẩn/hiện Phường/Xã nơi công tác theo tuyến cơ sở ---
+      // 2 chuỗi này KHỚP CHÍNH XÁC với hàm is_grassroots_unit ở DB (Bước 1)
+      const grassrootsUnits = [
+        'Trạm Y tế Phường/Xã/ Đặc khu',
+        'UBND Phường/Xã/ Đặc khu',
+      ];
+      const row = document.getElementById('workplace-ward-row');
+      const wpSelect = document.getElementById('workplace_ward');
+      if (grassrootsUnits.includes(selectedDonVi)) {
+        if (row) row.style.display = '';
+        if (wpSelect) wpSelect.setAttribute('required', 'required');
+      } else {
+        if (row) row.style.display = 'none';
+        if (wpSelect) {
+          wpSelect.removeAttribute('required');
+          $('#workplace_ward').val('').trigger('change.select2'); // clear khi không phải tuyến cơ sở
+        }
+      }
     });
 
     // 4. KHỞI TẠO SELECT2 CHO TẤT CẢ DROPDOWN
     if (typeof jQuery !== 'undefined' && jQuery.fn.select2) {
       $(
-        '#ward, #employeeStatus, #academic, #academicLevel, #fax, #department'
+        '#ward, #employeeStatus, #academic, #academicLevel, #fax, #department, #workplace_ward'
       ).select2({
         theme: 'bootstrap-5',
         dropdownParent: $('#modal-rrtForm .modal-content'),
@@ -18220,6 +19450,15 @@ window.createWardDropdown = async function () {
     if (window.lastfaxValue) {
       faxSelect.val(window.lastfaxValue).trigger('change');
     }
+    // Khôi phục workplace_ward khi mở form sửa (nếu có)
+    if (window.lastworkplaceWardValue) {
+      setTimeout(() => {
+        // đảm bảo fax đã trigger change (hiện row) trước khi set giá trị
+        $('#workplace_ward')
+          .val(window.lastworkplaceWardValue)
+          .trigger('change.select2');
+      }, 150);
+    }
     if (window.lastdepartmentValue) {
       // setTimeout để đảm bảo dropdown Khoa/Phòng đã được đổ dữ liệu sau khi Đơn vị thay đổi
       setTimeout(() => {
@@ -18227,6 +19466,13 @@ window.createWardDropdown = async function () {
           .val(window.lastdepartmentValue)
           .trigger('change.select2');
       }, 100);
+    }
+    if (window.lastemployeeStatusValue) {
+      setTimeout(() => {
+        $('#employeeStatus')
+          .val(window.lastemployeeStatusValue)
+          .trigger('change.select2');
+      }, 120);
     }
 
     console.log('✅ Khởi tạo Dropdown thành công!');
@@ -18410,8 +19656,8 @@ window.suggestRoster = async function (dateStr) {
   try {
     // 1. Lấy dữ liệu từ 2 bảng Supabase
     const [rosterRes, incidentRes] = await Promise.all([
-      supabaseClient.from('roster_schedules').select('team_name'),
-      supabaseClient
+      window.supabaseClient.from('roster_schedules').select('team_name'),
+      window.supabaseClient
         .from('incident_activities')
         .select('task_group')
         .eq('status', 'active'),
@@ -18421,19 +19667,86 @@ window.suggestRoster = async function (dateStr) {
 
     const history = rosterRes.data || [];
     const busyTeams = (incidentRes.data || []).map((i) => i.task_group);
-    const totalTeams = 10;
 
-    // 2. Tính toán số lần trực (công bằng luân phiên)
-    const dutyCounts = {};
-    for (let i = 1; i <= totalTeams; i++) {
-      const tName = `Team ${i}`;
-      dutyCounts[tName] = history.filter((h) => h.team_name === tName).length;
+    // 2. LẤY DANH SÁCH ĐỘI KHẢ DỤNG THEO PHÂN QUYỀN (VÉT CẠN TỪ NHIỀU NGUỒN)
+    let availableTeams = [];
+    const role = (window.userSession?.role || '').toLowerCase();
+
+    if (role === 'ward_admin') {
+      const myMaXa = String(window.userSession?.workplace_ma_xa || '').trim();
+
+      // NGUỒN 1: Từ danh sách nhân sự (Những đội đã có người)
+      const allUsers = window.appState?.users || [];
+      const userTeams = allUsers
+        .filter((u) => String(u.workplace_ma_xa || '').trim() === myMaXa)
+        .map((u) => String(u.team || '').trim())
+        .filter(Boolean);
+
+      // NGUỒN 2: Từ lịch sử đã trực (Những đội từng được lên lịch)
+      const historyTeams = history
+        .map((h) => String(h.team_name || '').trim())
+        .filter(Boolean);
+
+      // NGUỒN 3: Từ ô dropdown "Chọn Đội" trên giao diện (Nếu thẻ <select> đã có sẵn danh sách)
+      const uiTeams = [];
+      const teamSelect = document.getElementById('new-shift-team');
+      if (teamSelect && teamSelect.options) {
+        Array.from(teamSelect.options).forEach((opt) => {
+          if (opt.value) uiTeams.push(opt.value.trim());
+        });
+      }
+
+      // Gộp tất cả các nguồn lại và xóa trùng lặp bằng Set
+      const combinedTeams = [
+        ...new Set([...userTeams, ...historyTeams, ...uiTeams]),
+      ];
+
+      // Lọc lại lần cuối qua hàm isMyWardTeam của bạn
+      availableTeams = combinedTeams.filter((t) => window.isMyWardTeam(t));
+
+      // DỰ PHÒNG: Nếu quét cả 3 nguồn vẫn không có dữ liệu, tự động sinh Đội 1 và Đội 2
+      if (availableTeams.length === 0) {
+        const myWard = String(window.userSession?.workplace_ward || myMaXa);
+        availableTeams = [`Team ${myWard} 01`, `Team ${myWard} 02`];
+      }
+    } else {
+      // Admin HCDC: thấy MỌI đội (Team 1-10 + Team Phường...) — quét distinct từ nhiều nguồn
+      const adminTeams = new Set();
+
+      // Luôn có sẵn Team 1-10 (đội thành phố, kể cả chưa lên lịch bao giờ)
+      for (let i = 1; i <= 10; i++) adminTeams.add(`Team ${i}`);
+
+      // NGUỒN 1: đội thực tế có người (quét profiles)
+      try {
+        const { data: prof } = await window.supabaseClient
+          .from('profiles')
+          .select('team');
+        (prof || []).forEach((p) => {
+          const t = String(p.team || '').trim();
+          if (t && t !== 'No team') adminTeams.add(t);
+        });
+      } catch (e) {
+        console.warn('Không quét được đội từ profiles:', e);
+      }
+
+      // NGUỒN 2: đội từng được lên lịch (history đã lấy ở trên)
+      history.forEach((h) => {
+        const t = String(h.team_name || '').trim();
+        if (t) adminTeams.add(t);
+      });
+
+      availableTeams = [...adminTeams].sort();
     }
 
-    // 3. Phân tích gợi ý
+    // 3. Tính toán số lần trực (công bằng luân phiên)
+    const dutyCounts = {};
+    availableTeams.forEach((tName) => {
+      dutyCounts[tName] = history.filter((h) => h.team_name === tName).length;
+    });
+
+    // 4. Phân tích gợi ý
     let suggestions = [];
-    for (let i = 1; i <= totalTeams; i++) {
-      const teamName = `Team ${i}`;
+    availableTeams.forEach((teamName) => {
       let status = 'ok';
       let reason = 'Đội sẵn sàng (Đã trực: ' + dutyCounts[teamName] + ' ca)';
 
@@ -18449,21 +19762,18 @@ window.suggestRoster = async function (dateStr) {
         reason: reason,
         count: dutyCounts[teamName],
       });
-    }
+    });
 
-    // 4. Sắp xếp: Đội bận cho xuống cuối, đội trực ít cho lên đầu
+    // 5. Sắp xếp: Đội bận cho xuống cuối, đội trực ít cho lên đầu
     suggestions.sort((a, b) => {
       if (a.status !== b.status) return a.status === 'bad' ? 1 : -1;
       return a.count - b.count;
     });
 
-    // 5. Render ra Modal
+    // 6. Render ra Modal
     container.innerHTML = '';
     suggestions.forEach((s) => {
-      // 1. Xác định trạng thái logic
       const isBad = s.status === 'bad';
-
-      // 2. Định nghĩa tất cả các biến UI ngay từ đầu vòng lặp
       const itemClass = isBad ? 'sug-bad' : 'sug-good';
       const iconHTML = isBad
         ? '<i class="bx bxs-error-circle text-danger"></i>'
@@ -18471,7 +19781,6 @@ window.suggestRoster = async function (dateStr) {
       const btnText = isBad ? 'Không khả dụng' : 'Xếp lịch đội này';
       const btnAttr = isBad ? 'disabled' : '';
 
-      // 3. Xây dựng HTML an toàn
       const html = `
             <div class="suggestion-item ${itemClass}">
                 <div class="sug-header">
@@ -18491,7 +19800,6 @@ window.suggestRoster = async function (dateStr) {
                 </button>
             </div>
         `;
-
       container.insertAdjacentHTML('beforeend', html);
     });
   } catch (err) {
@@ -18925,14 +20233,15 @@ window.applyRolePermissions = function (role) {
   let userRole = role || window.userSession?.role || 'user';
   userRole = userRole.toLowerCase().trim();
 
+  // Định nghĩa Role chặt chẽ
   const isAdmin = userRole === 'admin';
-  const isManager = userRole === 'manager' || isAdmin;
+  const isWardAdmin = userRole === 'ward_admin';
 
   console.log(
     `🔐 Đang áp dụng phân quyền toàn cục cho Role: ${userRole.toUpperCase()}`
   );
 
-  // 1. ẨN/HIỆN MENU SIDEBAR (Hỗ trợ cả jQuery và JS thuần để chống lỗi)
+  // 1. ẨN/HIỆN MENU SIDEBAR (Trang/Page) -> CHỈ ADMIN
   if (typeof $ !== 'undefined') {
     $('#sidebar .side-menu li').each(function () {
       const allowedRoles = $(this).attr('data-roles');
@@ -18940,6 +20249,7 @@ window.applyRolePermissions = function (role) {
         const rolesArray = allowedRoles
           .split(',')
           .map((r) => r.trim().toLowerCase());
+        // Chỉ admin hoặc đúng role được chỉ định mới thấy menu
         if (rolesArray.includes(userRole) || isAdmin) {
           $(this).show();
         } else {
@@ -18965,24 +20275,23 @@ window.applyRolePermissions = function (role) {
     });
   }
 
-  // 2. ẨN/HIỆN NÚT CHỨC NĂNG THEO THUỘC TÍNH (data-permission)
+  // 2. ẨN/HIỆN NÚT CHỨC NĂNG THEO THUỘC TÍNH (data-permission) -> CHỈ ADMIN
   document.querySelectorAll('[data-permission]').forEach((el) => {
     const perm = el.getAttribute('data-permission');
     if (perm === 'admin' && !isAdmin) {
       el.style.display = 'none';
-    } else if (perm === 'manager' && !isManager) {
-      el.style.display = 'none';
     } else {
-      el.style.display = ''; // Khôi phục hiển thị nếu có quyền
+      el.style.display = '';
     }
   });
 
-  // 3. ẨN/HIỆN CÁC NÚT ĐẶC BIỆT THEO ID CỤ THỂ
+  // 3. ẨN/HIỆN CÁC NÚT ĐẶC BIỆT THEO ID CỤ THỂ -> ADMIN VÀ WARD_ADMIN ĐỀU THẤY
+  // 3. ẨN/HIỆN CÁC NÚT ĐẶC BIỆT THEO ID CỤ THỂ -> ADMIN VÀ WARD_ADMIN ĐỀU THẤY
   const adminOnlyIds = [
     'btn-create-course-trigger',
     'btn-add-doc',
     'admin-rotation-controls',
-    'btn-export-members',
+    /*'btn-export-members',*/
     'btn-export-logistics',
     'btn-delete-roster',
     'btn-open-plan-modal',
@@ -18993,11 +20302,16 @@ window.applyRolePermissions = function (role) {
   adminOnlyIds.forEach((id) => {
     const el = document.getElementById(id);
     if (el) {
-      el.style.display = isAdmin ? '' : 'none';
+      if (isAdmin || isWardAdmin) {
+        // Cấp đúng display: flex cho cụm nút điều chỉnh nhân sự để không bị vỡ UI
+        el.style.display = id === 'admin-rotation-controls' ? 'flex' : '';
+      } else {
+        el.style.display = 'none';
+      }
     }
   });
 
-  // 4. THIẾT LẬP CỜ PHÂN QUYỀN TOÀN CỤC CHO CÁC MODULE KHÁC
+  // 4. THIẾT LẬP CỜ PHÂN QUYỀN TOÀN CỤC (Module/Page Access) -> CHỈ ADMIN
   window.appState = window.appState || {};
   window.appState.permissions = {
     role: userRole,
@@ -19006,8 +20320,8 @@ window.applyRolePermissions = function (role) {
       datatable: true,
       roster: isAdmin,
       emergency: isAdmin,
-      team: isManager,
-      training: isManager,
+      team: isAdmin,
+      training: isAdmin,
       logistics: isAdmin,
       library: isAdmin,
       map: true,
