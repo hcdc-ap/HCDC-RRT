@@ -4463,3 +4463,20 @@ html {
   height: auto;
   min-height: 38px;
 }
+
+.side-menu .menu-item-with-badge,
+.side-menu a[style*="cursor: default"] {
+  display: flex;
+  align-items: center;
+}
+
+.side-menu .view-counter {
+  background-color: var(--blue); /* Màu xanh lơ (cyan) hiện đại */
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 12px;
+  margin-left: auto;
+  margin-right: 15px;
+}
