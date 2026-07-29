@@ -376,11 +376,11 @@
           <a href="#" data-target="page-datatable"><i class='bx bxs-data bx-sm'></i><span class="text">Biểu mẫu RRT</span></a>
         </li>
 
-        <li id="menu-roster" data-roles="admin">
+        <li id="menu-roster" data-roles="admin, ward_admin">
           <a href="#" data-target="page-roster"><i class='bx bxs-calendar-star bx-sm'></i><span class="text">Lịch trực</span></a>
         </li>
 
-        <li id="menu-active" data-roles="admin">
+        <li id="menu-active" data-roles="admin,ward_admin">
           <a href="#" data-target="page-emergency"><i class='bx bxs-megaphone bx-sm'></i><span class="text">Kích hoạt khẩn cấp</span></a>
         </li>
 
@@ -388,7 +388,7 @@
           <a href="#" data-target="page-tracking"><i class='bx bxs-tachometer bx-sm'></i><span class="text">Theo dõi sự kiện</span></a>
         </li>
 
-        <li id="menu-team" data-roles="admin,manager">
+        <li id="menu-team" data-roles="admin,ward_admin">
           <a href="#" data-target="page-team"><i class='bx bxs-group bx-sm'></i><span class="text">Thành viên</span></a>
         </li>
 
@@ -407,7 +407,7 @@
         <li id="menu-map">
           <a href="#" data-target="page-map"><i class='bx bxs-map-alt bx-sm'></i><span class="text">Bản đồ</span></a>
         </li>
-        <li id="menu-lab-admin">
+        <li id="menu-lab-admin" data-roles="admin">
           <a href="#" data-target="page-lab-admin">
             <i class='bx bxs-flask bx-sm'></i><span class="text">Phòng Xét nghiệm</span>
           </a>
@@ -416,15 +416,25 @@
           <a href="#" data-target="page-notification"><i class='bx bxs-message-dots bx-sm'></i><span class="text">Tin nhắn</span></a>
         </li>
       </ul>
-
       <ul class="side-menu bottom">
+        
+        <!-- MỤC HIỂN THỊ LƯỢT TRUY CẬP -->
+        <li>
+          <a href="javascript:void(0)" style="cursor: default;">
+            <i class='bx bx-show bx-sm'></i> <!-- Icon con mắt -->
+            <span class="text">Lượt truy cập</span>
+            <span class="badge view-counter" id="web-view-count">0</span>
+          </a>
+        </li>
 
+        <!-- NÚT ĐĂNG XUẤT CỦA BẠN -->
         <li>
           <a href="#" onclick="window.logout()" class="logout">
             <i class='bx bx-power-off bx-sm bx-burst-hover'></i>
             <span class="text">Đăng xuất</span>
           </a>
         </li>
+
       </ul>
     </section>
     <!-- SIDEBAR -->
@@ -810,7 +820,7 @@
             </div>
             <div class="row g-4">
               <div class="col-lg-6">
-                <div class="card shadow-sm text-center p-4 border-light">
+                <div id="user-dash-status-card" class="card shadow-sm text-center p-4 border-light">
                   <div id="user-status-icon" class="avatar-lg mx-auto bg-light-subtle rounded-circle d-flex align-items-center justify-content-center mb-3">
                     <i class='bx bx-check-circle fs-1 text-success'></i>
                   </div>
@@ -899,7 +909,7 @@
                 <li><a class="active" href="#">Lịch trực định kỳ</a></li>
               </ul>
             </div>
-            <button id="btn-auto-trigger" class="btn btn-primary" data-permission="admin">
+            <button id="btn-auto-trigger" class="btn btn-primary" data-permission="admin, ward_admin">
               <i class='bx bxs-magic-wand'></i> Lịch trình (AP Assistant)
             </button>
           </div>
@@ -920,7 +930,7 @@
                   <team class="new-shift-note">Ghi chú</label>
                     <textarea id="new-shift-note" class="form-control" rows="2" placeholder="VD: Trực sự kiện..."></textarea>
                 </div>
-                <button class="btn btn-primary w-100" onclick="submitNewShift()" data-permission="admin"><i class='bx bx-save'></i> XÁC NHẬN</button>
+                <button class="btn btn-primary w-100" onclick="submitNewShift()" data-permission="admin, ward_admin"><i class='bx bx-save'></i> XÁC NHẬN</button>
               </div>
 
               <div class="control-box" style="background: #f8fbff; border: 1px dashed #007bff;">
@@ -930,7 +940,7 @@
                 <div style="font-size:12px; color:#666; margin-bottom:15px;">
                   Thay thế nhân sự vắng mặt dựa trên chuyên môn, lịch nghỉ ngơi và trạng thái sẵn sàng.
                 </div>
-                <button onclick="openWizard()" class="btn btn-outline-primary w-100" data-permission="admin">
+                <button onclick="openWizard()" class="btn btn-outline-primary w-100" data-permission="admin, ward_admin">
                   <i class='bx bx-transfer-alt'></i> Tạo yêu cầu Thay thế
                 </button>
               </div>
@@ -998,7 +1008,7 @@
                   <option value="Driver">Lái xe</option>
                 </select>
 
-                <button id="btn-activate-emergency" class="btn btn-danger" data-permission="admin">
+                <button id="btn-activate-emergency" class="btn btn-danger" data-permission="admin,ward_admin">
                   <i class='bx bxs-megaphone'></i> KÍCH HOẠT (<span id="selected-count">0</span>)
                 </button>
               </div>
@@ -1311,16 +1321,7 @@
                       <select id="filter-team-select" class="form-select" multiple="multiple" style="width:100%" data-placeholder="-- Chọn nhiều đội --">
                         <option value="all" selected>Tất cả Đội</option>
                         <option value="No team">Chưa phân đội</option>
-                        <option value="Team 1">Team 1</option>
-                        <option value="Team 2">Team 2</option>
-                        <option value="Team 3">Team 3</option>
-                        <option value="Team 4">Team 4</option>
-                        <option value="Team 5">Team 5</option>
-                        <option value="Team 6">Team 6</option>
-                        <option value="Team 7">Team 7</option>
-                        <option value="Team 8">Team 8</option>
-                        <option value="Team 9">Team 9</option>
-                        <option value="Team 10">Team 10</option>
+                        <!-- ĐÃ XÓA CÁC TEAM HARDCODE Ở ĐÂY -->
                       </select>
                     </div>
                   </div>
@@ -2675,6 +2676,19 @@
               </select>
             </div>
           </div>
+          <!-- Hàng workplace_ward: CHỈ hiện khi Đơn vị công tác là Trạm YT / UBND phường -->
+        <div class="row" id="workplace-ward-row" style="display:none;">
+          <div class="col-md-12">
+            <div class="form-group mb-3">
+              <label for="workplace_ward">
+                Phường/Xã/Đặc khu nơi bạn đang công tác <span class="text-danger">*</span>
+              </label>
+              <select class="form-select" id="workplace_ward" name="workplace_ward">
+                <option value="">Chọn</option>
+              </select>
+            </div>
+          </div>
+        </div>
           <div class="col-md-4">
             <div class="form-group mb-3">
               <label for="department">Khoa/phòng:</label>
@@ -2692,6 +2706,7 @@
               </select>
             </div>
           </div>
+          
         </div>
         <div class="row">
           <label for="academic">7. Kinh nghiệm chuyên môn</label>
