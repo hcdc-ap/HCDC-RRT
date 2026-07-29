@@ -28,178 +28,6 @@
     return role === 'admin' || role === 'manager';
   };
 
-  // ============================================================
-  // PATCH 2: renderUserDashboard – hiển thị đúng thông báo
-  // từ bảng notifications thay vì đọc appState.incidents trực tiếp
-  // (tránh lỗi RLS chặn user thường đọc incidents)
-  // ============================================================
-
-  window.renderUserDashboard = async function () {
-    // Cập nhật tên hiển thị
-    const nameEl = document.getElementById('user-dash-name');
-    if (nameEl) {
-      nameEl.textContent =
-        window.userSession?.full_name ||
-        window.userSession?.username ||
-        'Thành viên';
-    }
-
-    const alertsContainer = document.getElementById('user-dash-alerts');
-    if (!alertsContainer) return;
-
-    alertsContainer.innerHTML =
-      '<li class="list-group-item text-muted text-center">' +
-      '<span class="spinner-border spinner-border-sm me-2"></span>Đang tải...</li>';
-
-    const myEmail = String(window.userSession?.email || '')
-      .toLowerCase()
-      .trim();
-    if (!myEmail) {
-      alertsContainer.innerHTML =
-        '<li class="list-group-item text-muted text-center">Không xác định được tài khoản.</li>';
-      return;
-    }
-
-    try {
-      // Lấy thông báo chưa đọc (kết hợp incident nếu có)
-      const { data: notifs, error } = await window.supabaseClient
-        .from('notifications')
-        .select(
-          'id, message, notification_type, is_read, created_at, incident_id, schedule_id'
-        )
-        .eq('user_email', myEmail)
-        .eq('is_read', false)
-        .order('created_at', { ascending: false })
-        .limit(20);
-
-      if (error) throw error;
-
-      alertsContainer.innerHTML = '';
-
-      if (!notifs || notifs.length === 0) {
-        alertsContainer.innerHTML =
-          '<li class="list-group-item text-muted text-center py-3">' +
-          'Không có thông báo mới.</li>';
-        return;
-      }
-
-      // Nếu có incident_id, fetch thêm tên/status của sự kiện
-      const incidentIds = [
-        ...new Set(notifs.map((n) => n.incident_id).filter(Boolean)),
-      ];
-      let incidentMap = {};
-
-      if (incidentIds.length > 0) {
-        const { data: incs } = await window.supabaseClient
-          .from('incidents')
-          .select('id, event_name, status')
-          .in('id', incidentIds);
-        (incs || []).forEach((i) => (incidentMap[i.id] = i));
-      }
-
-      notifs.forEach((notif) => {
-        const inc = notif.incident_id ? incidentMap[notif.incident_id] : null;
-        const isEmergency =
-          notif.notification_type === 'khan_cap' ||
-          notif.notification_type === 'thay_the';
-        const isActive = inc && inc.status === 'active';
-
-        const li = document.createElement('li');
-
-        if (isEmergency) {
-          li.className =
-            'list-group-item ' +
-            (isActive ? 'list-group-item-danger' : 'list-group-item-secondary') +
-            ' py-2';
-          li.innerHTML = `
-            <div class="d-flex justify-content-between align-items-start gap-2">
-              <div style="min-width:0;">
-                <strong>${isActive ? '🚨' : '✅'} ${_esc(notif.message)}</strong>
-                ${inc ? '<br><small class="text-muted">' + _esc(inc.event_name) + '</small>' : ''}
-              </div>
-              <div class="d-flex gap-1 flex-shrink-0">
-                ${
-                  isActive
-                    ? `<a href="#" onclick="simulateSidebarClick('page-tracking');return false;"
-                         class="btn btn-danger btn-sm py-0 px-2">Xem</a>`
-                    : ''
-                }
-                <button onclick="window.markNotificationAsRead('${notif.id}',this)"
-                        class="btn btn-outline-secondary btn-sm py-0 px-2"
-                        title="Đánh dấu đã đọc">✓</button>
-              </div>
-            </div>`;
-        } else {
-          li.className = 'list-group-item py-2';
-          li.innerHTML = `
-            <div class="d-flex justify-content-between align-items-start gap-2">
-              <small style="min-width:0;">${_esc(notif.message)}</small>
-              <button onclick="window.markNotificationAsRead('${notif.id}',this)"
-                      class="btn btn-outline-secondary btn-sm py-0 px-2 flex-shrink-0">✓</button>
-            </div>`;
-        }
-
-        alertsContainer.appendChild(li);
-      });
-    } catch (err) {
-      console.error('[renderUserDashboard] Lỗi:', err);
-      alertsContainer.innerHTML =
-        '<li class="list-group-item text-danger text-center">Lỗi tải thông báo: ' +
-        _esc(err.message) +
-        '</li>';
-    }
-  };
-
-  // ============================================================
-  // PATCH 3: markNotificationAsRead – xóa item khỏi list mượt mà
-  // ============================================================
-
-  window.markNotificationAsRead = async function (notifId, btn) {
-    if (!notifId) return;
-    const li = btn?.closest('li');
-    if (btn) btn.disabled = true;
-    if (li) li.style.opacity = '0.5';
-
-    try {
-      const { error } = await window.supabaseClient
-        .from('notifications')
-        .update({ is_read: true })
-        .eq('id', notifId);
-
-      if (error) throw error;
-
-      // Animation xóa khỏi list
-      if (li) {
-        li.style.transition = 'max-height .3s, opacity .3s';
-        li.style.maxHeight = li.offsetHeight + 'px';
-        li.style.overflow = 'hidden';
-        requestAnimationFrame(() => {
-          li.style.maxHeight = '0';
-          li.style.opacity = '0';
-          setTimeout(() => {
-            li.remove();
-            const container = document.getElementById('user-dash-alerts');
-            if (container && container.children.length === 0) {
-              container.innerHTML =
-                '<li class="list-group-item text-muted text-center py-3">' +
-                'Không có thông báo mới.</li>';
-            }
-          }, 310);
-        });
-      }
-
-      // Cập nhật số chuông
-      if (typeof window.loadUserNotifications === 'function') {
-        window.loadUserNotifications();
-      }
-    } catch (err) {
-      console.error('[markNotificationAsRead] Lỗi:', err);
-      if (btn) btn.disabled = false;
-      if (li) li.style.opacity = '1';
-      if (typeof showToast === 'function')
-        showToast('Lỗi: ' + err.message, 'error');
-    }
-  };
 
   // ============================================================
   // PATCH 4: submitIncidentResponse – đánh dấu thông báo đã đọc
@@ -275,7 +103,8 @@
             {
               incident_id: window.selectedIncidentId,
               user_id: myUserId,
-              action_type: actionType === 'confirm' ? 'Thành viên' : 'Đã từ chối',
+              action_type:
+                actionType === 'confirm' ? 'Thành viên' : 'Đã từ chối',
               updated_at: new Date().toISOString(),
             },
             { onConflict: 'incident_id,user_id' }
@@ -349,7 +178,9 @@
     try {
       $('#iapTabs button:first').tab('show');
     } catch (_) {}
-    $('#iap-objectives-container, #iap-logistics-body, #iap-activities-body').empty();
+    $(
+      '#iap-objectives-container, #iap-logistics-body, #iap-activities-body'
+    ).empty();
 
     try {
       // --- Bắt buộc: incidents ---
@@ -430,7 +261,11 @@
       const safeParse = (val, fallback = {}) => {
         if (!val) return fallback;
         if (typeof val === 'object') return val;
-        try { return JSON.parse(val); } catch { return fallback; }
+        try {
+          return JSON.parse(val);
+        } catch {
+          return fallback;
+        }
       };
 
       const meta = safeParse(planData.meta, {});
@@ -547,7 +382,10 @@
     }
     // Đảm bảo user dashboard được render sau khi có dữ liệu
     setTimeout(async () => {
-      if (!window.isUserAdmin() && typeof window.renderUserDashboard === 'function') {
+      if (
+        !window.isUserAdmin() &&
+        typeof window.renderUserDashboard === 'function'
+      ) {
         await window.renderUserDashboard();
       }
     }, 1500);
@@ -574,12 +412,18 @@
     const userId = window.getCurrentUserId(); // ← Đã có từ PATCH 1
 
     // Render optimistic UI
-    const escaped = typeof window.escapeHtml === 'function' ? window.escapeHtml(content) : content;
+    const escaped =
+      typeof window.escapeHtml === 'function'
+        ? window.escapeHtml(content)
+        : content;
     let htmlContent =
       type === 'Report'
         ? `<div class="report-bubble"><div class="report-header">
              <span><i class="bx bxs-report"></i> BÁO CÁO NHANH</span>
-             <span>${new Date().toLocaleTimeString('vi-VN', {hour:'2-digit',minute:'2-digit'})}</span>
+             <span>${new Date().toLocaleTimeString('vi-VN', {
+               hour: '2-digit',
+               minute: '2-digit',
+             })}</span>
            </div><div class="report-body">${escaped}</div></div>`
         : `<div class="msg-bubble" style="background:#0084ff;color:white;">${escaped}</div>`;
 
@@ -605,7 +449,7 @@
             incident_id: incidentId,
             content: content,
             log_type: type,
-            user_id: userId,   // ← Không còn crash
+            user_id: userId, // ← Không còn crash
             attachment_url: null,
           },
         ]);
@@ -637,13 +481,16 @@
       return;
     }
 
-    const esc = typeof window.escapeHtml === 'function' ? window.escapeHtml : (s) => s;
+    const esc =
+      typeof window.escapeHtml === 'function' ? window.escapeHtml : (s) => s;
     const contentHtml = `
       <div class="msg-bubble" style="background:#fff3cd;color:#856404;border:1px solid #ffeeba;width:100%;padding:15px;">
         <div style="display:inline-block;background:#dc3545;color:white;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:bold;margin-bottom:8px;">
           YÊU CẦU HỖ TRỢ (SOS)
         </div>
-        <div style="font-weight:bold;font-size:14px;color:#dc3545;">${esc(type).toUpperCase()}</div>
+        <div style="font-weight:bold;font-size:14px;color:#dc3545;">${esc(
+          type
+        ).toUpperCase()}</div>
         <div style="margin-top:5px;"><b>Chi tiết:</b> ${esc(qty)}</div>
         <div style="margin-top:5px;font-style:italic;">"${esc(desc)}"</div>
       </div>`;
@@ -660,25 +507,30 @@
     try {
       if (!incidentId) throw new Error('Không tìm thấy ID sự kiện');
 
-      const { error } = await window.supabaseClient.from('incident_logs').insert([
-        {
-          incident_id: incidentId,
-          content: contentHtml,
-          log_type: 'SOS',
-          user_id: window.getCurrentUserId(), // ← Đã có từ PATCH 1
-          attachment_url: null,
-        },
-      ]);
+      const { error } = await window.supabaseClient
+        .from('incident_logs')
+        .insert([
+          {
+            incident_id: incidentId,
+            content: contentHtml,
+            log_type: 'SOS',
+            user_id: window.getCurrentUserId(), // ← Đã có từ PATCH 1
+            attachment_url: null,
+          },
+        ]);
       if (error) throw error;
 
       document.getElementById('sos-qty').value = '';
       document.getElementById('sos-desc').value = '';
 
-      if (typeof window.closeModal === 'function') window.closeModal('modal-sos');
-      if (typeof showToast === 'function') showToast('✅ Đã gửi yêu cầu hỗ trợ SOS!', 'success');
+      if (typeof window.closeModal === 'function')
+        window.closeModal('modal-sos');
+      if (typeof showToast === 'function')
+        showToast('✅ Đã gửi yêu cầu hỗ trợ SOS!', 'success');
     } catch (err) {
       console.error('[submitSOS] Lỗi:', err);
-      if (typeof showToast === 'function') showToast('Lỗi gửi SOS: ' + err.message, 'error');
+      if (typeof showToast === 'function')
+        showToast('Lỗi gửi SOS: ' + err.message, 'error');
     }
   };
 
@@ -696,35 +548,35 @@
         .replace(/'/g, '&#039;');
     };
   }
-// PATCH 14: Đảm bảo tab Bản đồ luôn hiển thị
-document.addEventListener('DOMContentLoaded', function () {
-  setTimeout(function () {
-    const menuMap = document.getElementById('menu-map');
-    if (menuMap) {
-      menuMap.style.display = '';
-      menuMap.style.visibility = 'visible';
+  // PATCH 14: Đảm bảo tab Bản đồ luôn hiển thị
+  document.addEventListener('DOMContentLoaded', function () {
+    setTimeout(function () {
+      const menuMap = document.getElementById('menu-map');
+      if (menuMap) {
+        menuMap.style.display = '';
+        menuMap.style.visibility = 'visible';
+      }
+    }, 500);
+  });
+  // PATCH 17: Fix cảnh báo "Blocked aria-hidden" của Bootstrap modal
+  // Nguyên nhân: nút trong modal còn giữ focus khi modal đóng
+  document.addEventListener('hide.bs.modal', function (event) {
+    // Nếu phần tử đang focus nằm trong modal sắp đóng → bỏ focus trước
+    if (event.target.contains(document.activeElement)) {
+      document.activeElement.blur();
     }
-  }, 500);
-});
-// PATCH 17: Fix cảnh báo "Blocked aria-hidden" của Bootstrap modal
-// Nguyên nhân: nút trong modal còn giữ focus khi modal đóng
-document.addEventListener('hide.bs.modal', function (event) {
-  // Nếu phần tử đang focus nằm trong modal sắp đóng → bỏ focus trước
-  if (event.target.contains(document.activeElement)) {
-    document.activeElement.blur();
-  }
-});
-// PATCH 19: Dọn backdrop kẹt cho MỌI modal động trong app
-document.addEventListener('hidden.bs.modal', function () {
-  setTimeout(() => {
-    if (!document.querySelector('.modal.show')) {
-      document.querySelectorAll('.modal-backdrop').forEach((b) => b.remove());
-      document.body.classList.remove('modal-open');
-      document.body.style.overflow = '';
-      document.body.style.paddingRight = '';
-    }
-  }, 150);
-});
+  });
+  // PATCH 19: Dọn backdrop kẹt cho MỌI modal động trong app
+  document.addEventListener('hidden.bs.modal', function () {
+    setTimeout(() => {
+      if (!document.querySelector('.modal.show')) {
+        document.querySelectorAll('.modal-backdrop').forEach((b) => b.remove());
+        document.body.classList.remove('modal-open');
+        document.body.style.overflow = '';
+        document.body.style.paddingRight = '';
+      }
+    }, 150);
+  });
   // Shortcut nội bộ
   function _esc(s) {
     return window.escapeHtml(s);
