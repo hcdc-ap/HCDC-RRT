@@ -1,21 +1,20 @@
 // ============================================================================
-// GIAI ĐOẠN 2B — DISPATCH MODAL (giao diện điều phối PXN) — BẢN HOÀN CHỈNH
+// DISPATCH MODAL (giao diện điều phối PXN) — BẢN CHỐT (quy trình mới 2026)
 // Hệ thống RRT-HCDC
 // ----------------------------------------------------------------------------
 // Phụ thuộc: lab-dispatch-engine.js (window.LabDispatch), Leaflet, Bootstrap 5.
-// NHÚNG theo thứ tự:
-//   <script src="lab-dispatch-engine.js"></script>
-//   <script src="lab-dispatch-modal.js"></script>   ← file này
-//   <script src="lab-dispatch-actions.js"></script>
 //
-// MỞ MODAL — 2 nơi:
-//   (A) Từ HỒ SƠ SỰ CỐ (gắn tọa độ sự cố):
-//       window.openDispatchModal({ incidentId, incidentName, lat, lng })
-//   (B) Từ trang BẢN ĐỒ (admin tự nhập điểm — địa chỉ / vị trí / tay):
-//       window.openDispatchModal()
+// MỚI:
+//   • Ô nhập TIÊU CHÍ CHUYÊN GIA: QSM tối thiểu (ưu tiên) + Thời gian trả KQ
+//     tối đa (ưu tiên) → truyền xuống engine (minQsm, maxTurnaround).
+//   • Preset thứ 4: 🏅 Chất lượng (ưu tiên QSM). Giữ 3 slider gần/trống/nhanh.
+//   • Card kết quả: badge QSM + phân cấp mạng lưới, ĐẦU MỐI LIÊN HỆ (gọi/email),
+//     cảnh báo mềm (QSM thấp / trả KQ chậm hơn yêu cầu).
+//   • Sửa bug osrmWarn dùng trước khai báo ở nhánh "không tìm thấy".
 //
-// Phân quyền nút hành động do lab-dispatch-actions.js (2C) quyết định:
-//   admin → "Chốt điều phối mẫu" · Leader → "Đề xuất" · khác → chỉ xem.
+// MỞ MODAL:
+//   (A) Từ hồ sơ sự cố: window.openDispatchModal({ incidentId, incidentName, lat, lng })
+//   (B) Từ bản đồ (tự nhập điểm):  window.openDispatchModal()
 // ============================================================================
 
 (function () {
@@ -35,29 +34,20 @@
               "'": '&#039;',
             }[c])
         );
-  // Danh sách ngày lễ VN cố định (dd-mm). Admin bổ sung ngày lễ âm lịch thủ công.
-  const VN_HOLIDAYS = [
-    '01-01', // Tết Dương lịch
-    '30-04', // Giải phóng miền Nam
-    '01-05', // Quốc tế Lao động
-    '02-09', // Quốc khánh
-    // Tết Nguyên đán, Giỗ Tổ (âm lịch) đổi hằng năm — thêm dạng 'dd-mm' của năm hiện tại nếu cần
-  ];
 
-  // Trả về chuỗi cảnh báo nếu hôm nay là T7/CN/lễ; '' nếu ngày thường
+  const VN_HOLIDAYS = ['01-01', '30-04', '01-05', '02-09'];
+
   function getDayWarning() {
     const now = new Date();
-    const dow = now.getDay(); // 0=CN, 6=T7
+    const dow = now.getDay();
     const dd = String(now.getDate()).padStart(2, '0');
     const mm = String(now.getMonth() + 1).padStart(2, '0');
-    const isHoliday = VN_HOLIDAYS.includes(`${dd}-${mm}`);
-
-    if (isHoliday) return 'Hôm nay là ngày lễ';
+    if (VN_HOLIDAYS.includes(`${dd}-${mm}`)) return 'Hôm nay là ngày lễ';
     if (dow === 0) return 'Hôm nay là Chủ nhật';
     if (dow === 6) return 'Hôm nay là Thứ Bảy';
     return '';
   }
-  // State phiên làm việc hiện tại của modal
+
   const S = {
     incidentId: null,
     incidentName: null,
@@ -66,23 +56,22 @@
     testTypeId: null,
     sampleCount: 20,
     preset: 'balanced',
-    weights: null, // trọng số slider tùy chỉnh (null = dùng preset)
-    excludeLabIds: [], // PXN bị loại trừ tại trận
-    lastResult: null, // kết quả findBestLabs gần nhất
-    map: null, // Leaflet instance
-    routeLayers: [], // các polyline/marker đang vẽ
+    weights: null,
+    minBsl: null, // BSL chuyên gia chọn (lọc cứng)
+    minQsm: null, // không nhập — chỉ chấm điểm
+    maxTurnaround: null, // không nhập — chỉ chấm điểm
+    excludeLabIds: [],
+    lastResult: null,
+    map: null,
+    routeLayers: [],
   };
 
   let _testTypes = [];
 
-  const RANK_COLORS = ['#16a34a', '#0ea5e9', '#f59e0b']; // #1 lá, #2 dương, #3 cam
+  const RANK_COLORS = ['#16a34a', '#0ea5e9', '#f59e0b'];
   const FALLBACK_COLOR = '#6b7280';
 
-  // --------------------------------------------------------------------------
-  // MỞ MODAL
-  // --------------------------------------------------------------------------
   window.openDispatchModal = async function (opts = {}) {
-    // Reset toàn bộ state cho phiên mới
     S.incidentId = opts.incidentId || null;
     S.incidentName = opts.incidentName || null;
     S.lat = opts.lat ?? null;
@@ -91,12 +80,14 @@
     S.sampleCount = 20;
     S.preset = 'balanced';
     S.weights = null;
+    S.minBsl = null;
+    S.minQsm = null;
+    S.maxTurnaround = null;
     S.excludeLabIds = [];
     S.lastResult = null;
     S.map = null;
     S.routeLayers = [];
 
-    // Nạp danh mục loại XN
     try {
       const { data, error } = await window.supabaseClient
         .from('test_types')
@@ -131,11 +122,10 @@
         (t) =>
           `<option value="${t.id}" data-bsl="${t.required_bsl}">${esc(
             t.name
-          )} · cần BSL-${t.required_bsl}</option>`
+          )}</option>`
       )
       .join('');
 
-    // Điểm sự cố: từ hồ sơ (khóa, hiện tên) hoặc nhập tay (địa chỉ/vị trí/tọa độ)
     const originBlock = S.incidentId
       ? `<div class="alert alert-secondary py-2 mb-0">
            <small class="text-muted d-block">Sự kiện khẩn cấp</small>
@@ -177,11 +167,20 @@
               <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
-              <!-- HÀNG INPUT -->
-              <div class="row g-3 align-items-end mb-3">
-                <div class="col-md-9">
-                  <label class="form-label mb-1">Loại xét nghiệm <span class="text-danger">*</span></label>
+              <!-- HÀNG INPUT: kỹ thuật + BSL (lọc cứng) + số mẫu -->
+              <div class="row g-3 align-items-end mb-2">
+                <div class="col-md-6">
+                  <label class="form-label mb-1">Loại xét nghiệm (kỹ thuật) <span class="text-danger">*</span></label>
                   <select id="disp-testtype" class="form-select">${ttOptions}</select>
+                </div>
+                <div class="col-md-3">
+                  <label class="form-label mb-1">An toàn sinh học <span class="text-danger">*</span></label>
+                  <select id="disp-bsl" class="form-select" title="Cấp ATSH tối thiểu — PXN thấp hơn sẽ bị loại (lọc cứng)">
+                    <option value="1">ATSH cấp 1</option>
+                    <option value="2" selected>ATSH cấp 2</option>
+                    <option value="3">ATSH cấp 3</option>
+                    <option value="4">ATSH cấp 4</option>
+                  </select>
                 </div>
                 <div class="col-md-3">
                   <label class="form-label mb-1">Số mẫu</label>
@@ -194,13 +193,15 @@
               <div class="card mb-3">
                 <div class="card-body py-2">
                   <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
-                    <div class="btn-group btn-group-sm" role="group" id="disp-presets">
+                    <div class="btn-group btn-group-sm flex-wrap" role="group" id="disp-presets">
                       <input type="radio" class="btn-check" name="preset" id="p-urgent" value="urgent">
                       <label class="btn btn-outline-danger" for="p-urgent">⚡ Khẩn</label>
                       <input type="radio" class="btn-check" name="preset" id="p-balanced" value="balanced" checked>
                       <label class="btn btn-outline-secondary" for="p-balanced">⚖️ Cân bằng</label>
                       <input type="radio" class="btn-check" name="preset" id="p-capacity" value="capacity">
                       <label class="btn btn-outline-primary" for="p-capacity">📦 Nhiều mẫu</label>
+                      <input type="radio" class="btn-check" name="preset" id="p-quality" value="quality">
+                      <label class="btn btn-outline-success" for="p-quality">🏅 Chất lượng</label>
                     </div>
                     <div class="d-flex align-items-center gap-1">
                       <button class="btn btn-sm btn-link text-decoration-none p-1" type="button"
@@ -214,7 +215,7 @@
                     </div>
                   </div>
                   <div id="disp-advanced" class="d-none mt-2 pt-2 border-top">
-                    <small class="text-muted d-block mb-1">Kéo để thay đổi mức độ ưu tiên:</small>
+                    <small class="text-muted d-block mb-1">Kéo để chỉnh 3 tiêu chí khoảng cách / công suất / tốc độ. (Chất lượng & mạng lưới do chế độ 🏅 hoặc QSM tối thiểu điều khiển.)</small>
                     <div class="row g-2">
                       <div class="col-md-4"><label class="form-label mb-0"><small>Gần nhất <span id="w-near">34</span>%</small></label>
                         <input type="range" class="form-range" id="slider-near" min="0" max="100" value="34"></div>
@@ -225,33 +226,33 @@
                     </div>
                   </div>
                   <div id="disp-help" class="d-none mt-2 pt-2 border-top">
-                    <div class="alert alert-info py-2 mb-0" style="font-size:.85rem;">
-                      <div class="mb-2"><b><i class='bx bx-bulb'></i> Hệ thống xếp hạng Phòng xét nghiệm theo 3 tiêu chí:</b></div>
-                      <div class="d-flex align-items-start gap-2 mb-1">
-                        <span class="badge" style="background:#16a34a;">Gần nhất</span>
-                        <span>Phòng xét nghiệm có thời gian di chuyển ngắn nhất từ sự kiện khẩn cấp.</span>
-                      </div>
-                      <div class="d-flex align-items-start gap-2 mb-1">
-                        <span class="badge" style="background:#0ea5e9;">Còn nhận mẫu trong ngày</span>
-                        <span>Phòng xét nghiệm còn nhiều công suất nhận mẫu trong ngày.</span>
-                      </div>
-                      <div class="d-flex align-items-start gap-2 mb-2">
-                        <span class="badge" style="background:#f59e0b;">Trả Kết quả nhanh</span>
-                        <span>Phòng xét nghiệm trả kết quả xét nghiệm sớm nhất.</span>
-                      </div>
-                      <div class="mb-1"><b>Chọn chế độ phù hợp tình huống:</b></div>
-                      <div class="ms-1" style="line-height:1.7;">
-                        ⚡ <b>Khẩn</b>: cần kết quả gấp → ưu tiên Phòng xét nghiệm gần nhất & trả Kết quả nhanh.<br>
-                        ⚖️ <b>Cân bằng</b>: tình huống thường → cân nhắc đều cả 3 tiêu chí.<br>
-                        📦 <b>Nhiều mẫu</b>: ổ dịch lớn, nhiều mẫu → ưu tiên nơi còn khả năng tiếp nhận mẫu.<br>
-                        🎚️ <b>Tùy chỉnh</b>: tự kéo mức ưu tiên nếu 3 chế độ trên chưa phù hợp.
-                      </div>
-                      <div class="mt-2 pt-1 border-top text-muted">
-                        <i class='bx bx-shield'></i> Lưu ý an toàn: Phòng xét nghiệm không đủ cấp an toàn sinh học (BSL)
-                        cho tác nhân này sẽ <b>không bao giờ xuất hiện</b>, bất kể chọn chế độ nào.
-                      </div>
+                  <div class="alert alert-info py-2 mb-0" style="font-size:.85rem;">
+                    
+                    <div class="mb-2"><b><i class='bx bx-bulb'></i> Tiêu chí xếp hạng Phòng Xét nghiệm:</b></div>
+                    <div class="ms-1" style="line-height:1.7;">
+                      🟢 <b>Gần nhất</b>: Thời gian vận chuyển mẫu ngắn nhất từ nơi có sự kiện khẩn cấp đến phòng xét nghiệm.<br>
+                      🔵 <b>Còn nhận mẫu</b>: Vẫn có khả năng nhận thêm mẫu xét nghiệm trong ngày.<br>
+                      🟠 <b>Trả Kết quả xét nghiệm nhanh</b>: Thời gian xét nghiệm và trả kết quả sớm nhất.<br>
+                      🏅 <b>Chất lượng QSM</b>: Đạt chuẩn chất lượng cao (ISO 15189 / QĐ2429).<br>
+                      🌐 <b>Năng lực xét nghiệm</b>: Là đơn vị có năng lực xét nghiệm cao trong mạng lưới.
                     </div>
+                    
+                    <div class="mb-1 mt-2"><b>Chế độ gợi ý:</b></div>
+                    <div class="ms-1" style="line-height:1.7;">
+                      ⚡ <b>Khẩn cấp</b>: Ưu tiên phòng xét nghiệm gần nhất và trả kết quả xét nghiệm nhanh nhất.<br>
+                      ⚖️ <b>Cân bằng</b>: Cân nhắc đồng đều tất cả các tiêu chí nêu trên.<br>
+                      📦 <b>Nhiều mẫu</b>: Ưu tiên những phòng xét nghiệm có khả năng nhận số lượng mẫu lớn trong ngày.<br>
+                      🏅 <b>Ưu tiên chất lượng</b>: Ưu tiên chọn phòng xét nghiệm đạt chuẩn cao (Chất lượng QSM & Độ chuyên sâu).
+                    </div>
+                    
+                    <div class="mt-2 pt-2 border-top text-muted" style="line-height:1.6;">
+                      <i class='bx bx-shield'></i> <b>Lưu ý quan trọng:</b><br>
+                      - <b>Bắt buộc:</b> Phòng xét nghiệm <i>không đủ cấp An toàn sinh học (BSL)</i> cho tác nhân này sẽ <b>bị loại hoàn toàn khỏi danh sách</b> ở mọi chế độ.<br>
+                      - <b>Sắp xếp:</b> Tiêu chí "Chất lượng" và "Thời gian trả Kết quả xét nghiệm" dùng để xếp hạng. Nếu thiếu hoặc thấp, Phòng xét nghiệm vẫn sẽ xuất hiện nhưng bị đẩy xuống cuối và có cảnh báo.
+                    </div>
+                    
                   </div>
+                </div>
                 </div>
               </div>
 
@@ -261,7 +262,6 @@
                 </button>
               </div>
 
-              <!-- KẾT QUẢ + BẢN ĐỒ (ẩn, hiện khi bấm Phòng Xét nghiệm) -->
               <div id="disp-results"></div>
               <div id="disp-map-wrap" class="d-none mt-3">
                 <div class="d-flex justify-content-between align-items-center mb-1">
@@ -280,16 +280,32 @@
 
     const modalEl = document.getElementById('dispatchModal');
     new bootstrap.Modal(modalEl).show();
-    // Biến dropdown loại XN thành ô tìm-gõ (Select2 — app đã có sẵn)
+
     if (window.$ && $.fn.select2) {
       $('#disp-testtype').select2({
-        dropdownParent: $('#dispatchModal'),   // QUAN TRỌNG: neo trong modal, không Select2 sẽ bị modal che
+        dropdownParent: $('#dispatchModal'),
         placeholder: 'Gõ để tìm loại xét nghiệm...',
         width: '100%',
       });
     }
 
-    // Dọn dẹp khi modal đóng: hủy map + gỡ backdrop kẹt
+    // Tiện dụng: chọn kỹ thuật → BSL dropdown gợi ý theo required_bsl của kỹ thuật
+    // (chuyên gia vẫn đổi tay được — đây chỉ là giá trị mặc định giúp nhanh).
+    const setBslFromTech = () => {
+      const opt = document.querySelector('#disp-testtype option:checked');
+      const need = parseInt(opt?.getAttribute('data-bsl'));
+      const bslSel = document.getElementById('disp-bsl');
+      if (bslSel && need >= 1 && need <= 4) bslSel.value = String(need);
+    };
+    setBslFromTech(); // đặt theo kỹ thuật đầu tiên
+    if (window.$ && $.fn.select2) {
+      $('#disp-testtype').on('change', setBslFromTech);
+    } else {
+      document
+        .getElementById('disp-testtype')
+        ?.addEventListener('change', setBslFromTech);
+    }
+
     modalEl.addEventListener(
       'hidden.bs.modal',
       function () {
@@ -300,10 +316,13 @@
           S.map = null;
           S.routeLayers = [];
         }
-      // Hủy Select2 của dropdown loại XN khi đóng modal
-      if (window.$ && $.fn.select2 && $('#disp-testtype').hasClass('select2-hidden-accessible')) {
-        $('#disp-testtype').select2('destroy');
-      }
+        if (
+          window.$ &&
+          $.fn.select2 &&
+          $('#disp-testtype').hasClass('select2-hidden-accessible')
+        ) {
+          $('#disp-testtype').select2('destroy');
+        }
         wrap.remove();
         setTimeout(() => {
           if (!document.querySelector('.modal.show')) {
@@ -319,32 +338,30 @@
       { once: true }
     );
 
-    // Slider tự cân bằng tổng = 100
     ['near', 'free', 'fast'].forEach((k) => {
       const el = document.getElementById('slider-' + k);
       if (el) el.addEventListener('input', () => rebalanceSliders(k));
     });
-    // Chọn preset → tắt chế độ custom
-    // Chọn preset → slider chạy theo + tắt chế độ custom
     document.querySelectorAll('input[name="preset"]').forEach((r) => {
       r.addEventListener('change', () => {
-        S.weights = null; // dùng preset, không phải custom
-        syncSlidersToPreset(r.value); // slider nhảy theo cho người dùng thấy
+        S.weights = null;
+        syncSlidersToPreset(r.value);
       });
     });
 
-    // Đặt slider khớp preset mặc định (balanced) ngay khi mở modal
     syncSlidersToPreset('balanced');
   }
 
-  // Bảng trọng số của từng preset (khớp với PRESETS trong engine)
+  // Trọng số HIỂN THỊ cho 3 slider (near/free/fast, tổng 100).
+  // Lưu ý: trọng số THẬT khi chọn preset lấy từ engine.PRESETS (5 chiều);
+  // 3 slider chỉ hiện tương quan gần/trống/nhanh cho trực quan.
   const PRESET_WEIGHTS = {
-    urgent: { near: 45, free: 10, fast: 45 },
+    urgent: { near: 50, free: 10, fast: 40 },
     balanced: { near: 34, free: 33, fast: 33 },
     capacity: { near: 20, free: 60, fast: 20 },
+    quality: { near: 34, free: 33, fast: 33 },
   };
 
-  // Đẩy slider + nhãn % chạy theo preset được chọn
   function syncSlidersToPreset(preset) {
     const w = PRESET_WEIGHTS[preset] || PRESET_WEIGHTS.balanced;
     ['near', 'free', 'fast'].forEach((k) => {
@@ -354,6 +371,7 @@
       if (label) label.textContent = w[k];
     });
   }
+
   function rebalanceSliders(changed) {
     const get = (k) =>
       parseInt(document.getElementById('slider-' + k).value) || 0;
@@ -374,11 +392,11 @@
       o2 = remain - o1;
     }
     const vals = { [changed]: changedVal, [others[0]]: o1, [others[1]]: o2 };
-
     ['near', 'free', 'fast'].forEach((k) => {
       document.getElementById('slider-' + k).value = vals[k];
       document.getElementById('w-' + k).textContent = vals[k];
     });
+    // Custom = chỉ 3 chiều (qual/net = 0). Preset mới dùng đủ 5 chiều.
     S.weights = {
       near: vals.near / 100,
       free: vals.free / 100,
@@ -396,6 +414,12 @@
     S.preset =
       document.querySelector('input[name="preset"]:checked')?.value ||
       'balanced';
+
+    // BSL chuyên gia chọn (lọc CỨNG). QSM/turnaround KHÔNG nhập — chỉ vào chấm điểm.
+    const bslRaw = document.getElementById('disp-bsl')?.value;
+    S.minBsl = bslRaw ? parseInt(bslRaw) : null;
+    S.minQsm = null;
+    S.maxTurnaround = null;
 
     if (!S.incidentId) {
       S.lat = parseFloat(document.getElementById('disp-lat')?.value);
@@ -423,6 +447,7 @@
         originLng: S.lng,
         preset: S.preset,
         weights: S.weights,
+        minBsl: S.minBsl,
         excludeLabIds: S.excludeLabIds,
         candidateLimit: 10,
         topN: 3,
@@ -444,9 +469,16 @@
     const el = document.getElementById('disp-results');
     const { ranked, top, meta } = result;
 
+    // Định nghĩa osrmWarn TRƯỚC mọi nhánh (sửa bug dùng trước khai báo)
+    const osrmWarn =
+      meta.osrmFailures > 0
+        ? `<div class="alert alert-warning py-1 px-2 mb-2"><small><i class='bx bx-wifi-off'></i>
+         ${meta.osrmFailures}/${meta.afterExclude} tuyến dùng khoảng cách ước lượng (dịch vụ chỉ đường tạm gián đoạn).
+         Thời gian/quãng đường có thể chưa chính xác.</small></div>`
+        : '';
+
     if (!ranked.length) {
       const tt = _testTypes.find((t) => t.id === S.testTypeId);
-      // Cảnh báo mềm nếu hôm nay T7/CN/lễ (đa số PXN nghỉ, chỉ vài PXN trực)
       const dayWarn = getDayWarning();
       const dayWarnHtml = dayWarn
         ? `<div class="alert alert-warning py-2 mb-2">
@@ -462,24 +494,16 @@
           <i class='bx bx-error'></i> <strong>Không tìm thấy Phòng xét nghiệm phù hợp</strong> cho "${esc(
             tt?.name || ''
           )}".<br>
-          <small>Nguyên nhân có thể: chưa Phòng xét nghiệm nào đủ cấp an toàn sinh học (cần BSL-${
+          <small>Nguyên nhân có thể: chưa PXN nào đủ cấp an toàn sinh học (cần ATSH cấp ${
             tt?.required_bsl ?? '?'
           }),
-          chưa khai báo năng lực loại Xét nghiệm này, hoặc tất cả đã bị loại trừ.</small>
+          chưa khai báo năng lực loại này, hoặc tất cả đã bị loại trừ.</small>
         </div>`;
       if (typeof window.showPendingSuggestions === 'function')
         window.showPendingSuggestions(S.incidentId, S.testTypeId);
-      // Không tìm thấy PXN → xóa hình dispatch cũ trên bản đồ (nếu có)
       if (window.LabDispatchMap) window.LabDispatchMap.clear();
       return;
     }
-
-    const osrmWarn =
-      meta.osrmFailures > 0
-        ? `<div class="alert alert-warning py-1 px-2 mb-2"><small><i class='bx bx-wifi-off'></i>
-         ${meta.osrmFailures}/${meta.afterExclude} tuyến dùng khoảng cách ước lượng (dịch vụ chỉ đường tạm gián đoạn).
-         Thời gian/quãng đường có thể chưa chính xác.</small></div>`
-        : '';
 
     const cards = ranked
       .map((lab) => {
@@ -494,6 +518,49 @@
             ? ' <small class="text-muted">(ước lượng)</small>'
             : '';
 
+        // QSM + cấp năng lực (capability_tier — tính từ QSM + kỹ thuật)
+        const qsmBadge = lab.qsm_label
+          ? `<span class="badge bg-info text-dark">${esc(lab.qsm_label)}</span>`
+          : `<span class="badge bg-light text-muted">Chưa có QSM</span>`;
+        const netBadge =
+          lab.capability_tier != null
+            ? `<span class="badge bg-secondary">Cấp năng lực ${lab.capability_tier}/5</span>`
+            : '';
+
+        // Cảnh báo mềm (chỉ còn công suất — QSM/turnaround không còn là ngưỡng nhập)
+        const warnHtml = '';
+
+        // Đầu mối liên hệ — KEY cho RRT
+        const contactHtml =
+          lab.head_name || lab.head_phone
+            ? `<div class="mt-1 p-2 rounded" style="background:#f0fdf4;border:1px solid #bbf7d0;">
+                 <small class="d-block text-muted">Đầu mối PXN</small>
+                 <div class="d-flex justify-content-between align-items-center flex-wrap gap-1">
+                   <span><i class='bx bx-user'></i> <b>${esc(
+                     lab.head_name || '—'
+                   )}</b></span>
+                   ${
+                     lab.head_phone
+                       ? `<a href="tel:${esc(
+                           lab.head_phone
+                         )}" class="btn btn-sm btn-success py-0"><i class='bx bx-phone'></i> ${esc(
+                           lab.head_phone
+                         )}</a>`
+                       : ''
+                   }
+                 </div>
+                 ${
+                   lab.head_email
+                     ? `<small><a href="mailto:${esc(
+                         lab.head_email
+                       )}"><i class='bx bx-envelope'></i> ${esc(
+                         lab.head_email
+                       )}</a></small>`
+                     : ''
+                 }
+               </div>`
+            : '';
+
         return `
         <div class="card mb-2 dispatch-lab-card" style="border-left:5px solid ${color};">
           <div class="card-body py-2">
@@ -504,11 +571,12 @@
           lab.rank
         } ${rankLabel}</span>
                   <strong>${esc(lab.lab_name)}</strong>
-                  <span class="badge bg-dark">BSL-${lab.bsl_level}</span>
+                  <span class="badge bg-dark">ATSH ${lab.bsl_level}</span>
                 </div>
                 <small class="text-muted d-block">${esc(
-                  lab.address || ''
-                )}</small>
+                  lab.level || ''
+                )} · ${esc(lab.address || '')}</small>
+                <div class="mt-1 d-flex flex-wrap gap-1">${qsmBadge} ${netBadge}</div>
                 <div class="mt-1 d-flex flex-wrap gap-3">
                   <small><i class='bx bx-map-pin'></i> <b>${
                     lab.route.km
@@ -516,13 +584,15 @@
                   <small><i class='bx bx-time'></i> <b>${
                     lab.route.minutes
                   } phút</b></small>
-                  <small><i class='bx bx-timer'></i> Trả Kết quả: <b>${
+                  <small><i class='bx bx-timer'></i> Trả KQ: <b>${
                     lab.turnaround_hours != null
                       ? lab.turnaround_hours + 'h'
                       : '—'
                   }</b></small>
                   ${enoughBadge}
                 </div>
+                ${warnHtml}
+                ${contactHtml}
               </div>
               <div class="text-end flex-shrink-0">
                 <div class="mb-1"><span class="badge bg-light text-dark" style="font-size:.95em;">
@@ -544,7 +614,11 @@
             </div>
             <div class="mt-1 d-flex gap-1" style="height:5px;" title="Gần ${
               lab.scores.gan
-            } · Trống ${lab.scores.trong} · Nhanh ${lab.scores.nhanh}">
+            } · Trống ${lab.scores.trong} · Nhanh ${
+          lab.scores.nhanh
+        } · Chất lượng ${lab.scores.chatLuong} · Mạng lưới ${
+          lab.scores.mangLuoi
+        }">
               <div style="flex:${
                 lab.scores.gan
               };background:#16a34a;border-radius:3px;"></div>
@@ -554,6 +628,12 @@
               <div style="flex:${
                 lab.scores.nhanh
               };background:#f59e0b;border-radius:3px;"></div>
+              <div style="flex:${
+                lab.scores.chatLuong
+              };background:#8b5cf6;border-radius:3px;"></div>
+              <div style="flex:${
+                lab.scores.mangLuoi
+              };background:#64748b;border-radius:3px;"></div>
             </div>
           </div>
         </div>`;
@@ -574,7 +654,7 @@
         } Phòng xét nghiệm phù hợp · Xếp theo <b>${labelPreset(
       meta
     )}</b></small>
-        <small class="text-muted"><i class='bx bx-bulb'></i> Thanh màu: 🟢Gần 🔵Trống 🟠Nhanh</small>
+        <small class="text-muted"><i class='bx bx-bulb'></i> 🟢Gần 🔵Trống 🟠Nhanh 🟣Chất lượng ⚫Mạng lưới</small>
       </div>
       ${excludeInfo}
       ${cards}
@@ -592,13 +672,6 @@
     if (typeof window.showPendingSuggestions === 'function') {
       window.showPendingSuggestions(S.incidentId, S.testTypeId);
     }
-    if (typeof window.renderDispatchActions === 'function') {
-      top.forEach((lab) => window.renderDispatchActions(lab, S));
-    }
-    if (typeof window.showPendingSuggestions === 'function') {
-      window.showPendingSuggestions(S.incidentId, S.testTypeId);
-    }
-    // Chiếu kết quả lên bản đồ nền (Bước 2) — CHỖ ĐÚNG: nhánh CÓ kết quả
     if (window.LabDispatchMap && ranked.length) {
       window.LabDispatchMap.project(result, {
         lat: S.lat,
@@ -607,21 +680,23 @@
       });
     }
   }
+
   window._toggleDispatchHelp = function () {
     document.getElementById('disp-help')?.classList.toggle('d-none');
   };
+
   function labelPreset(meta) {
     if (meta.preset === 'custom') return 'trọng số tùy chỉnh';
     return (
-      { urgent: '⚡ Khẩn', balanced: '⚖️ Cân bằng', capacity: '📦 Nhiều mẫu' }[
-        meta.preset
-      ] || meta.preset
+      {
+        urgent: '⚡ Khẩn',
+        balanced: '⚖️ Cân bằng',
+        capacity: '📦 Nhiều mẫu',
+        quality: '🏅 Chất lượng',
+      }[meta.preset] || meta.preset
     );
   }
 
-  // --------------------------------------------------------------------------
-  // LOẠI TRỪ / KHÔI PHỤC PXN TẠI TRẬN
-  // --------------------------------------------------------------------------
   window._excludeLab = function (labId) {
     if (!S.excludeLabIds.includes(labId)) S.excludeLabIds.push(labId);
     window._runDispatch();
@@ -722,7 +797,7 @@
   };
 
   // --------------------------------------------------------------------------
-  // NHẬP TỌA ĐỘ (trang bản đồ): địa chỉ → tọa độ, vị trí của tôi
+  // NHẬP TỌA ĐỘ (trang bản đồ)
   // --------------------------------------------------------------------------
   window._geocodeAddress = async function () {
     const q = document.getElementById('disp-address')?.value.trim();
@@ -733,20 +808,17 @@
     }
     hint.innerHTML =
       '<small class="text-muted"><span class="spinner-border spinner-border-sm"></span> Đang tìm địa chỉ...</small>';
-
     try {
       const url =
         'https://nominatim.openstreetmap.org/search?format=json&limit=5&countrycodes=vn&q=' +
         encodeURIComponent(q);
       const res = await fetch(url, { headers: { 'Accept-Language': 'vi' } });
       const data = await res.json();
-
       if (!data || data.length === 0) {
         hint.innerHTML =
           '<small class="text-danger">Không tìm thấy địa chỉ. Thử nhập cụ thể hơn (thêm quận, thành phố).</small>';
         return;
       }
-
       if (data.length === 1) {
         _applyGeocode(data[0]);
       } else {
@@ -817,9 +889,6 @@
     );
   };
 
-  // --------------------------------------------------------------------------
-  // EXPORT STATE (cho 2C đọc)
-  // --------------------------------------------------------------------------
   window._getDispatchState = function () {
     return {
       incidentId: S.incidentId,
@@ -831,6 +900,6 @@
   };
 
   console.log(
-    '[lab-dispatch-modal.js] ✅ Dispatch Modal sẵn sàng. (window.openDispatchModal)'
+    '[lab-dispatch-modal.js] ✅ Dispatch Modal (tiêu chí chuyên gia + QSM/đầu mối) sẵn sàng.'
   );
 })();
