@@ -105,6 +105,10 @@
       incidentId: S.incidentId,
       km: lab.route.km,
       minutes: lab.route.minutes,
+      // Đầu mối liên hệ PXN — để RRT liên hệ ngay sau khi chốt
+      headName: lab.head_name || null,
+      headPhone: lab.head_phone || null,
+      headEmail: lab.head_email || null,
     };
     // Nhúng dưới dạng chuỗi JSON đã escape nháy đơn để đặt trong onclick='...'
     return JSON.stringify(payload).replace(/'/g, '&#39;');
@@ -299,6 +303,9 @@
           `✅ Đã điều ${p.sampleCount} mẫu tới ${p.labName}`,
           'success'
         );
+
+      // Nhắc RRT liên hệ ĐẦU MỐI PXN để phối hợp (mong muốn Khoa XN)
+      _showContactReminder(p);
 
       // Gửi thông báo cho THÀNH VIÊN đang tham gia sự cố (kèm km + phút).
       // → ghi vào bảng notifications → trigger tự bắn Telegram/email.
@@ -522,7 +529,7 @@
                 </div>
                 <table class="table table-sm align-middle">
                   <thead class="table-light"><tr>
-                    ${headIncident}<th>Phòng Xét nghiệm</th><th>Loại xét nghiệm</th>
+                    ${headIncident}<th>Phòng Xét nghiệm</th><th>Loại kỹ thuật xét nghiệm</th>
                     <th class="text-center">Số mẫu</th><th class="text-center">Trạng thái</th><th></th>
                   </tr></thead>
                   <tbody>${
@@ -655,7 +662,67 @@
     });
   }
 
+  // --------------------------------------------------------------------------
+  // NHẮC LIÊN HỆ ĐẦU MỐI PXN sau khi chốt (mong muốn Khoa XN: phối hợp nhanh)
+  // --------------------------------------------------------------------------
+  function _showContactReminder(p) {
+    if (!p.headName && !p.headPhone && !p.headEmail) return; // không có đầu mối → bỏ qua
+
+    document.getElementById('lab-contact-reminder')?.remove();
+    const wrap = document.createElement('div');
+    wrap.id = 'lab-contact-reminder';
+    wrap.innerHTML = `
+      <div class="modal fade" id="labContactModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+          <div class="modal-content">
+            <div class="modal-header" style="background:#0f766e;color:#fff;">
+              <h5 class="modal-title"><i class='bx bx-phone-call'></i> Liên hệ đầu mối Phòng xét nghiệm</h5>
+              <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+              <p class="mb-2">Đã điều <b>${p.sampleCount}</b> mẫu tới <b>${esc(p.labName)}</b>.
+              Vui lòng liên hệ đầu mối để thống nhất phối hợp:</p>
+              <div class="p-3 rounded" style="background:#f0fdf4;border:1px solid #bbf7d0;">
+                <div class="mb-1"><i class='bx bx-user'></i> <b>${esc(p.headName || 'Trưởng khoa XN')}</b></div>
+                ${
+                  p.headPhone
+                    ? `<div class="mb-2"><a href="tel:${esc(p.headPhone)}" class="btn btn-success btn-sm">
+                         <i class='bx bx-phone'></i> Gọi ${esc(p.headPhone)}</a></div>`
+                    : '<div class="text-muted mb-2"><small>Chưa có số điện thoại đầu mối</small></div>'
+                }
+                ${
+                  p.headEmail
+                    ? `<div><a href="mailto:${esc(p.headEmail)}"><i class='bx bx-envelope'></i> ${esc(p.headEmail)}</a></div>`
+                    : ''
+                }
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button class="btn btn-secondary" data-bs-dismiss="modal">Đóng</button>
+            </div>
+          </div>
+        </div>
+      </div>`;
+    document.body.appendChild(wrap);
+    const modalEl = document.getElementById('labContactModal');
+    new bootstrap.Modal(modalEl).show();
+    modalEl.addEventListener(
+      'hidden.bs.modal',
+      () => {
+        wrap.remove();
+        setTimeout(() => {
+          if (!document.querySelector('.modal.show')) {
+            document.querySelectorAll('.modal-backdrop').forEach((b) => b.remove());
+            document.body.classList.remove('modal-open');
+            document.body.style.overflow = '';
+          }
+        }, 150);
+      },
+      { once: true }
+    );
+  }
+
   console.log(
-    '[lab-dispatch-actions.js] ✅ Hành động điều phối (đề xuất/duyệt/chốt/hủy) sẵn sàng.'
+    '[lab-dispatch-actions.js] ✅ Hành động điều phối (đề xuất/duyệt/chốt/hủy + đầu mối liên hệ) sẵn sàng.'
   );
 })();
