@@ -51,11 +51,25 @@
             }[c])
         );
 
-  const LEVEL_LABELS = {
-    trung_uong: 'Tuyến Trung ương',
-    tinh_thanh: 'Tuyến Tỉnh/Thành phố',
-    xa_phuong: 'Tuyến Xã/Phường',
-  };
+  // Mô hình cơ quan (level = loại hình đơn vị, theo tài liệu chốt PXN 2026)
+  const ORG_MODELS = [
+    'Viện, Trường',
+    'Bệnh viện bộ ngành',
+    'Bệnh viện công lập',
+    'Bệnh viện tư nhân',
+    'Trung tâm Kiểm soát bệnh tật',
+    'Trung tâm y tế',
+    'Trạm Y tế',
+  ];
+  // QSM: mức chất lượng (label → level số để tính capability_tier)
+  const QSM_OPTIONS = [
+    { level: 0, label: '', text: 'Chưa có' },
+    { level: 1, label: 'QĐ2429 Mức 1', text: 'QĐ2429 Mức 1' },
+    { level: 2, label: 'QĐ2429 Mức 2', text: 'QĐ2429 Mức 2' },
+    { level: 3, label: 'QĐ2429 Mức 3', text: 'QĐ2429 Mức 3' },
+    { level: 4, label: 'QĐ2429 Mức 4', text: 'QĐ2429 Mức 4' },
+    { level: 5, label: 'ISO 15189', text: 'ISO 15189 (≈ Mức 5)' },
+  ];
 
   // ==========================================================================
   // GUARD QUYỀN: chỉ admin mới vào được trang này
@@ -131,7 +145,7 @@
 
       let rows = '';
       if (!labs || labs.length === 0) {
-        rows = `<tr><td colspan="6" class="text-center text-muted py-4">
+        rows = `<tr><td colspan="8" class="text-center text-muted py-4">
                   Chưa có phòng xét nghiệm nào. Bấm "Thêm Phòng Xét nghiệm" để bắt đầu.
                 </td></tr>`;
       } else {
@@ -140,9 +154,18 @@
           const statusBadge = lab.is_active
             ? '<span class="badge bg-success">Đang hoạt động</span>'
             : '<span class="badge bg-secondary">Tạm ngừng</span>';
-          const bslBadge = `<span class="badge bg-dark">BSL-${
+          const bslBadge = `<span class="badge bg-dark">ATSH cấp ${
             lab.bsl_level ?? '?'
           }</span>`;
+          const qsmBadge = lab.qsm_label
+            ? `<span class="badge bg-info text-dark">${esc(
+                lab.qsm_label
+              )}</span>`
+            : '<span class="text-muted">—</span>';
+          const tierBadge =
+            lab.capability_tier != null
+              ? `<span class="badge bg-secondary">${lab.capability_tier}</span>`
+              : '<span class="text-muted">—</span>';
           const hasCoord = lab.lat != null && lab.lng != null;
 
           rows += `
@@ -158,10 +181,12 @@
                     : ''
                 }
               </td>
-              <td>${esc(LEVEL_LABELS[lab.level] || lab.level || '—')}</td>
+              <td>${esc(lab.level || '—')}</td>
               <td>${bslBadge}</td>
+              <td>${qsmBadge}</td>
+              <td class="text-center">${tierBadge}</td>
               <td class="text-center">
-                <span class="badge bg-info text-dark">${capCount} loại xét nghiệm</span>
+                <span class="badge bg-info text-dark">${capCount} loại</span>
                 <button class="btn btn-sm btn-outline-primary ms-1" onclick="window.openCapabilityModal('${
                   lab.id
                 }')" title="Quản lý năng lực">
@@ -196,7 +221,7 @@
               <i class='bx bx-history'></i> Lịch sử điều phối mẫu
             </button>
             <button class="btn btn-outline-secondary" onclick="window.openTestTypeModal()">
-              <i class='bx bx-list-ul'></i> Danh mục loại xét nghiệm
+              <i class='bx bx-list-ul'></i> Danh mục loại kỹ thuật xét nghiệm
             </button>
             <button class="btn btn-primary" onclick="window.openLabModal()">
               <i class='bx bx-plus'></i> Thêm Phòng Xét nghiệm
@@ -204,25 +229,402 @@
           </div>
         </div>
         <div class="table-responsive">
-          <table class="table table-hover align-middle">
+          <table id="lab-list-table" class="table table-hover align-middle" style="width:100%">
             <thead class="table-light">
               <tr>
                 <th>Tên & Địa chỉ</th>
-                <th>Tuyến</th>
+                <th>Mô hình cơ quan</th>
                 <th>An toàn sinh học</th>
-                <th class="text-center">Năng lực</th>
+                <th>QSM</th>
+                <th class="text-center">Cấp năng lực</th>
+                <th class="text-center">Kỹ thuật xét nghiệm</th>
                 <th>Trạng thái</th>
                 <th></th>
               </tr>
             </thead>
             <tbody>${rows}</tbody>
           </table>
+        </div>
+
+        <!-- 3 BIỂU ĐỒ TỔNG QUAN (dàn ngang) -->
+        <div class="row g-3 mt-2" id="lab-charts-row">
+          <div class="col-md-4">
+            <div class="card h-100"><div class="card-body p-2">
+              <div id="chart-tier" style="height:280px;"></div>
+            </div></div>
+          </div>
+          <div class="col-md-4">
+            <div class="card h-100"><div class="card-body p-2">
+              <div id="chart-orgmodel" style="height:280px;"></div>
+            </div></div>
+          </div>
+          <div class="col-md-4">
+            <div class="card h-100"><div class="card-body p-2">
+              <div id="chart-techniques" style="height:280px;"></div>
+            </div></div>
+          </div>
         </div>`;
+
+      // Khởi tạo DataTable (tìm kiếm, phân trang, sắp xếp, xuất Excel/CSV)
+      _initLabDataTable();
     } catch (e) {
       console.error('[lab-admin] Lỗi tải danh sách Phòng Xét nghiệm:', e);
       container.innerHTML = `<div class="alert alert-danger m-3">Lỗi tải danh sách: ${esc(
         e.message
       )}</div>`;
+    }
+  }
+
+  // Khởi tạo DataTable cho bảng PXN: tìm kiếm, phân trang, sắp xếp, xuất Excel/CSV
+  function _initLabDataTable() {
+    if (!(window.$ && $.fn && $.fn.DataTable)) {
+      console.warn(
+        '[lab-admin] Chưa nạp DataTables — bảng hiển thị dạng thường.'
+      );
+      return;
+    }
+    // Hủy instance cũ nếu có (tránh lỗi "reinitialise")
+    if ($.fn.DataTable.isDataTable('#lab-list-table')) {
+      $('#lab-list-table').DataTable().destroy();
+    }
+    // Nút xuất chỉ hiện nếu có plugin buttons
+    const hasButtons = !!($.fn.dataTable && $.fn.dataTable.Buttons);
+    const cfg = {
+      destroy: true,
+      responsive: true,
+      pageLength: 10,
+      lengthMenu: [
+        [10, 25, 50, 100, -1],
+        [10, 25, 50, 100, 'Tất cả'],
+      ],
+      order: [[0, 'asc']],
+      columnDefs: [{ orderable: false, targets: [5, 7] }],
+      language: {
+        search: 'Tìm kiếm:',
+        lengthMenu: 'Hiện _MENU_ dòng',
+        info: 'Hiển thị _START_–_END_ / _TOTAL_ phòng xét nghiệm',
+        infoEmpty: 'Không có dữ liệu',
+        infoFiltered: '(lọc từ _MAX_ phòng)',
+        paginate: {
+          first: 'Đầu',
+          last: 'Cuối',
+          next: 'Sau',
+          previous: 'Trước',
+        },
+        zeroRecords: 'Không tìm thấy phòng xét nghiệm phù hợp',
+      },
+    };
+    if (hasButtons) {
+      // Trên: nút xuất (B) + độ dài trang (l) + phân trang (p) + tìm kiếm (f)
+      // Dưới: thông tin (i) + phân trang (p)
+      cfg.dom =
+        '<"d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2"B<"d-flex align-items-center gap-2"lf>>' +
+        '<"d-flex justify-content-end mb-2"p>' +
+        'rt' +
+        '<"d-flex justify-content-between align-items-center mt-2 flex-wrap gap-2"ip>';
+      cfg.buttons = [
+        // Xuất Excel bảng đang hiển thị (nhanh, chỉ cột trên bảng)
+        {
+          extend: 'excelHtml5',
+          text: "<i class='bx bx-table'></i> Excel (bảng)",
+          className: 'btn btn-sm btn-outline-success',
+          title: 'Danh_muc_PXN',
+          exportOptions: { columns: [0, 1, 2, 3, 4, 6] },
+        },
+        // Xuất CSV ĐẦY ĐỦ dữ liệu liên kết (PXN + từng kỹ thuật)
+        {
+          text: "<i class='bx bx-download'></i> Xuất file *.CSV",
+          className: 'btn btn-sm btn-outline-primary',
+          action: function () {
+            window._exportLabsCsv();
+          },
+        },
+      ];
+    } else {
+      cfg.dom =
+        '<"d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2"lf>' +
+        '<"d-flex justify-content-end mb-2"p>' +
+        'rt' +
+        '<"d-flex justify-content-between align-items-center mt-2 flex-wrap gap-2"ip>';
+      console.info(
+        '[lab-admin] Plugin Buttons chưa có → dùng nút xuất dự phòng.'
+      );
+    }
+    $('#lab-list-table').DataTable(cfg);
+
+    if (!hasButtons) _injectFallbackExport();
+
+    // Vẽ 3 biểu đồ tổng quan dưới bảng
+    _renderLabCharts();
+  }
+
+  // Xuất CSV dự phòng (không cần plugin) — đọc thẳng dữ liệu PXN
+  function _injectFallbackExport() {
+    const host = document.querySelector('#lab-admin-content .d-flex.gap-2');
+    if (!host || document.getElementById('lab-export-fallback')) return;
+    const btn = document.createElement('button');
+    btn.id = 'lab-export-fallback';
+    btn.className = 'btn btn-outline-success';
+    btn.innerHTML = "<i class='bx bx-download'></i> Xuất CSV";
+    btn.onclick = window._exportLabsCsv;
+    host.prepend(btn);
+  }
+
+  // Xuất CSV có DỮ LIỆU LIÊN KẾT (laboratories + lab_capabilities).
+  // Định dạng "long": mỗi dòng = 1 kỹ thuật của 1 PXN, kèm đầy đủ thông tin PXN.
+  // PXN chưa khai kỹ thuật vẫn có 1 dòng (cột kỹ thuật để trống).
+  window._exportLabsCsv = async function () {
+    try {
+      if (window.showToast)
+        window.showToast('Đang chuẩn bị dữ liệu xuất...', 'info');
+
+      // Tải PXN + năng lực liên kết (join test_types) trong 1 truy vấn
+      const { data: labs, error } = await window.supabaseClient
+        .from('laboratories')
+        .select(
+          'name, level, address, phone, bsl_level, qsm_label, capability_tier, ' +
+            'head_name, head_phone, head_email, total_biosafety_staff, dedicated_staff, ' +
+            'external_qa, interlab, reports_positive, periodic_report, is_active, ' +
+            'lab_capabilities ( max_capacity_per_day, turnaround_hours, equipment_detail, ' +
+            'test_types ( name, category, required_bsl ) )'
+        )
+        .order('name', { ascending: true });
+      if (error) throw error;
+
+      const headers = [
+        'Tên PXN',
+        'Mô hình cơ quan',
+        'Địa chỉ',
+        'Điện thoại',
+        'ATSH cấp',
+        'QSM',
+        'Cấp năng lực',
+        'Đầu mối',
+        'SĐT đầu mối',
+        'Email đầu mối',
+        'NS ATSH',
+        'NS chuyên trách',
+        'Ngoại kiểm',
+        'Liên phòng',
+        'Báo cáo ca(+)',
+        'Báo cáo định kỳ',
+        'Hoạt động',
+        'Kỹ thuật xét nghiệm',
+        'Nhóm kỹ thuật',
+        'BSL yêu cầu KT',
+        'Công suất (mẫu/ngày)',
+        'Thời gian trả KQ (giờ)',
+        'Chi tiết máy',
+      ];
+      const yn = (v) => (v ? 'Có' : 'Không');
+      const cell = (v) => {
+        const s = String(v ?? '');
+        return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+      };
+
+      const lines = [headers.join(',')];
+      let capRowCount = 0;
+      (labs || []).forEach((l) => {
+        const labCols = [
+          l.name,
+          l.level,
+          l.address,
+          l.phone,
+          l.bsl_level,
+          l.qsm_label,
+          l.capability_tier,
+          l.head_name,
+          l.head_phone,
+          l.head_email,
+          l.total_biosafety_staff,
+          l.dedicated_staff,
+          yn(l.external_qa),
+          yn(l.interlab),
+          yn(l.reports_positive),
+          yn(l.periodic_report),
+          yn(l.is_active),
+        ];
+        const caps = l.lab_capabilities || [];
+        if (caps.length === 0) {
+          lines.push([...labCols, '', '', '', '', '', ''].map(cell).join(','));
+        } else {
+          caps.forEach((c) => {
+            capRowCount++;
+            lines.push(
+              [
+                ...labCols,
+                c.test_types?.name,
+                c.test_types?.category,
+                c.test_types?.required_bsl,
+                c.max_capacity_per_day,
+                c.turnaround_hours,
+                c.equipment_detail,
+              ]
+                .map(cell)
+                .join(',')
+            );
+          });
+        }
+      });
+
+      const blob = new Blob(['\uFEFF' + lines.join('\n')], {
+        type: 'text/csv;charset=utf-8;',
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `PXN_va_nang_luc_${new Date()
+        .toISOString()
+        .slice(0, 10)}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+      if (window.showToast)
+        window.showToast(
+          `Đã xuất ${labs?.length || 0} PXN, ${capRowCount} dòng năng lực`,
+          'success'
+        );
+    } catch (e) {
+      if (window.showToast)
+        window.showToast('Lỗi xuất CSV: ' + e.message, 'error');
+    }
+  };
+
+  // ==========================================================================
+  // 3 BIỂU ĐỒ TỔNG QUAN (Highcharts — nhất quán với app)
+  //   1. Phân bố Cấp năng lực (1-5) — cột
+  //   2. Cơ cấu Mô hình cơ quan — donut
+  //   3. Top kỹ thuật phổ biến — thanh ngang
+  // ==========================================================================
+  async function _renderLabCharts() {
+    if (typeof Highcharts === 'undefined') {
+      console.warn('[lab-admin] Chưa nạp Highcharts — bỏ qua biểu đồ.');
+      return;
+    }
+    try {
+      // Tải dữ liệu tổng hợp
+      const { data: labs } = await window.supabaseClient
+        .from('laboratories')
+        .select('level, capability_tier, does_microbiology');
+      const { data: caps } = await window.supabaseClient
+        .from('lab_capabilities')
+        .select('test_types(name, category)');
+
+      const L = labs || [];
+
+      // --- 1. Phân bố cấp năng lực (1..5) ---
+      const tierCount = [0, 0, 0, 0, 0]; // index 0 = cấp 1
+      L.forEach((l) => {
+        const t = l.capability_tier;
+        if (t >= 1 && t <= 5) tierCount[t - 1]++;
+      });
+      const tierColors = [
+        '#94a3b8',
+        '#0ea5e9',
+        '#ca8a04',
+        '#ea580c',
+        '#dc2626',
+      ];
+      Highcharts.chart('chart-tier', {
+        chart: {
+          type: 'column',
+          backgroundColor: 'transparent',
+          style: { fontFamily: "'Ubuntu',sans-serif" },
+        },
+        title: {
+          text: 'Phân bố Cấp năng lực',
+          style: { fontSize: '14px', fontWeight: 'bold' },
+        },
+        subtitle: { text: 'Số PXN theo cấp (1→5)' },
+        xAxis: { categories: ['Cấp 1', 'Cấp 2', 'Cấp 3', 'Cấp 4', 'Cấp 5'] },
+        yAxis: { min: 0, title: { text: 'Số PXN' }, allowDecimals: false },
+        legend: { enabled: false },
+        credits: { enabled: false },
+        plotOptions: {
+          column: {
+            borderRadius: 5,
+            dataLabels: { enabled: true },
+            colorByPoint: true,
+            colors: tierColors,
+          },
+        },
+        series: [{ name: 'PXN', data: tierCount }],
+      });
+
+      // --- 2. Cơ cấu mô hình cơ quan (donut) ---
+      const orgMap = {};
+      L.forEach((l) => {
+        const k = l.level || 'Khác';
+        orgMap[k] = (orgMap[k] || 0) + 1;
+      });
+      const orgData = Object.entries(orgMap)
+        .sort((a, b) => b[1] - a[1])
+        .map(([name, y]) => ({ name, y }));
+      Highcharts.chart('chart-orgmodel', {
+        chart: {
+          type: 'pie',
+          backgroundColor: 'transparent',
+          style: { fontFamily: "'Ubuntu',sans-serif" },
+        },
+        title: {
+          text: 'Cơ cấu Mô hình cơ quan',
+          style: { fontSize: '14px', fontWeight: 'bold' },
+        },
+        subtitle: { text: `Tổng ${L.length} PXN` },
+        tooltip: {
+          pointFormat: '<b>{point.y}</b> PXN ({point.percentage:.0f}%)',
+        },
+        credits: { enabled: false },
+        plotOptions: {
+          pie: {
+            innerSize: '55%',
+            dataLabels: {
+              enabled: true,
+              format: '{point.name}: {point.y}',
+              style: { fontSize: '10px' },
+            },
+          },
+        },
+        series: [{ name: 'PXN', data: orgData }],
+      });
+
+      // --- 3. Top kỹ thuật phổ biến (thanh ngang) ---
+      const techMap = {};
+      (caps || []).forEach((c) => {
+        const n = c.test_types?.name;
+        if (n) techMap[n] = (techMap[n] || 0) + 1;
+      });
+      const techData = Object.entries(techMap)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 8); // top 8
+      Highcharts.chart('chart-techniques', {
+        chart: {
+          type: 'bar',
+          backgroundColor: 'transparent',
+          style: { fontFamily: "'Ubuntu',sans-serif" },
+        },
+        title: {
+          text: 'Kỹ thuật phổ biến (Top 8)',
+          style: { fontSize: '14px', fontWeight: 'bold' },
+        },
+        subtitle: { text: 'Số PXN làm được mỗi kỹ thuật' },
+        xAxis: {
+          categories: techData.map((d) => d[0]),
+          labels: { style: { fontSize: '10px' } },
+        },
+        yAxis: { min: 0, title: { text: 'Số PXN' }, allowDecimals: false },
+        legend: { enabled: false },
+        credits: { enabled: false },
+        plotOptions: {
+          bar: {
+            borderRadius: 4,
+            dataLabels: { enabled: true },
+            color: '#0f766e',
+          },
+        },
+        series: [{ name: 'PXN', data: techData.map((d) => d[1]) }],
+      });
+    } catch (e) {
+      console.warn('[lab-admin] Lỗi vẽ biểu đồ:', e.message);
     }
   }
 
@@ -237,9 +639,27 @@
       phone: '',
       lat: '',
       lng: '',
-      level: 'xa_phuong',
+      level: 'Bệnh viện công lập',
       bsl_level: 2,
       is_active: true,
+      head_name: '',
+      head_phone: '',
+      head_email: '',
+      qsm_level: 0,
+      qsm_label: '',
+      iso15189_scope: '',
+      total_biosafety_staff: '',
+      dedicated_staff: '',
+      does_microbiology: true,
+      external_qa: false,
+      external_qa_detail: '',
+      interlab: false,
+      interlab_detail: '',
+      reports_positive: false,
+      report_method: '',
+      periodic_report: false,
+      periodic_report_detail: '',
+      capacity_needs: '',
     };
 
     if (labId) {
@@ -266,14 +686,18 @@
           }>BSL-${n}</option>`
       )
       .join('');
-    const levelOptions = Object.entries(LEVEL_LABELS)
-      .map(
-        ([v, label]) =>
-          `<option value="${v}" ${
-            lab.level === v ? 'selected' : ''
-          }>${label}</option>`
-      )
-      .join('');
+    const levelOptions = ORG_MODELS.map(
+      (m) =>
+        `<option value="${esc(m)}" ${lab.level === m ? 'selected' : ''}>${esc(
+          m
+        )}</option>`
+    ).join('');
+    const qsmOptions = QSM_OPTIONS.map(
+      (q) =>
+        `<option value="${q.level}" data-label="${esc(q.label)}" ${
+          (lab.qsm_level ?? 0) === q.level ? 'selected' : ''
+        }>${esc(q.text)}</option>`
+    ).join('');
 
     // Dựng modal (tạo mới mỗi lần mở để tránh state cũ)
     document.getElementById('lab-modal-wrapper')?.remove();
@@ -312,7 +736,7 @@
                   )}" placeholder="Số nhà, đường, phường, quận...">
                 </div>
                 <div class="col-md-6">
-                  <label class="form-label">Tuyến chuyên môn</label>
+                  <label class="form-label">Mô hình cơ quan</label>
                   <select id="lab-level" class="form-select">${levelOptions}</select>
                 </div>
                 <div class="col-md-6">
@@ -352,6 +776,102 @@
                 </div>
                 <small class="text-muted">Nhập địa chỉ, nhập tay, hoặc bấm trực tiếp lên bản đồ để đặt điểm.</small>
                   <div id="lab-picker-map" style="height:300px;border-radius:8px;margin-top:8px;background:#eee;"></div>
+                </div>
+
+                <div class="col-12"><hr class="my-1"><h6 class="text-primary mb-0"><i class='bx bx-phone'></i> Đầu mối liên hệ (Trưởng khoa XN)</h6></div>
+                <div class="col-md-4">
+                  <label class="form-label">Họ tên đầu mối</label>
+                  <input id="lab-head-name" class="form-control" value="${esc(
+                    lab.head_name || ''
+                  )}" placeholder="Trưởng khoa XN">
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label">Điện thoại đầu mối</label>
+                  <input id="lab-head-phone" class="form-control" value="${esc(
+                    lab.head_phone || ''
+                  )}" placeholder="09...">
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label">Email đầu mối</label>
+                  <input id="lab-head-email" class="form-control" value="${esc(
+                    lab.head_email || ''
+                  )}" placeholder="email@...">
+                </div>
+
+                <div class="col-12"><hr class="my-1"><h6 class="text-primary mb-0"><i class='bx bx-award'></i> Chất lượng (QSM) & Nhân sự</h6></div>
+                <div class="col-md-5">
+                  <label class="form-label">Mức chất lượng (QSM)</label>
+                  <select id="lab-qsm" class="form-select">${qsmOptions}</select>
+                </div>
+                <div class="col-md-7">
+                  <label class="form-label">Lĩnh vực ISO 15189 công nhận</label>
+                  <input id="lab-iso-scope" class="form-control" value="${esc(
+                    lab.iso15189_scope || ''
+                  )}" placeholder="VS, SHPT...">
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label">Tổng nhân sự có chứng chỉ ATSH</label>
+                  <input id="lab-staff-total" type="number" min="0" class="form-control" value="${
+                    lab.total_biosafety_staff ?? ''
+                  }">
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label">Nhân sự chuyên trách vi sinh/SHPT</label>
+                  <input id="lab-staff-dedicated" type="number" min="0" class="form-control" value="${
+                    lab.dedicated_staff ?? ''
+                  }">
+                </div>
+
+                <div class="col-12"><hr class="my-1"><h6 class="text-primary mb-0"><i class='bx bx-check-shield'></i> Ngoại kiểm & Báo cáo (TT54)</h6></div>
+                <div class="col-md-6">
+                  <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" id="lab-external-qa" ${
+                      lab.external_qa ? 'checked' : ''
+                    }>
+                    <label class="form-check-label" for="lab-external-qa">Tham gia ngoại kiểm</label>
+                  </div>
+                  <input id="lab-external-qa-detail" class="form-control form-control-sm mt-1" value="${esc(
+                    lab.external_qa_detail || ''
+                  )}" placeholder="Chi tiết ngoại kiểm...">
+                </div>
+                <div class="col-md-6">
+                  <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" id="lab-interlab" ${
+                      lab.interlab ? 'checked' : ''
+                    }>
+                    <label class="form-check-label" for="lab-interlab">So sánh liên phòng</label>
+                  </div>
+                  <input id="lab-interlab-detail" class="form-control form-control-sm mt-1" value="${esc(
+                    lab.interlab_detail || ''
+                  )}" placeholder="Chi tiết liên phòng...">
+                </div>
+                <div class="col-md-6">
+                  <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" id="lab-reports-positive" ${
+                      lab.reports_positive ? 'checked' : ''
+                    }>
+                    <label class="form-check-label" for="lab-reports-positive">Báo cáo ca (+) theo TT54</label>
+                  </div>
+                  <input id="lab-report-method" class="form-control form-control-sm mt-1" value="${esc(
+                    lab.report_method || ''
+                  )}" placeholder="Phương thức báo cáo...">
+                </div>
+                <div class="col-md-6">
+                  <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" id="lab-periodic-report" ${
+                      lab.periodic_report ? 'checked' : ''
+                    }>
+                    <label class="form-check-label" for="lab-periodic-report">Báo cáo định kỳ</label>
+                  </div>
+                  <input id="lab-periodic-detail" class="form-control form-control-sm mt-1" value="${esc(
+                    lab.periodic_report_detail || ''
+                  )}" placeholder="Chi tiết báo cáo định kỳ...">
+                </div>
+                <div class="col-12">
+                  <label class="form-label">Nhu cầu nâng cao năng lực</label>
+                  <textarea id="lab-capacity-needs" class="form-control" rows="2" placeholder="Nhu cầu đào tạo, thiết bị...">${esc(
+                    lab.capacity_needs || ''
+                  )}</textarea>
                 </div>
 
                 <div class="col-12">
@@ -547,6 +1067,20 @@
       return;
     }
 
+    const qsmSel = document.getElementById('lab-qsm');
+    const qsmLevel = qsmSel ? parseInt(qsmSel.value) || 0 : 0;
+    const qsmLabel =
+      qsmSel?.options[qsmSel.selectedIndex]?.getAttribute('data-label') || null;
+
+    const numOrNull = (id) => {
+      const v = document.getElementById(id)?.value;
+      return v !== '' && v != null ? parseInt(v) : null;
+    };
+    const strOrNull = (id) => {
+      const v = document.getElementById(id)?.value?.trim();
+      return v || null;
+    };
+
     const payload = {
       name,
       address: document.getElementById('lab-address').value.trim() || null,
@@ -556,6 +1090,31 @@
       level: document.getElementById('lab-level').value,
       bsl_level: parseInt(document.getElementById('lab-bsl').value),
       is_active: document.getElementById('lab-active').checked,
+      // Đầu mối liên hệ
+      head_name: strOrNull('lab-head-name'),
+      head_phone: strOrNull('lab-head-phone'),
+      head_email: strOrNull('lab-head-email'),
+      // QSM (level + label → trigger tự tính lại capability_tier)
+      qsm_level: qsmLevel,
+      qsm_label: qsmLabel,
+      iso15189_scope: strOrNull('lab-iso-scope'),
+      // Nhân sự
+      total_biosafety_staff: numOrNull('lab-staff-total'),
+      dedicated_staff: numOrNull('lab-staff-dedicated'),
+      // Ngoại kiểm / liên phòng
+      external_qa: document.getElementById('lab-external-qa')?.checked || false,
+      external_qa_detail: strOrNull('lab-external-qa-detail'),
+      interlab: document.getElementById('lab-interlab')?.checked || false,
+      interlab_detail: strOrNull('lab-interlab-detail'),
+      // Báo cáo TT54
+      reports_positive:
+        document.getElementById('lab-reports-positive')?.checked || false,
+      report_method: strOrNull('lab-report-method'),
+      periodic_report:
+        document.getElementById('lab-periodic-report')?.checked || false,
+      periodic_report_detail: strOrNull('lab-periodic-detail'),
+      // Nhu cầu
+      capacity_needs: strOrNull('lab-capacity-needs'),
     };
 
     try {
@@ -703,7 +1262,7 @@
             <div class="modal-body">
               <table class="table table-sm align-middle">
                 <thead class="table-light">
-                  <tr><th>Loại xét nghiệm</th><th class="text-center">Công suất/ngày</th><th class="text-center">Trả Kết quả</th><th></th></tr>
+                  <tr><th>Loại kỹ thuật xét nghiệm</th><th class="text-center">Công suất/ngày</th><th class="text-center">Trả Kết quả</th><th></th></tr>
                 </thead>
                 <tbody>${
                   capRows ||
@@ -714,10 +1273,10 @@
               <h6 class="mb-2"><i class='bx bx-plus-circle'></i> Thêm năng lực</h6>
               ${
                 available.length === 0
-                  ? '<div class="text-muted">Đã gán hết các loại xét nghiệm trong danh mục.</div>'
+                  ? '<div class="text-muted">Đã gán hết các loại kỹ thuật xét nghiệm trong danh mục.</div>'
                   : `<div class="row g-2 align-items-end">
                     <div class="col-md-5">
-                      <label class="form-label">Loại xét nghiệm</label>
+                      <label class="form-label">Loại kỹ thuật xét nghiệm</label>
                       <select id="cap-testtype" class="form-select">${addOptions}</select>
                     </div>
                     <div class="col-md-3">
@@ -754,7 +1313,7 @@
     // Cảnh báo (không chặn) nếu gán XN đòi BSL cao hơn cấp Phòng Xét nghiệm — dữ liệu sẽ mâu thuẫn
     if (reqBsl > labBsl) {
       const ok = confirm(
-        `Cảnh báo an toàn sinh học:\n\nLoại xét nghiệm này yêu cầu BSL-${reqBsl}, nhưng Phòng Xét nghiệm chỉ đạt BSL-${labBsl}.\n\n` +
+        `Cảnh báo an toàn sinh học:\n\nLoại kỹ thuật xét nghiệm này yêu cầu BSL-${reqBsl}, nhưng Phòng Xét nghiệm chỉ đạt BSL-${labBsl}.\n\n` +
           `Nếu vẫn gán, khi điều phối mẫu hệ thống sẽ TỰ ĐỘNG LOẠI Phòng Xét nghiệm này khỏi gợi ý (vì không đủ cấp an toàn) — năng lực gán vào sẽ vô tác dụng.\n\n` +
           `Bạn có chắc muốn tiếp tục? (Nên kiểm tra lại cấp BSL của Phòng Xét nghiệm)`
       );
@@ -837,7 +1396,7 @@
         <div class="modal-dialog modal-lg">
           <div class="modal-content">
             <div class="modal-header" style="background:#006a75;color:#fff;">
-              <h5 class="modal-title"><i class='bx bx-list-ul'></i> Danh mục loại xét nghiệm</h5>
+              <h5 class="modal-title"><i class='bx bx-list-ul'></i> Danh mục loại kỹ thuật xét nghiệm</h5>
               <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
@@ -848,7 +1407,7 @@
               <table class="table table-sm align-middle">
               <thead class="table-light"><tr>
               <th style="cursor:pointer;" onclick="window.sortTestTypes('name')">
-                Tên loại Xét nghiệm ${_ttArrow('name')}
+                Tên loại kỹ thuật Xét nghiệm ${_ttArrow('name')}
               </th>
               <th style="cursor:pointer;" onclick="window.sortTestTypes('category')">
                 Nhóm ${_ttArrow('category')}
@@ -859,19 +1418,19 @@
             </tr></thead>
                 <tbody>${
                   rows ||
-                  '<tr><td colspan="3" class="text-center text-muted">Chưa có loại xét nghiệm.</td></tr>'
+                  '<tr><td colspan="3" class="text-center text-muted">Chưa có loại kỹ thuật xét nghiệm.</td></tr>'
                 }</tbody>
               </table>
               <hr>
-              <h6 class="mb-2"><i class='bx bx-plus-circle'></i> Thêm loại xét nghiệm</h6>
+              <h6 class="mb-2"><i class='bx bx-plus-circle'></i> Thêm loại kỹ thuật xét nghiệm</h6>
               <div class="row g-2 align-items-end">
                 <div class="col-md-5">
-                  <label class="form-label">Tên loại xét nghiệm</label>
+                  <label class="form-label">Tên loại kỹ thuật xét nghiệm</label>
                   <input id="tt-name" class="form-control" placeholder="VD: PCR Sốt rét">
                 </div>
                 <div class="col-md-3">
                   <label class="form-label">Nhóm</label>
-                  <input id="tt-category" class="form-control" placeholder="sinh_hoc / moi_truong">
+                  <input id="tt-category" class="form-control" placeholder="advanced / basic/ molecular">
                 </div>
                 <div class="col-md-2">
                   <label class="form-label">BSL yêu cầu</label>
@@ -917,7 +1476,7 @@
     const name = document.getElementById('tt-name').value.trim();
     if (!name) {
       if (window.showToast)
-        window.showToast('Nhập tên loại xét nghiệm', 'warning');
+        window.showToast('Nhập tên loại kỹ thuật xét nghiệm', 'warning');
       return;
     }
     try {
@@ -930,11 +1489,11 @@
       ]);
       if (error) throw error;
       if (window.showToast)
-        window.showToast('Đã thêm loại xét nghiệm', 'success');
+        window.showToast('Đã thêm loại kỹ thuật xét nghiệm', 'success');
       window.openTestTypeModal(); // reload
     } catch (e) {
       const msg = e.message?.includes('duplicate')
-        ? 'Loại xét nghiệm này đã tồn tại.'
+        ? 'Loại kỹ thuật xét nghiệm này đã tồn tại.'
         : e.message;
       if (window.showToast) window.showToast('Lỗi: ' + msg, 'error');
     }
