@@ -13986,6 +13986,7 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
 
   // Các LAYER ỔN ĐỊNH (tạo 1 lần, cập nhật nội dung bên trong)
   let choroplethLayer = null; // L.geoJSON (tô màu phường)
+  let populationLayer = null;
   let membersLayer = null; // L.layerGroup (thành viên)
   let incidentsLayer = null; // L.layerGroup (sự cố)
   let membersMarkerMap = new Map(); // tra marker theo tọa độ (cho zoom-to)
@@ -13994,12 +13995,13 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
   let legendControl = null;
   let statsControl = null;
 
-  // Trạng thái bật/tắt từng lớp (để legend biết ẩn/hiện phần nào)
+  // Trạng thái bật/tắt từng lớp
   const layerVisible = {
-    choropleth: true,
+    choropleth: false,
+    population: true, // BỔ SUNG: Mặc định tắt để không đè màu lớp RRT
     members: true,
     incidents: true,
-    labs: false,
+    labs: true,
   };
 
   let mapPluginsReady = false;
@@ -14136,6 +14138,71 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
       }
     });
     return g;
+  }
+  // ============================================================
+  // 2B. LỚP BẢN ĐỒ HÀNH CHÍNH / DÂN SỐ
+  // ============================================================
+  // Dải màu xanh dương để phân biệt với màu đỏ của RRT
+  function getPopColor(d) {
+    const pop = parseFloat(d) || 0;
+    return pop > 50000
+      ? '#7fbfbf'
+      : pop > 30000
+      ? '#99cccc'
+      : pop > 15000
+      ? '#b2d8d8'
+      : pop > 5000
+      ? '#cce5e5'
+      : pop > 0
+      ? '#e5f2f2'
+      : '#ffffff'; // Màu nhạt nếu phường không có dữ liệu
+  }
+
+  function populationStyle(feature) {
+    return {
+      fillColor: getPopColor(
+        feature.properties.danSo || feature.properties.DanSo || 0
+      ),
+      weight: 1.5,
+      opacity: 1,
+      color: '#666', // Viền xám đậm để rõ ranh giới hành chính
+      dashArray: '2',
+      fillOpacity: 0.7,
+    };
+  }
+
+  function onEachFeaturePopulation(feature, layer) {
+    const p = feature.properties;
+    const name = p.name || p.tenXa || p.maXa || p.ma_xa || 'Chưa xác định';
+    const quan = p.quan || p.tenQuan || p.QUAN || '';
+    const danSo = p.danSo || p.DanSo || 0;
+    
+    // Lấy thông tin diện tích, có bọc lót chữ hoa/thường tùy định dạng GeoJSON
+    const dienTich = p.dienTich || p.DienTich || p.Shape_Area || 0;
+
+    layer.on({
+      mouseover: (e) => {
+        const l = e.target;
+        l.setStyle({ weight: 1.3, color: '#000', fillOpacity: 0.63, dashArray: '' });
+        l.bringToFront();
+      },
+      mouseout: (e) => {
+        if (populationLayer) populationLayer.resetStyle(e.target);
+      },
+      click: () => {
+        layer.bindPopup(`
+          <div style="text-align:center;min-width:160px;font-family:sans-serif;">
+            <b style="color:#08519c;font-size:15px;">${escMap(name)}</b><br/>
+            ${quan ? `<span style="font-size:12px;color:#6b7280;">${escMap(quan)}</span><br/>` : ''}
+            <hr style="margin:8px 0;border-top:1px dashed #cbd5e1;">
+            <div style="text-align:left;font-size:13px;line-height:1.6;">
+              <b>Dân số:</b> <span style="color:#b91c1c;">${danSo.toLocaleString('vi-VN')}</span> người<br/>
+              <b>Diện tích:</b> ${dienTich ? Number(dienTich).toLocaleString('vi-VN') + ' km²' : 'N/A'}
+            </div>
+          </div>
+        `).openPopup();
+      }
+    });
   }
 
   // ============================================================
@@ -14302,6 +14369,19 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
     if (layerVisible.labs && window.LabMapLayer) {
       html += `<div class="legend-section">${window.LabMapLayer.legendHtml()}</div>`;
     }
+    // BỔ SUNG: Chú giải Dân số
+    if (layerVisible.population) {
+      const pGrades = [0, 5000, 15000, 30000, 50000];
+      const pLabels = ['< 5k', '5k - 15k', '15k - 30k', '30k - 50k', '> 50k'];
+      html +=
+        '<div class="legend-section"><hr style="margin:4px 0;"><b>Dân số (người)</b><br>';
+      pGrades.forEach((g, i) => {
+        html += `<i style="background:${getPopColor(g + 1)}"></i> ${
+          pLabels[i]
+        }<br>`;
+      });
+      html += '</div>';
+    }
     div.innerHTML =
       html || '<span class="text-muted">Không có lớp nào bật.</span>';
   }
@@ -14350,18 +14430,24 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
   // 5. XÂY LAYER (1 lần) + control thống nhất
   // ============================================================
   function buildLayersOnce() {
-    // Choropleth: tạo layer rỗng, sẽ nạp GeoJSON trong refreshChoropleth
     choroplethLayer = L.geoJSON(buildChoroGeoJson(), {
       style: choroStyle,
       onEachFeature: onEachFeatureChoropleth,
     });
+    
+    // BỔ SUNG: Khởi tạo layer Dân số
+    populationLayer = L.geoJSON(geojsonData, {
+      style: populationStyle,
+      onEachFeature: onEachFeaturePopulation,
+    });
+
     membersLayer = L.layerGroup();
     incidentsLayer = L.layerGroup();
     fillMembersLayer();
     fillIncidentsLayer();
 
-    // Bật mặc định theo layerVisible
     if (layerVisible.choropleth) choroplethLayer.addTo(map);
+    if (layerVisible.population) populationLayer.addTo(map); // BỔ SUNG
     if (layerVisible.members) membersLayer.addTo(map);
     if (layerVisible.incidents) incidentsLayer.addTo(map);
   }
@@ -14583,6 +14669,7 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
     }
 
     const overlays = {
+      '🏙️ Hành chính/ Dân số': populationLayer, // BỔ SUNG: Đưa vào Control
       '🗺️ RRT-ers/ Phường': choroplethLayer,
       '👥 RRT-ers': membersLayer,
       '🚨 Sự kiện': incidentsLayer,
@@ -14609,6 +14696,7 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
 
     function _setVisibleByLayer(layer, on) {
       if (layer === choroplethLayer) layerVisible.choropleth = on;
+      else if (layer === populationLayer) layerVisible.population = on; // BỔ SUNG
       else if (layer === membersLayer) layerVisible.members = on;
       else if (layer === incidentsLayer) layerVisible.incidents = on;
       else if (labLayer && layer === labLayer) layerVisible.labs = on;
