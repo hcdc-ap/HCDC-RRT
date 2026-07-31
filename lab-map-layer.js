@@ -1,27 +1,20 @@
 // ============================================================================
-// LỚP PHÒNG XÉT NGHIỆM TRÊN BẢN ĐỒ — Bước 1 (nền tảng)
+// LỚP PHÒNG XÉT NGHIỆM TRÊN BẢN ĐỒ — V2 (theo Bảng 1 phân tầng năng lực)
 // Hệ thống RRT-HCDC
 // ----------------------------------------------------------------------------
-// Module ĐỘC LẬP, không sửa code bản đồ hiện có. Ghép vào bằng 2 dòng trong
-// renderMapPage() (xem cuối file).
+// THAY ĐỔI:
+//   • Marker 5 MÀU theo CẤP NĂNG LỰC (capability_tier 1-5, tính theo Bảng 1):
+//       Cấp 5 = đỏ    (đầy đủ + giải trình tự/virus, QSM cao)
+//       Cấp 4 = cam
+//       Cấp 3 = hổ phách
+//       Cấp 2 = xanh dương
+//       Cấp 1 = xám xanh
+//       Cấp 0/chưa = xám (chưa phân hạng / tạm ngừng)
+//   • Popup hiện: CẤP NĂNG LỰC + ATSH (BSL). KHÔNG hiện QSM.
+//   • Panel chi tiết vẫn đầy đủ (gồm QSM, đầu mối, kỹ thuật...).
+//   • Dùng capability_tier từ DB (không tự tính ở client).
 //
-// Tính năng Bước 1:
-//   • Load PXN 1 lần + cache (không query lại mỗi lần bật/tắt)
-//   • Marker hình theo TUYẾN: ★ trung ương · ⬢ tỉnh/thành · ● xã/phường
-//   • Màu tĩnh: xanh = đang hoạt động, xám = tạm ngừng (KHÔNG phải tải trọng)
-//   • Clustering (Leaflet.markercluster) khi có hàng trăm điểm — fallback
-//     layerGroup thường nếu chưa nhúng thư viện
-//   • Popup dashboard-mini LAZY: chỉ query năng lực khi click 1 điểm
-//     (phương án A — chỉ năng lực tĩnh, KHÔNG tải trọng động)
-//   • Đăng ký vào L.control.layers để bật/tắt
-//
-// NHÚNG (sau leaflet + markercluster):
-//   <script src="lab-map-layer.js"></script>
-//
-// PHỤ THUỘC nhúng sẵn trong index.html:
-//   <link href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" rel="stylesheet"/>
-//   <link href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" rel="stylesheet"/>
-//   <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+// PHỤ THUỘC: leaflet + (tùy chọn) leaflet.markercluster.
 // ============================================================================
 
 (function () {
@@ -30,72 +23,91 @@
   const esc = (s) =>
     window.escapeHtml
       ? window.escapeHtml(String(s ?? ''))
-      : String(s ?? '').replace(
-          /[&<>"']/g,
-          (c) =>
-            ({
-              '&': '&amp;',
-              '<': '&lt;',
-              '>': '&gt;',
-              '"': '&quot;',
-              "'": '&#039;',
-            }[c])
+      : String(s ?? '').replace(/[&<>"']/g, (c) =>
+          ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[c])
         );
 
-  // Cache PXN (load 1 lần)
   let _labsCache = null;
-  let _labLayer = null; // cluster group hoặc layerGroup
-  let _layersControl = null; // L.control.layers (tạo 1 lần)
+  let _labLayer = null;
+  let _layersControl = null;
 
-  const LEVEL_LABELS = {
-    trung_uong: 'Tuyến Trung ương',
-    tinh_thanh: 'Tuyến Tỉnh/Thành phố',
-    xa_phuong: 'Tuyến Xã/Phường',
+  // ------------------------------------------------------------------
+  // THANG 5 CẤP NĂNG LỰC (capability_tier 1-5 theo Bảng 1)
+  // ------------------------------------------------------------------
+  const TIER_INFO = {
+    5: { color: '#dc2626', label: 'Năng lực Xét nghiệm Cấp 5' },
+    4: { color: '#ea580c', label: 'Năng lực Xét nghiệm Cấp 4' },
+    3: { color: '#f59e0b', label: 'Năng lực Xét nghiệm Cấp 3' },
+    2: { color: '#0ea5e9', label: 'Năng lực Xét nghiệm Cấp 2' },
+    1: { color: '#94a3b8', label: 'Năng lực Xét nghiệm Cấp 1' },
+    0: { color: '#cbd5e1', label: 'Chưa phân hạng' },
   };
+  function tierInfo(tier, isActive) {
+    if (!isActive) return { color: '#9ca3af', label: 'Tạm ngừng' };
+    return TIER_INFO[tier] || TIER_INFO[0];
+  }
 
-  // Icon hình theo tuyến (SVG divIcon). Màu theo trạng thái hoạt động.
-  function labIcon(level, isActive) {
-    const color = isActive ? '#0d9488' : '#9ca3af'; // teal / xám
-    const stroke = '#ffffff';
-    let shape;
-    if (level === 'trung_uong') {
-      // Ngôi sao (tuyến cao nhất)
-      shape = `<polygon points="12,2 15,9 22,9 16,14 18,21 12,17 6,21 8,14 2,9 9,9"
-                 fill="${color}" stroke="${stroke}" stroke-width="1.5"/>`;
-    } else if (level === 'tinh_thanh') {
-      // Lục giác
-      shape = `<polygon points="12,2 21,7 21,17 12,22 3,17 3,7"
-                 fill="${color}" stroke="${stroke}" stroke-width="1.5"/>`;
-    } else {
-      // Tròn (xã/phường)
-      shape = `<circle cx="12" cy="12" r="9" fill="${color}" stroke="${stroke}" stroke-width="1.5"/>`;
-    }
-    const svg = `<svg width="26" height="26" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-         ${shape}
-         <text x="12" y="15" text-anchor="middle" font-size="9" fill="#fff" font-weight="bold">XN</text>
-       </svg>`;
+  function labIcon(tier, isActive) {
+    const color = tierInfo(tier, isActive).color;
+    const num = isActive && tier >= 1 && tier <= 5 ? tier : '';
+    const svg = `<svg width="28" height="28" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="12" cy="12" r="9" fill="${color}" stroke="#ffffff" stroke-width="2"/>
+        <text x="12" y="15.5" text-anchor="middle" font-size="10" fill="#fff" font-weight="bold">${num || 'XN'}</text>
+      </svg>`;
     return L.divIcon({
       className: 'lab-map-icon',
       html: svg,
-      iconSize: [26, 26],
-      iconAnchor: [13, 13],
-      popupAnchor: [0, -13],
+      iconSize: [28, 28],
+      iconAnchor: [14, 14],
+      popupAnchor: [0, -14],
     });
   }
 
   // ------------------------------------------------------------------
-  // LOAD PXN (cache). Chỉ query 1 lần cho cả phiên.
+  // LOAD PXN (dùng capability_tier từ DB) + kỹ thuật cho panel
   // ------------------------------------------------------------------
   async function loadLabs(force) {
     if (_labsCache && !force) return _labsCache;
     try {
-      const { data, error } = await window.supabaseClient
+      const { data: labs, error: e1 } = await window.supabaseClient
         .from('laboratories')
         .select(
-          'id, name, address, phone, lat, lng, level, bsl_level, is_active'
+          'id, name, address, phone, lat, lng, level, bsl_level, is_active, ' +
+            'capability_tier, qsm_level, qsm_label, network_tier, ' +
+            'head_name, head_phone, head_email, does_microbiology, iso15189_scope, ' +
+            'external_qa, interlab, reports_positive, periodic_report, ' +
+            'total_biosafety_staff, dedicated_staff, capacity_needs'
         );
-      if (error) throw error;
-      _labsCache = (data || []).filter((l) => l.lat != null && l.lng != null);
+      if (e1) throw e1;
+
+      const validLabs = (labs || []).filter((l) => l.lat != null && l.lng != null);
+      const ids = validLabs.map((l) => l.id);
+
+      let caps = [];
+      if (ids.length) {
+        const { data: capData, error: e2 } = await window.supabaseClient
+          .from('lab_capabilities')
+          .select('lab_id, max_capacity_per_day, turnaround_hours, equipment_detail, test_types(name, category)')
+          .in('lab_id', ids);
+        if (e2) throw e2;
+        caps = capData || [];
+      }
+
+      const capsByLab = {};
+      caps.forEach((c) => {
+        (capsByLab[c.lab_id] = capsByLab[c.lab_id] || []).push(c);
+      });
+
+      validLabs.forEach((l) => {
+        l._caps = capsByLab[l.id] || [];
+        const t = l.capability_tier;
+        l._tier = t != null ? t : 0;
+        const info = tierInfo(l._tier, l.is_active);
+        l._tierColor = info.color;
+        l._tierLabel = info.label;
+      });
+
+      _labsCache = validLabs;
       return _labsCache;
     } catch (e) {
       console.error('[lab-map] Lỗi tải PXN:', e);
@@ -105,252 +117,239 @@
   }
 
   // ------------------------------------------------------------------
-  // POPUP DASHBOARD-MINI (lazy: query năng lực khi click)
-  // Phương án A: chỉ NĂNG LỰC TĨNH (loại XN + công suất tối đa + trả KQ),
-  // KHÔNG hiện tải trọng động (để dành cho Dispatch Mode).
+  // POPUP GỌN — CẤP NĂNG LỰC + ATSH (không QSM)
   // ------------------------------------------------------------------
-  async function buildLabPopupContent(lab) {
-    // Khung cơ bản hiện ngay, phần năng lực tải sau
-    const bslBadge = `<span style="background:#1f2937;color:#fff;padding:1px 6px;border-radius:4px;font-size:11px;">BSL-${
+  function buildLabPopupContent(lab) {
+    const isActive = lab.is_active;
+    const info = tierInfo(lab._tier, isActive);
+    const bslBadge = `<span style="background:#1f2937;color:#fff;padding:1px 6px;border-radius:4px;font-size:11px;">ATSH cấp ${
       lab.bsl_level ?? '?'
     }</span>`;
-    const levelText = LEVEL_LABELS[lab.level] || lab.level || '—';
-    const statusText = lab.is_active
-      ? '<span style="color:#0d9488;font-weight:bold;">● Đang hoạt động</span>'
+    const statusText = isActive
+      ? '<span style="color:#16a34a;font-weight:bold;">● Đang hoạt động</span>'
       : '<span style="color:#9ca3af;font-weight:bold;">● Tạm ngừng</span>';
     const phone = lab.phone
-      ? `<a href="tel:${esc(lab.phone)}" style="color:#0369a1;">${esc(
-          lab.phone
-        )}</a>`
+      ? `<a href="tel:${esc(lab.phone)}" style="color:#0369a1;">${esc(lab.phone)}</a>`
       : '<span style="color:#9ca3af;">—</span>';
 
-    let capHtml =
-      '<div style="color:#9ca3af;font-size:12px;padding:6px 0;"><span class="spinner-border spinner-border-sm"></span> Đang tải năng lực...</div>';
-
     const container = document.createElement('div');
-    container.style.minWidth = '260px';
+    container.style.minWidth = '250px';
     container.style.fontFamily = "'Inter',sans-serif";
     container.innerHTML = `
       <div style="border-bottom:1px solid #e5e7eb;padding-bottom:6px;margin-bottom:6px;">
-        <div style="font-weight:bold;color:#0f766e;font-size:14px;">${esc(
-          lab.name
-        )}</div>
-        <div style="font-size:12px;color:#6b7280;">${esc(
-          lab.address || ''
-        )}</div>
+        <div style="font-weight:bold;color:#0f766e;font-size:14px;">${esc(lab.name)}</div>
+        <div style="font-size:12px;color:#6b7280;">${esc(lab.level || '—')}</div>
       </div>
-      <div style="font-size:12px;line-height:1.7;">
-        <div>${bslBadge} &nbsp; ${esc(levelText)}</div>
+      <div style="font-size:12px;line-height:1.9;">
+        <div style="display:flex;align-items:center;gap:6px;">
+          <span style="display:inline-block;width:14px;height:14px;border-radius:50%;background:${info.color};border:1px solid #fff;box-shadow:0 0 0 1px #cbd5e1;text-align:center;"></span>
+          <span style="font-weight:700;">${esc(info.label)}</span>
+        </div>
+        <div style="margin-top:2px;">${bslBadge}</div>
         <div>${statusText}</div>
-        <div><i class='bx bx-phone'></i> Hotline: ${phone}</div>
+        <div><i class='bx bx-phone'></i> ${phone}</div>
       </div>
-      <div style="border-top:1px dashed #cbd5e1;margin:6px 0;"></div>
-      <div style="font-weight:bold;font-size:12px;color:#0369a1;margin-bottom:3px;">
-        <i class='bx bx-list-check'></i> Năng lực xét nghiệm
-      </div>
-      <div class="lab-popup-caps" style="font-size:12px;">${capHtml}</div>
+      <button class="lab-detail-btn" style="margin-top:8px;width:100%;background:#0f766e;color:#fff;border:none;padding:6px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;">
+        <i class='bx bx-list-ul'></i> Xem chi tiết đầy đủ
+      </button>
     `;
-
-    // Lazy load năng lực
-    (async () => {
-      try {
-        const { data, error } = await window.supabaseClient
-          .from('lab_capabilities')
-          .select(
-            'max_capacity_per_day, turnaround_hours, test_types(name, required_bsl)'
-          )
-          .eq('lab_id', lab.id);
-        if (error) throw error;
-
-        const capBox = container.querySelector('.lab-popup-caps');
-        if (!capBox) return;
-
-        if (!data || data.length === 0) {
-          capBox.innerHTML =
-            '<span style="color:#9ca3af;font-style:italic;">Chưa khai báo năng lực.</span>';
-          return;
-        }
-
-        capBox.innerHTML = `
-          <table style="width:100%;border-collapse:collapse;font-size:11.5px;">
-            <thead>
-              <tr style="color:#6b7280;text-align:left;">
-                <th style="padding:2px 4px;">Loại XN</th>
-                <th style="padding:2px 4px;text-align:center;">CS/ngày</th>
-                <th style="padding:2px 4px;text-align:center;">Trả KQ</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${data
-                .map(
-                  (c) => `
-                <tr style="border-top:1px solid #f1f5f9;">
-                  <td style="padding:2px 4px;">${esc(
-                    c.test_types?.name || '—'
-                  )}</td>
-                  <td style="padding:2px 4px;text-align:center;">${
-                    c.max_capacity_per_day
-                  }</td>
-                  <td style="padding:2px 4px;text-align:center;">${
-                    c.turnaround_hours != null ? c.turnaround_hours + 'h' : '—'
-                  }</td>
-                </tr>`
-                )
-                .join('')}
-            </tbody>
-          </table>`;
-      } catch (e) {
-        const capBox = container.querySelector('.lab-popup-caps');
-        if (capBox)
-          capBox.innerHTML =
-            '<span style="color:#dc2626;">Lỗi tải năng lực.</span>';
-      }
-    })();
-
+    container.querySelector('.lab-detail-btn').addEventListener('click', () => {
+      openLabDetailPanel(lab);
+    });
     return container;
   }
 
   // ------------------------------------------------------------------
-  // TẠO LỚP PXN (cluster nếu có thư viện, không thì layerGroup thường)
+  // PANEL CHI TIẾT ĐẦY ĐỦ (gồm QSM, đầu mối, kỹ thuật)
   // ------------------------------------------------------------------
+  function openLabDetailPanel(lab) {
+    document.getElementById('lab-detail-panel')?.remove();
+    document.getElementById('lab-detail-backdrop')?.remove();
+
+    const backdrop = document.createElement('div');
+    backdrop.id = 'lab-detail-backdrop';
+    backdrop.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:20000;';
+    backdrop.addEventListener('click', closeLabDetailPanel);
+
+    const yn = (v) =>
+      v ? '<span style="color:#16a34a;font-weight:600;">Có</span>' : '<span style="color:#9ca3af;">Không</span>';
+    const row = (label, val) =>
+      `<div style="display:flex;padding:5px 0;border-bottom:1px solid #f1f5f9;font-size:13px;">
+         <div style="width:42%;color:#6b7280;">${esc(label)}</div>
+         <div style="width:58%;font-weight:500;">${val}</div>
+       </div>`;
+
+    const contact =
+      lab.head_name || lab.head_phone || lab.head_email
+        ? `${row('Đầu mối (Trưởng khoa)', esc(lab.head_name || '—'))}
+           ${row('Điện thoại đầu mối', lab.head_phone ? `<a href="tel:${esc(lab.head_phone)}">${esc(lab.head_phone)}</a>` : '—')}
+           ${row('Email đầu mối', lab.head_email ? `<a href="mailto:${esc(lab.head_email)}">${esc(lab.head_email)}</a>` : '—')}`
+        : row('Đầu mối liên hệ', '<span style="color:#9ca3af;">Chưa khai báo</span>');
+
+    const caps = lab._caps || [];
+    const capsHtml = caps.length
+      ? `<table style="width:100%;border-collapse:collapse;font-size:12px;margin-top:4px;">
+           <thead><tr style="color:#6b7280;text-align:left;">
+             <th style="padding:3px 4px;">Kỹ thuật</th>
+             <th style="padding:3px 4px;text-align:center;">CS/ngày</th>
+             <th style="padding:3px 4px;text-align:center;">Trả KQ</th>
+           </tr></thead>
+           <tbody>
+             ${caps
+               .map(
+                 (c) => `<tr style="border-top:1px solid #f1f5f9;">
+                   <td style="padding:3px 4px;">${esc(c.test_types?.name || '—')}
+                     ${c.equipment_detail ? `<br><span style="color:#9ca3af;font-size:11px;">${esc(c.equipment_detail)}</span>` : ''}
+                   </td>
+                   <td style="padding:3px 4px;text-align:center;">${c.max_capacity_per_day ?? '—'}</td>
+                   <td style="padding:3px 4px;text-align:center;">${c.turnaround_hours != null ? c.turnaround_hours + 'h' : '—'}</td>
+                 </tr>`
+               )
+               .join('')}
+           </tbody>
+         </table>`
+      : '<span style="color:#9ca3af;font-style:italic;">Chưa khai báo năng lực.</span>';
+
+    const info = tierInfo(lab._tier, lab.is_active);
+
+    const panel = document.createElement('div');
+    panel.id = 'lab-detail-panel';
+    panel.style.cssText =
+      'position:fixed;top:0;right:0;width:min(420px,92vw);height:100%;background:#fff;z-index:20001;' +
+      'box-shadow:-4px 0 24px rgba(0,0,0,.18);overflow-y:auto;font-family:\'Inter\',sans-serif;';
+    panel.innerHTML = `
+      <div style="position:sticky;top:0;background:linear-gradient(135deg,#0f766e,#0369a1);color:#fff;padding:14px 16px;">
+        <button id="lab-detail-close" style="float:right;background:transparent;border:none;color:#fff;font-size:22px;line-height:1;cursor:pointer;">&times;</button>
+        <div style="font-weight:bold;font-size:16px;padding-right:24px;">${esc(lab.name)}</div>
+        <div style="font-size:12px;opacity:.9;margin-top:2px;">${esc(lab.level || '')}</div>
+      </div>
+      <div style="padding:14px 16px;">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+          <span style="display:inline-block;width:16px;height:16px;border-radius:50%;background:${info.color};"></span>
+          <b style="font-size:14px;">${esc(info.label)}</b>
+        </div>
+
+        <div style="font-weight:bold;color:#0369a1;font-size:13px;margin:10px 0 4px;">📞 Đầu mối liên hệ</div>
+        ${contact}
+
+        <div style="font-weight:bold;color:#0369a1;font-size:13px;margin:14px 0 4px;">🏥 Thông tin chung</div>
+        ${row('Địa chỉ', esc(lab.address || '—'))}
+        ${row('Hotline', lab.phone ? `<a href="tel:${esc(lab.phone)}">${esc(lab.phone)}</a>` : '—')}
+        ${row('An toàn sinh học', 'ATSH cấp ' + (lab.bsl_level ?? '?'))}
+        ${row('Cấp năng lực xét nghiệm', lab._tier >= 1 ? 'Cấp ' + lab._tier : 'Chưa phân hạng')}
+        ${row('Mức chất lượng (QSM)', esc(lab.qsm_label || 'Chưa có'))}
+        ${row('Lĩnh vực ISO công nhận', esc(lab.iso15189_scope || '—'))}
+        ${row('NS an toàn sinh học', lab.total_biosafety_staff ?? '—')}
+        ${row('NS chuyên trách', lab.dedicated_staff ?? '—')}
+
+        <div style="font-weight:bold;color:#0369a1;font-size:13px;margin:14px 0 4px;">✅ Chất lượng & Báo cáo</div>
+        ${row('Ngoại kiểm', yn(lab.external_qa))}
+        ${row('So sánh liên phòng', yn(lab.interlab))}
+        ${row('Báo cáo ca (+) (TT54)', yn(lab.reports_positive))}
+        ${row('Báo cáo định kỳ', yn(lab.periodic_report))}
+
+        <div style="font-weight:bold;color:#0369a1;font-size:13px;margin:14px 0 4px;">🧪 Năng lực kỹ thuật</div>
+        ${capsHtml}
+
+        ${
+          lab.capacity_needs
+            ? `<div style="font-weight:bold;color:#0369a1;font-size:13px;margin:14px 0 4px;">📌 Nhu cầu nâng cao</div>
+               <div style="font-size:12.5px;color:#374151;">${esc(lab.capacity_needs)}</div>`
+            : ''
+        }
+      </div>
+    `;
+    document.body.appendChild(backdrop);
+    document.body.appendChild(panel);
+    panel.querySelector('#lab-detail-close').addEventListener('click', closeLabDetailPanel);
+  }
+
+  function closeLabDetailPanel() {
+    document.getElementById('lab-detail-panel')?.remove();
+    document.getElementById('lab-detail-backdrop')?.remove();
+  }
+
   function createLabLayer(labs) {
     const useCluster = typeof L.markerClusterGroup === 'function';
     const group = useCluster
-      ? L.markerClusterGroup({
-          maxClusterRadius: 50,
-          spiderfyOnMaxZoom: true,
-          chunkedLoading: true, // load mượt với hàng trăm điểm
-        })
+      ? L.markerClusterGroup({ maxClusterRadius: 50, spiderfyOnMaxZoom: true, chunkedLoading: true })
       : L.layerGroup();
-
-    if (!useCluster) {
-      console.warn(
-        '[lab-map] Chưa nhúng Leaflet.markercluster — dùng marker thường. ' +
-          'Với hàng trăm điểm nên nhúng thư viện để tránh đè marker.'
-      );
-    }
+    if (!useCluster) console.warn('[lab-map] Chưa nhúng Leaflet.markercluster — dùng marker thường.');
 
     labs.forEach((lab) => {
-      const marker = L.marker([lab.lat, lab.lng], {
-        icon: labIcon(lab.level, lab.is_active),
-      });
-      // Tooltip nhanh (tên) + popup dashboard (lazy) khi click
-      marker.bindTooltip(esc(lab.name), {
-        direction: 'top',
-        offset: L.point(0, -13),
-      });
-      marker.on('click', async function () {
-        const content = await buildLabPopupContent(lab);
-        marker.bindPopup(content, { maxWidth: 320 }).openPopup();
+      const marker = L.marker([lab.lat, lab.lng], { icon: labIcon(lab._tier, lab.is_active) });
+      marker.bindTooltip(esc(lab.name), { direction: 'top', offset: L.point(0, -14) });
+      marker.on('click', function () {
+        marker.bindPopup(buildLabPopupContent(lab), { maxWidth: 320 }).openPopup();
       });
       group.addLayer(marker);
     });
-
     return group;
   }
 
-  // ------------------------------------------------------------------
-  // API CHÍNH: gắn lớp PXN vào bản đồ + đăng ký vào layers control.
-  //   Gọi từ renderMapPage(): window.LabMapLayer.attach(map, { show: false })
-  //   • map: Leaflet map instance (biến `map` trong module bản đồ của bạn)
-  //   • opts.show: true = hiện sẵn, false = tắt sẵn (mặc định false)
-  //   • opts.otherOverlays: object các lớp khác muốn gộp vào control
-  //       VD { 'Thành viên RRT': markersLayerGroupInstance, 'Sự kiện': incidentsLayerGroup }
-  // ------------------------------------------------------------------
   window.LabMapLayer = {
     attach: async function (map, opts = {}) {
       if (!map || typeof L === 'undefined') {
         console.warn('[lab-map] Thiếu map hoặc Leaflet.');
         return;
       }
-
       const labs = await loadLabs();
-
-      // Tạo lại lớp (nếu attach nhiều lần, gỡ cái cũ)
       if (_labLayer && map.hasLayer(_labLayer)) map.removeLayer(_labLayer);
       _labLayer = createLabLayer(labs);
-
       if (opts.show) _labLayer.addTo(map);
+      if (opts.standalone) return { layer: _labLayer, count: labs.length };
 
-      // CHẾ ĐỘ STANDALONE: chỉ trả layer, KHÔNG tự tạo control.
-      // Module bản đồ chính sẽ gom _labLayer vào L.control.layers chung.
-      if (opts.standalone) {
-        return { layer: _labLayer, count: labs.length };
-      }
-
-      // Chế độ tự quản (dùng khi module bản đồ chính không quản control)
       const overlays = { '🧪 Phòng xét nghiệm': _labLayer };
       if (opts.otherOverlays && typeof opts.otherOverlays === 'object') {
         Object.entries(opts.otherOverlays).forEach(([name, layer]) => {
           if (layer) overlays[name] = layer;
         });
       }
-
       if (!_layersControl) {
-        _layersControl = L.control
-          .layers(null, overlays, {
-            collapsed: true,
-            position: 'topright',
-          })
-          .addTo(map);
+        _layersControl = L.control.layers(null, overlays, { collapsed: true, position: 'topright' }).addTo(map);
       } else {
         _layersControl.addOverlay(_labLayer, '🧪 Phòng xét nghiệm');
       }
-
-      return {
-        layer: _labLayer,
-        count: labs.length,
-        control: _layersControl,
-      };
+      return { layer: _labLayer, count: labs.length, control: _layersControl };
     },
 
-    // Nạp lại dữ liệu PXN (VD sau khi admin thêm PXN mới) + vẽ lại
     reload: async function (map, opts = {}) {
-      await loadLabs(true); // force
+      await loadLabs(true);
       return window.LabMapLayer.attach(map, opts);
     },
 
-    // Lấy cache PXN (cho Dispatch Mode ở Bước 2 tái dùng, khỏi query lại)
-    getCache: function () {
-      return _labsCache;
-    },
+    getCache: function () { return _labsCache; },
+    openDetail: function (lab) { openLabDetailPanel(lab); },
 
-    // Legend HTML cho hình dạng tuyến (bên ngoài tự chèn vào legend nếu muốn)
+    // Legend theo 5 CẤP NĂNG LỰC
     legendHtml: function () {
+      const item = (color, text) =>
+        `<div style="display:flex;align-items:center;gap:6px;margin:2px 0;">
+           <span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:${color};"></span>
+           <span style="font-size:12px;">${text}</span>
+         </div>`;
       return `
         <hr style="margin:4px 0;">
-        <b>Phòng xét nghiệm</b><br>
-        <span style="font-size:13px;">★</span> Tuyến Trung ương<br>
-        <span style="font-size:13px;">⬢</span> Tuyến Tỉnh/Thành<br>
-        <span style="font-size:13px;">●</span> Tuyến Xã/Phường<br>
-        <i style="background:#0d9488;width:12px;height:12px;display:inline-block;border-radius:3px;"></i> Đang hoạt động<br>
-        <i style="background:#9ca3af;width:12px;height:12px;display:inline-block;border-radius:3px;"></i> Tạm ngừng`;
+        <b style="font-size:12px;">Năng lực xét nghiệm</b>
+        ${item(TIER_INFO[5].color, 'Cấp 5')}
+        ${item(TIER_INFO[4].color, 'Cấp 4')}
+        ${item(TIER_INFO[3].color, 'Cấp 3')}
+        ${item(TIER_INFO[2].color, 'Cấp 2')}
+        ${item(TIER_INFO[1].color, 'Cấp 1')}
+        ${item(TIER_INFO[0].color, 'Chưa phân hạng / tạm ngừng')}`;
     },
   };
 
-  console.log(
-    '[lab-map-layer.js] ✅ Lớp PXN trên bản đồ sẵn sàng. (window.LabMapLayer)'
-  );
+  console.log('[lab-map-layer.js] ✅ Lớp PXN (5 cấp năng lực theo Bảng 1) sẵn sàng.');
 })();
 
 /* ============================================================================
-   CÁCH GHÉP VÀO renderMapPage() — thêm 2-3 dòng, KHÔNG sửa gì khác
-   ----------------------------------------------------------------------------
-   Trong renderMapPage(), SAU khi đã có markersLayerGroupInstance +
-   incidentsLayerGroup + renderMap() (tức bản đồ đã vẽ xong), thêm:
-
-     // Gắn lớp PXN + gộp các lớp có sẵn vào 1 control bật/tắt
+   GHÉP VÀO renderMapPage():
      if (window.LabMapLayer) {
        await window.LabMapLayer.attach(map, {
-         show: false,                       // mặc định tắt, người dùng tự bật
-         otherOverlays: {
-           'Thành viên RRT': markersLayerGroupInstance,
-           'Sự kiện': incidentsLayerGroup,
-         },
+         show: false,
+         otherOverlays: { 'Thành viên RRT': markersLayerGroupInstance, 'Sự kiện': incidentsLayerGroup },
        });
      }
-
-   (Tùy chọn) chèn chú thích tuyến vào legend hiện có — trong addLegend(),
-   thêm vào cuối div.innerHTML:
-     if (window.LabMapLayer) div.innerHTML += window.LabMapLayer.legendHtml();
+   Legend: if (window.LabMapLayer) div.innerHTML += window.LabMapLayer.legendHtml();
 ============================================================================ */
