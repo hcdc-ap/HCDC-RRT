@@ -733,7 +733,7 @@
                   <label class="form-label">Địa chỉ</label>
                   <input id="lab-address" class="form-control" value="${esc(
                     lab.address || ''
-                  )}" placeholder="Số nhà, đường, phường, quận...">
+                  )}" placeholder="366A Âu Dương Lân, phường Chánh Hưng, TP.HCM.">
                 </div>
                 <div class="col-md-6">
                   <label class="form-label">Mô hình cơ quan</label>
@@ -774,7 +774,7 @@
                     </button>
                   </div>
                 </div>
-                <small class="text-muted">Nhập địa chỉ, nhập tay, hoặc bấm trực tiếp lên bản đồ để đặt điểm.</small>
+                <small class="text-muted">Nhập địa chỉ, nhập tay, hoặc bấm trực tiếp lên bản đồ để đặt vị trí.</small>
                   <div id="lab-picker-map" style="height:300px;border-radius:8px;margin-top:8px;background:#eee;"></div>
                 </div>
 
@@ -1430,7 +1430,12 @@
                 </div>
                 <div class="col-md-3">
                   <label class="form-label">Nhóm</label>
-                  <input id="tt-category" class="form-control" placeholder="advanced / basic/ molecular">
+                  <select id="tt-category" class="form-select">
+                    <option value="advanced">advanced</option>
+                    <option value="basic" selected>basic</option>
+                    <option value="culture">culture</option>
+                    <option value="molecular">molecular</option>
+                  </select>
                 </div>
                 <div class="col-md-2">
                   <label class="form-label">BSL yêu cầu</label>
