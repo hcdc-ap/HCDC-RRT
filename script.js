@@ -14368,6 +14368,7 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
     // PXN
     if (layerVisible.labs && window.LabMapLayer) {
       html += `<div class="legend-section">${window.LabMapLayer.legendHtml()}</div>`;
+      
     }
     // BỔ SUNG: Chú giải Dân số
     if (layerVisible.population) {
@@ -14384,6 +14385,11 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
     }
     div.innerHTML =
       html || '<span class="text-muted">Không có lớp nào bật.</span>';
+    // Kích hoạt hover highlight cho legend PXN (SAU khi HTML đã vào DOM)
+    if (layerVisible.labs && window.LabMapLayer && window.LabMapLayer.bindLegendHover) {
+      window.LabMapLayer.bindLegendHover(div);
+    }
+      
   }
 
   function addLegend() {
@@ -14396,6 +14402,7 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
       return div;
     };
     legendControl.addTo(map);
+    
   }
   function refreshLegend() {
     const box = document.getElementById('map-legend-box');
