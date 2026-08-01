@@ -23,16 +23,8 @@
   const esc = (s) =>
     window.escapeHtml
       ? window.escapeHtml(s)
-      : String(s ?? '').replace(
-          /[&<>"']/g,
-          (c) =>
-            ({
-              '&': '&amp;',
-              '<': '&lt;',
-              '>': '&gt;',
-              '"': '&quot;',
-              "'": '&#039;',
-            }[c])
+      : String(s ?? '').replace(/[&<>"']/g, (c) =>
+          ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[c])
         );
 
   const VN_HOLIDAYS = ['01-01', '30-04', '01-05', '02-09'];
@@ -57,9 +49,9 @@
     sampleCount: 20,
     preset: 'balanced',
     weights: null,
-    minBsl: null, // BSL chuyên gia chọn (lọc cứng)
-    minQsm: null, // không nhập — chỉ chấm điểm
-    maxTurnaround: null, // không nhập — chỉ chấm điểm
+    minBsl: null,          // BSL chuyên gia chọn (lọc cứng)
+    minQsm: null,          // không nhập — chỉ chấm điểm
+    maxTurnaround: null,   // không nhập — chỉ chấm điểm
     excludeLabIds: [],
     lastResult: null,
     map: null,
@@ -120,9 +112,7 @@
     const ttOptions = _testTypes
       .map(
         (t) =>
-          `<option value="${t.id}" data-bsl="${t.required_bsl}">${esc(
-            t.name
-          )}</option>`
+          `<option value="${t.id}">${esc(t.name)}</option>`
       )
       .join('');
 
@@ -130,9 +120,7 @@
       ? `<div class="alert alert-secondary py-2 mb-0">
            <small class="text-muted d-block">Sự kiện khẩn cấp</small>
            <strong>${esc(S.incidentName || 'Sự cố')}</strong>
-           <span class="text-muted"> · ${S.lat?.toFixed?.(
-             5
-           )}, ${S.lng?.toFixed?.(5)}</span>
+           <span class="text-muted"> · ${S.lat?.toFixed?.(5)}, ${S.lng?.toFixed?.(5)}</span>
          </div>`
       : `<div>
            <label class="form-label mb-1"><small>Vị trí sự kiện khẩn cấp</small></label>
@@ -170,7 +158,7 @@
               <!-- HÀNG INPUT: kỹ thuật + BSL (lọc cứng) + số mẫu -->
               <div class="row g-3 align-items-end mb-2">
                 <div class="col-md-6">
-                  <label class="form-label mb-1">Loại Kỹ thuật xét nghiệm <span class="text-danger">*</span></label>
+                  <label class="form-label mb-1">Loại xét nghiệm (kỹ thuật) <span class="text-danger">*</span></label>
                   <select id="disp-testtype" class="form-select">${ttOptions}</select>
                 </div>
                 <div class="col-md-3">
@@ -226,33 +214,29 @@
                     </div>
                   </div>
                   <div id="disp-help" class="d-none mt-2 pt-2 border-top">
-                  <div class="alert alert-info py-2 mb-0" style="font-size:.85rem;">
-                    
-                    <div class="mb-2"><b><i class='bx bx-bulb'></i> Tiêu chí xếp hạng Phòng Xét nghiệm:</b></div>
-                    <div class="ms-1" style="line-height:1.7;">
-                      🟢 <b>Gần nhất</b>: Thời gian vận chuyển mẫu ngắn nhất từ nơi có sự kiện khẩn cấp đến phòng xét nghiệm.<br>
-                      🔵 <b>Còn nhận mẫu</b>: Vẫn có khả năng nhận thêm mẫu xét nghiệm trong ngày.<br>
-                      🟠 <b>Trả Kết quả xét nghiệm nhanh</b>: Thời gian xét nghiệm và trả kết quả sớm nhất.<br>
-                      🏅 <b>Chất lượng QSM</b>: Đạt chuẩn chất lượng cao (ISO 15189 / QĐ2429).<br>
-                      🌐 <b>Năng lực xét nghiệm</b>: Là đơn vị có năng lực xét nghiệm cao trong mạng lưới.
+                    <div class="alert alert-info py-2 mb-0" style="font-size:.85rem;">
+                      <div class="mb-2"><b><i class='bx bx-bulb'></i> Hệ thống xếp hạng PXN theo 5 tiêu chí:</b></div>
+                      <div class="ms-1" style="line-height:1.7;">
+                        🟢 <b>Gần nhất</b>: thời gian di chuyển ngắn nhất.<br>
+                        🔵 <b>Còn nhận mẫu</b>: còn công suất trong ngày.<br>
+                        🟠 <b>Trả KQ nhanh</b>: trả kết quả sớm.<br>
+                        🏅 <b>Chất lượng (QSM)</b>: đạt ISO 15189 / QĐ2429 mức cao.<br>
+                        🌐 <b>Mạng lưới</b>: phân cấp năng lực cao trong mạng lưới.
+                      </div>
+                      <div class="mb-1 mt-2"><b>Chế độ:</b></div>
+                      <div class="ms-1" style="line-height:1.7;">
+                        ⚡ <b>Khẩn</b>: ưu tiên gần & nhanh.<br>
+                        ⚖️ <b>Cân bằng</b>: cân nhắc đều.<br>
+                        📦 <b>Nhiều mẫu</b>: ưu tiên công suất.<br>
+                        🏅 <b>Chất lượng</b>: ưu tiên QSM & mạng lưới.
+                      </div>
+                      <div class="mt-2 pt-1 border-top text-muted">
+                        <i class='bx bx-shield'></i> An toàn: PXN không đủ cấp ATSH cho tác nhân này
+                        <b>không bao giờ xuất hiện</b>, bất kể chế độ. QSM & thời gian trả KQ là
+                        <b>ưu tiên</b> (thiếu vẫn hiện nhưng xếp sau + cảnh báo).
+                      </div>
                     </div>
-                    
-                    <div class="mb-1 mt-2"><b>Chế độ gợi ý:</b></div>
-                    <div class="ms-1" style="line-height:1.7;">
-                      ⚡ <b>Khẩn cấp</b>: Ưu tiên phòng xét nghiệm gần nhất và trả kết quả xét nghiệm nhanh nhất.<br>
-                      ⚖️ <b>Cân bằng</b>: Cân nhắc đồng đều tất cả các tiêu chí nêu trên.<br>
-                      📦 <b>Nhiều mẫu</b>: Ưu tiên những phòng xét nghiệm có khả năng tiếp nhận số lượng mẫu lớn trong ngày.<br>
-                      🏅 <b>Năng lực Phòng xét nghiệm </b>: Ưu tiên chọn phòng xét nghiệm đạt chuẩn cao (Năng lực xét nghiệm & Chất lượng QSM).
-                    </div>
-                    
-                    <div class="mt-2 pt-2 border-top text-muted" style="line-height:1.6;">
-                      <i class='bx bx-shield'></i> <b>Lưu ý quan trọng:</b><br>
-                      - <b>Bắt buộc:</b> Phòng xét nghiệm <i>không đủ cấp An toàn sinh học (BSL)</i> cho tác nhân này sẽ <b>bị loại hoàn toàn khỏi danh sách</b> ở mọi chế độ.<br>
-                      - <b>Sắp xếp:</b> Tiêu chí "Chất lượng" và "Thời gian trả Kết quả xét nghiệm" dùng để xếp hạng. Nếu thiếu hoặc thấp, Phòng xét nghiệm vẫn sẽ xuất hiện nhưng bị đẩy xuống cuối và có cảnh báo.
-                    </div>
-                    
                   </div>
-                </div>
                 </div>
               </div>
 
@@ -289,46 +273,24 @@
       });
     }
 
-    // Tiện dụng: chọn kỹ thuật → BSL dropdown gợi ý theo required_bsl của kỹ thuật
-    // (chuyên gia vẫn đổi tay được — đây chỉ là giá trị mặc định giúp nhanh).
-    const setBslFromTech = () => {
-      const opt = document.querySelector('#disp-testtype option:checked');
-      const need = parseInt(opt?.getAttribute('data-bsl'));
-      const bslSel = document.getElementById('disp-bsl');
-      if (bslSel && need >= 1 && need <= 4) bslSel.value = String(need);
-    };
-    setBslFromTech(); // đặt theo kỹ thuật đầu tiên
-    if (window.$ && $.fn.select2) {
-      $('#disp-testtype').on('change', setBslFromTech);
-    } else {
-      document
-        .getElementById('disp-testtype')
-        ?.addEventListener('change', setBslFromTech);
-    }
+    // BSL KHÔNG auto-set theo kỹ thuật. Chuyên gia CHỦ ĐỘNG chọn cấp ATSH theo
+    // TÁC NHÂN của tình huống (dropdown mặc định ATSH cấp 2). Kỹ thuật không gắn BSL.
 
     modalEl.addEventListener(
       'hidden.bs.modal',
       function () {
         if (S.map) {
-          try {
-            S.map.remove();
-          } catch (_) {}
+          try { S.map.remove(); } catch (_) {}
           S.map = null;
           S.routeLayers = [];
         }
-        if (
-          window.$ &&
-          $.fn.select2 &&
-          $('#disp-testtype').hasClass('select2-hidden-accessible')
-        ) {
+        if (window.$ && $.fn.select2 && $('#disp-testtype').hasClass('select2-hidden-accessible')) {
           $('#disp-testtype').select2('destroy');
         }
         wrap.remove();
         setTimeout(() => {
           if (!document.querySelector('.modal.show')) {
-            document
-              .querySelectorAll('.modal-backdrop')
-              .forEach((b) => b.remove());
+            document.querySelectorAll('.modal-backdrop').forEach((b) => b.remove());
             document.body.classList.remove('modal-open');
             document.body.style.overflow = '';
             document.body.style.paddingRight = '';
@@ -373,11 +335,8 @@
   }
 
   function rebalanceSliders(changed) {
-    const get = (k) =>
-      parseInt(document.getElementById('slider-' + k).value) || 0;
-    let near = get('near'),
-      free = get('free'),
-      fast = get('fast');
+    const get = (k) => parseInt(document.getElementById('slider-' + k).value) || 0;
+    let near = get('near'), free = get('free'), fast = get('fast');
     const others = ['near', 'free', 'fast'].filter((k) => k !== changed);
     const changedVal = { near, free, fast }[changed];
     const remain = 100 - changedVal;
@@ -397,11 +356,7 @@
       document.getElementById('w-' + k).textContent = vals[k];
     });
     // Custom = chỉ 3 chiều (qual/net = 0). Preset mới dùng đủ 5 chiều.
-    S.weights = {
-      near: vals.near / 100,
-      free: vals.free / 100,
-      fast: vals.fast / 100,
-    };
+    S.weights = { near: vals.near / 100, free: vals.free / 100, fast: vals.fast / 100 };
   }
 
   // --------------------------------------------------------------------------
@@ -409,11 +364,9 @@
   // --------------------------------------------------------------------------
   window._runDispatch = async function () {
     S.testTypeId = document.getElementById('disp-testtype').value;
-    S.sampleCount =
-      parseInt(document.getElementById('disp-samples').value) || 1;
+    S.sampleCount = parseInt(document.getElementById('disp-samples').value) || 1;
     S.preset =
-      document.querySelector('input[name="preset"]:checked')?.value ||
-      'balanced';
+      document.querySelector('input[name="preset"]:checked')?.value || 'balanced';
 
     // BSL chuyên gia chọn (lọc CỨNG). QSM/turnaround KHÔNG nhập — chỉ vào chấm điểm.
     const bslRaw = document.getElementById('disp-bsl')?.value;
@@ -427,10 +380,7 @@
     }
     if (isNaN(S.lat) || isNaN(S.lng) || S.lat == null || S.lng == null) {
       if (window.showToast)
-        window.showToast(
-          'Chưa có tọa độ điểm sự cố (nhập địa chỉ/vị trí/tọa độ)',
-          'warning'
-        );
+        window.showToast('Chưa có tọa độ điểm sự cố (nhập địa chỉ/vị trí/tọa độ)', 'warning');
       return;
     }
 
@@ -456,9 +406,7 @@
       renderResults(result);
     } catch (e) {
       console.error('[dispatch] Lỗi:', e);
-      resultsEl.innerHTML = `<div class="alert alert-danger">Lỗi: ${esc(
-        e.message
-      )}</div>`;
+      resultsEl.innerHTML = `<div class="alert alert-danger">Lỗi: ${esc(e.message)}</div>`;
     }
   };
 
@@ -494,10 +442,11 @@
           <i class='bx bx-error'></i> <strong>Không tìm thấy Phòng xét nghiệm phù hợp</strong> cho "${esc(
             tt?.name || ''
           )}".<br>
-          <small>Nguyên nhân có thể: chưa PXN nào đủ cấp an toàn sinh học (cần ATSH cấp ${
-            tt?.required_bsl ?? '?'
+          <small>Nguyên nhân có thể: chưa PXN nào đạt cấp an toàn sinh học bạn yêu cầu (ATSH cấp ${
+            S.minBsl ?? '?'
           }),
-          chưa khai báo năng lực loại này, hoặc tất cả đã bị loại trừ.</small>
+          chưa khai báo năng lực loại này, hoặc tất cả đã bị loại trừ.
+          Có thể thử hạ cấp ATSH yêu cầu (nếu phù hợp với tác nhân).</small>
         </div>`;
       if (typeof window.showPendingSuggestions === 'function')
         window.showPendingSuggestions(S.incidentId, S.testTypeId);
@@ -524,7 +473,7 @@
           : `<span class="badge bg-light text-muted">Chưa có QSM</span>`;
         const netBadge =
           lab.capability_tier != null
-            ? `<span class="badge bg-secondary">Cấp năng lực ${lab.capability_tier}/5</span>`
+            ? `<span class="badge bg-secondary">Cấp năng lực ${lab.capability_tier}</span>`
             : '';
 
         // Cảnh báo mềm (chỉ còn công suất — QSM/turnaround không còn là ngưỡng nhập)
@@ -536,26 +485,16 @@
             ? `<div class="mt-1 p-2 rounded" style="background:#f0fdf4;border:1px solid #bbf7d0;">
                  <small class="d-block text-muted">Đầu mối PXN</small>
                  <div class="d-flex justify-content-between align-items-center flex-wrap gap-1">
-                   <span><i class='bx bx-user'></i> <b>${esc(
-                     lab.head_name || '—'
-                   )}</b></span>
+                   <span><i class='bx bx-user'></i> <b>${esc(lab.head_name || '—')}</b></span>
                    ${
                      lab.head_phone
-                       ? `<a href="tel:${esc(
-                           lab.head_phone
-                         )}" class="btn btn-sm btn-success py-0"><i class='bx bx-phone'></i> ${esc(
-                           lab.head_phone
-                         )}</a>`
+                       ? `<a href="tel:${esc(lab.head_phone)}" class="btn btn-sm btn-success py-0"><i class='bx bx-phone'></i> ${esc(lab.head_phone)}</a>`
                        : ''
                    }
                  </div>
                  ${
                    lab.head_email
-                     ? `<small><a href="mailto:${esc(
-                         lab.head_email
-                       )}"><i class='bx bx-envelope'></i> ${esc(
-                         lab.head_email
-                       )}</a></small>`
+                     ? `<small><a href="mailto:${esc(lab.head_email)}"><i class='bx bx-envelope'></i> ${esc(lab.head_email)}</a></small>`
                      : ''
                  }
                </div>`
@@ -567,27 +506,17 @@
             <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
               <div style="min-width:0;">
                 <div class="d-flex align-items-center gap-2 flex-wrap">
-                  <span class="badge" style="background:${color};">#${
-          lab.rank
-        } ${rankLabel}</span>
+                  <span class="badge" style="background:${color};">#${lab.rank} ${rankLabel}</span>
                   <strong>${esc(lab.lab_name)}</strong>
                   <span class="badge bg-dark">ATSH ${lab.bsl_level}</span>
                 </div>
-                <small class="text-muted d-block">${esc(
-                  lab.level || ''
-                )} · ${esc(lab.address || '')}</small>
+                <small class="text-muted d-block">${esc(lab.level || '')} · ${esc(lab.address || '')}</small>
                 <div class="mt-1 d-flex flex-wrap gap-1">${qsmBadge} ${netBadge}</div>
                 <div class="mt-1 d-flex flex-wrap gap-3">
-                  <small><i class='bx bx-map-pin'></i> <b>${
-                    lab.route.km
-                  } km</b>${srcNote}</small>
-                  <small><i class='bx bx-time'></i> <b>${
-                    lab.route.minutes
-                  } phút</b></small>
+                  <small><i class='bx bx-map-pin'></i> <b>${lab.route.km} km</b>${srcNote}</small>
+                  <small><i class='bx bx-time'></i> <b>${lab.route.minutes} phút</b></small>
                   <small><i class='bx bx-timer'></i> Trả KQ: <b>${
-                    lab.turnaround_hours != null
-                      ? lab.turnaround_hours + 'h'
-                      : '—'
+                    lab.turnaround_hours != null ? lab.turnaround_hours + 'h' : '—'
                   }</b></small>
                   ${enoughBadge}
                 </div>
@@ -598,42 +527,22 @@
                 <div class="mb-1"><span class="badge bg-light text-dark" style="font-size:.95em;">
                   Điểm: <b>${lab.scores.total}</b></span></div>
                 <div class="btn-group btn-group-sm">
-                  <button class="btn btn-outline-secondary" onclick="window._showLabRoute('${
-                    lab.lab_id
-                  }')" title="Xem đường đi">
+                  <button class="btn btn-outline-secondary" onclick="window._showLabRoute('${lab.lab_id}')" title="Xem đường đi">
                     <i class='bx bx-map'></i>
                   </button>
-                  <button class="btn btn-outline-danger" onclick="window._excludeLab('${
-                    lab.lab_id
-                  }')" title="Loại trừ Phòng xét nghiệm này">
+                  <button class="btn btn-outline-danger" onclick="window._excludeLab('${lab.lab_id}')" title="Loại trừ Phòng xét nghiệm này">
                     <i class='bx bx-x-circle'></i>
                   </button>
                 </div>
                 <div class="mt-1" id="disp-action-${lab.lab_id}"></div>
               </div>
             </div>
-            <div class="mt-1 d-flex gap-1" style="height:5px;" title="Gần ${
-              lab.scores.gan
-            } · Trống ${lab.scores.trong} · Nhanh ${
-          lab.scores.nhanh
-        } · Chất lượng ${lab.scores.chatLuong} · Mạng lưới ${
-          lab.scores.mangLuoi
-        }">
-              <div style="flex:${
-                lab.scores.gan
-              };background:#16a34a;border-radius:3px;"></div>
-              <div style="flex:${
-                lab.scores.trong
-              };background:#0ea5e9;border-radius:3px;"></div>
-              <div style="flex:${
-                lab.scores.nhanh
-              };background:#f59e0b;border-radius:3px;"></div>
-              <div style="flex:${
-                lab.scores.chatLuong
-              };background:#8b5cf6;border-radius:3px;"></div>
-              <div style="flex:${
-                lab.scores.mangLuoi
-              };background:#64748b;border-radius:3px;"></div>
+            <div class="mt-1 d-flex gap-1" style="height:5px;" title="Gần ${lab.scores.gan} · Trống ${lab.scores.trong} · Nhanh ${lab.scores.nhanh} · Chất lượng ${lab.scores.chatLuong} · Mạng lưới ${lab.scores.mangLuoi}">
+              <div style="flex:${lab.scores.gan};background:#16a34a;border-radius:3px;"></div>
+              <div style="flex:${lab.scores.trong};background:#0ea5e9;border-radius:3px;"></div>
+              <div style="flex:${lab.scores.nhanh};background:#f59e0b;border-radius:3px;"></div>
+              <div style="flex:${lab.scores.chatLuong};background:#8b5cf6;border-radius:3px;"></div>
+              <div style="flex:${lab.scores.mangLuoi};background:#64748b;border-radius:3px;"></div>
             </div>
           </div>
         </div>`;
@@ -649,11 +558,7 @@
       <div id="disp-pending"></div>
       ${osrmWarn}
       <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-1">
-        <small class="text-muted">Tìm thấy ${
-          ranked.length
-        } Phòng xét nghiệm phù hợp · Xếp theo <b>${labelPreset(
-      meta
-    )}</b></small>
+        <small class="text-muted">Tìm thấy ${ranked.length} Phòng xét nghiệm phù hợp · Xếp theo <b>${labelPreset(meta)}</b></small>
         <small class="text-muted"><i class='bx bx-bulb'></i> 🟢Gần 🔵Trống 🟠Nhanh 🟣Chất lượng ⚫Mạng lưới</small>
       </div>
       ${excludeInfo}
@@ -716,9 +621,8 @@
     if (!lab) return;
 
     document.getElementById('disp-map-wrap').classList.remove('d-none');
-    document.getElementById(
-      'disp-map-label'
-    ).textContent = `${lab.lab_name} — ${lab.route.km} km, ${lab.route.minutes} phút`;
+    document.getElementById('disp-map-label').textContent =
+      `${lab.lab_name} — ${lab.route.km} km, ${lab.route.minutes} phút`;
 
     if (!S.map) {
       if (typeof L === 'undefined') {
@@ -744,9 +648,7 @@
     }
 
     S.routeLayers.forEach((layer) => {
-      try {
-        S.map.removeLayer(layer);
-      } catch (_) {}
+      try { S.map.removeLayer(layer); } catch (_) {}
     });
     S.routeLayers = [];
 
@@ -773,12 +675,8 @@
       })
         .addTo(S.map)
         .bindPopup(
-          `<b>#${l.rank} ${esc(l.lab_name)}</b><br>${l.route.km} km · ${
-            l.route.minutes
-          } phút` +
-            (l.route.source === 'haversine'
-              ? '<br><i>(ước lượng đường chim bay)</i>'
-              : '')
+          `<b>#${l.rank} ${esc(l.lab_name)}</b><br>${l.route.km} km · ${l.route.minutes} phút` +
+            (l.route.source === 'haversine' ? '<br><i>(ước lượng đường chim bay)</i>' : '')
         );
       S.routeLayers.push(marker);
       if (selected) marker.openPopup();
@@ -787,9 +685,7 @@
     const selCoords = lab.route.geometry.coordinates.map((c) => [c[1], c[0]]);
     S.map.fitBounds(L.latLngBounds(selCoords).pad(0.2));
     setTimeout(() => S.map.invalidateSize(), 150);
-    document
-      .getElementById('disp-map-wrap')
-      .scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    document.getElementById('disp-map-wrap').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   };
 
   window._hideDispatchMap = function () {
@@ -838,9 +734,7 @@
     } catch (e) {
       console.error('[geocode]', e);
       hint.innerHTML =
-        '<small class="text-danger">Lỗi tìm địa chỉ: ' +
-        esc(e.message) +
-        '</small>';
+        '<small class="text-danger">Lỗi tìm địa chỉ: ' + esc(e.message) + '</small>';
     }
   };
 
@@ -850,40 +744,31 @@
   };
 
   function _applyGeocode(d) {
-    const lat = parseFloat(d.lat),
-      lng = parseFloat(d.lon);
+    const lat = parseFloat(d.lat), lng = parseFloat(d.lon);
     document.getElementById('disp-lat').value = lat.toFixed(6);
     document.getElementById('disp-lng').value = lng.toFixed(6);
-    document.getElementById(
-      'disp-origin-hint'
-    ).innerHTML = `<small class="text-success"><i class='bx bx-check-circle'></i> ${esc(
-      d.display_name
-    )}</small>`;
+    document.getElementById('disp-origin-hint').innerHTML =
+      `<small class="text-success"><i class='bx bx-check-circle'></i> ${esc(d.display_name)}</small>`;
   }
 
   window._dispatchUseMyLocation = function () {
     const hint = document.getElementById('disp-origin-hint');
     if (!navigator.geolocation) {
-      if (window.showToast)
-        window.showToast('Trình duyệt không hỗ trợ định vị', 'warning');
+      if (window.showToast) window.showToast('Trình duyệt không hỗ trợ định vị', 'warning');
       return;
     }
     hint.innerHTML =
       '<small class="text-muted"><span class="spinner-border spinner-border-sm"></span> Đang lấy vị trí...</small>';
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        document.getElementById('disp-lat').value =
-          pos.coords.latitude.toFixed(6);
-        document.getElementById('disp-lng').value =
-          pos.coords.longitude.toFixed(6);
+        document.getElementById('disp-lat').value = pos.coords.latitude.toFixed(6);
+        document.getElementById('disp-lng').value = pos.coords.longitude.toFixed(6);
         hint.innerHTML =
           '<small class="text-success"><i class="bx bx-check-circle"></i> Đã lấy vị trí hiện tại của bạn.</small>';
       },
       (err) => {
         hint.innerHTML =
-          '<small class="text-danger">Không lấy được vị trí: ' +
-          esc(err.message) +
-          '</small>';
+          '<small class="text-danger">Không lấy được vị trí: ' + esc(err.message) + '</small>';
       },
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
     );
@@ -899,7 +784,5 @@
     };
   };
 
-  console.log(
-    '[lab-dispatch-modal.js] ✅ Dispatch Modal (tiêu chí chuyên gia + QSM/đầu mối) sẵn sàng.'
-  );
+  console.log('[lab-dispatch-modal.js] ✅ Dispatch Modal (tiêu chí chuyên gia + QSM/đầu mối) sẵn sàng.');
 })();
