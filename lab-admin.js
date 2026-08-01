@@ -630,7 +630,7 @@
                   <label class="form-label">Địa chỉ</label>
                   <input id="lab-address" class="form-control" value="${esc(
                     lab.address || ''
-                  )}" placeholder="Số nhà, đường, phường, quận...">
+                  )}" placeholder="366A Âu Dương Lân, phường Chánh Hưng, TP.HCM">
                 </div>
                 <div class="col-md-6">
                   <label class="form-label">Mô hình cơ quan</label>
