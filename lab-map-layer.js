@@ -134,7 +134,7 @@
         <div><i class='bx bx-phone'></i> ${phone}</div>
       </div>
       <button class="lab-detail-btn" style="margin-top:8px;width:100%;background:#0f766e;color:#fff;border:none;padding:6px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;">
-        <i class='bx bx-list-ul'></i> Xem chi tiết đầy đủ
+        <i class='bx bx-list-ul'></i> Xem thêm chi tiết
       </button>
     `;
     container.querySelector('.lab-detail-btn').addEventListener('click', () => {
