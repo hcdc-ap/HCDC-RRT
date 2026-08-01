@@ -170,7 +170,7 @@
               <!-- HÀNG INPUT: kỹ thuật + BSL (lọc cứng) + số mẫu -->
               <div class="row g-3 align-items-end mb-2">
                 <div class="col-md-6">
-                  <label class="form-label mb-1">Loại xét nghiệm (kỹ thuật) <span class="text-danger">*</span></label>
+                  <label class="form-label mb-1">Loại Kỹ thuật xét nghiệm <span class="text-danger">*</span></label>
                   <select id="disp-testtype" class="form-select">${ttOptions}</select>
                 </div>
                 <div class="col-md-3">
@@ -241,8 +241,8 @@
                     <div class="ms-1" style="line-height:1.7;">
                       ⚡ <b>Khẩn cấp</b>: Ưu tiên phòng xét nghiệm gần nhất và trả kết quả xét nghiệm nhanh nhất.<br>
                       ⚖️ <b>Cân bằng</b>: Cân nhắc đồng đều tất cả các tiêu chí nêu trên.<br>
-                      📦 <b>Nhiều mẫu</b>: Ưu tiên những phòng xét nghiệm có khả năng nhận số lượng mẫu lớn trong ngày.<br>
-                      🏅 <b>Ưu tiên chất lượng</b>: Ưu tiên chọn phòng xét nghiệm đạt chuẩn cao (Chất lượng QSM & Độ chuyên sâu).
+                      📦 <b>Nhiều mẫu</b>: Ưu tiên những phòng xét nghiệm có khả năng tiếp nhận số lượng mẫu lớn trong ngày.<br>
+                      🏅 <b>Năng lực Phòng xét nghiệm </b>: Ưu tiên chọn phòng xét nghiệm đạt chuẩn cao (Năng lực xét nghiệm & Chất lượng QSM).
                     </div>
                     
                     <div class="mt-2 pt-2 border-top text-muted" style="line-height:1.6;">
