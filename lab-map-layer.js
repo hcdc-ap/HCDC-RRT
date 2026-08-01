@@ -3,34 +3,25 @@
 // Hệ thống RRT-HCDC
 // ----------------------------------------------------------------------------
 // THAY ĐỔI:
-//   • Marker 5 MÀU theo CẤP NĂNG LỰC (capability_tier 1-5, tính theo Bảng 1):
-//       Cấp 5 = đỏ    (đầy đủ + giải trình tự/virus, QSM cao)
-//       Cấp 4 = cam
-//       Cấp 3 = hổ phách
-//       Cấp 2 = xanh dương
-//       Cấp 1 = xám xanh
-//       Cấp 0/chưa = xám (chưa phân hạng / tạm ngừng)
-//   • Popup hiện: CẤP NĂNG LỰC + ATSH (BSL). KHÔNG hiện QSM.
-//   • Panel chi tiết vẫn đầy đủ (gồm QSM, đầu mối, kỹ thuật...).
-//   • Dùng capability_tier từ DB (không tự tính ở client).
+//   • Marker 5 MÀU theo CẤP NĂNG LỰC (capability_tier 1-5, tính theo Bảng 1)
+//   • Popup: CẤP NĂNG LỰC + ATSH (BSL). KHÔNG hiện QSM.
+//   • Panel chi tiết đầy đủ (QSM, đầu mối, kỹ thuật).
+//   • MỚI: hover legend → highlight marker cùng cấp (mờ cấp khác).
 //
 // PHỤ THUỘC: leaflet + (tùy chọn) leaflet.markercluster.
 // ============================================================================
-
 (function () {
   'use strict';
-
   const esc = (s) =>
     window.escapeHtml
       ? window.escapeHtml(String(s ?? ''))
       : String(s ?? '').replace(/[&<>"']/g, (c) =>
           ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[c])
         );
-
   let _labsCache = null;
   let _labLayer = null;
   let _layersControl = null;
-
+  let _markersByTier = {}; // { tier: [{marker, lab}] } — highlight theo cấp
   // ------------------------------------------------------------------
   // THANG 5 CẤP NĂNG LỰC (capability_tier 1-5 theo Bảng 1)
   // ------------------------------------------------------------------
@@ -46,7 +37,6 @@
     if (!isActive) return { color: '#9ca3af', label: 'Tạm ngừng' };
     return TIER_INFO[tier] || TIER_INFO[0];
   }
-
   function labIcon(tier, isActive) {
     const color = tierInfo(tier, isActive).color;
     const num = isActive && tier >= 1 && tier <= 5 ? tier : '';
@@ -54,15 +44,16 @@
         <circle cx="12" cy="12" r="9" fill="${color}" stroke="#ffffff" stroke-width="2"/>
         <text x="12" y="15.5" text-anchor="middle" font-size="10" fill="#fff" font-weight="bold">${num || 'XN'}</text>
       </svg>`;
+    // Bọc SVG trong lớp con .lab-icon-inner. KHI HIGHLIGHT chỉ scale lớp con này,
+    // KHÔNG đụng transform của marker container (Leaflet dùng transform để định vị!).
     return L.divIcon({
       className: 'lab-map-icon',
-      html: svg,
+      html: `<div class="lab-icon-inner" style="transition:transform .2s;transform-origin:center bottom;">${svg}</div>`,
       iconSize: [28, 28],
       iconAnchor: [14, 14],
       popupAnchor: [0, -14],
     });
   }
-
   // ------------------------------------------------------------------
   // LOAD PXN (dùng capability_tier từ DB) + kỹ thuật cho panel
   // ------------------------------------------------------------------
@@ -79,10 +70,8 @@
             'total_biosafety_staff, dedicated_staff, capacity_needs'
         );
       if (e1) throw e1;
-
       const validLabs = (labs || []).filter((l) => l.lat != null && l.lng != null);
       const ids = validLabs.map((l) => l.id);
-
       let caps = [];
       if (ids.length) {
         const { data: capData, error: e2 } = await window.supabaseClient
@@ -92,12 +81,10 @@
         if (e2) throw e2;
         caps = capData || [];
       }
-
       const capsByLab = {};
       caps.forEach((c) => {
         (capsByLab[c.lab_id] = capsByLab[c.lab_id] || []).push(c);
       });
-
       validLabs.forEach((l) => {
         l._caps = capsByLab[l.id] || [];
         const t = l.capability_tier;
@@ -106,7 +93,6 @@
         l._tierColor = info.color;
         l._tierLabel = info.label;
       });
-
       _labsCache = validLabs;
       return _labsCache;
     } catch (e) {
@@ -115,7 +101,6 @@
       return _labsCache;
     }
   }
-
   // ------------------------------------------------------------------
   // POPUP GỌN — CẤP NĂNG LỰC + ATSH (không QSM)
   // ------------------------------------------------------------------
@@ -131,7 +116,6 @@
     const phone = lab.phone
       ? `<a href="tel:${esc(lab.phone)}" style="color:#0369a1;">${esc(lab.phone)}</a>`
       : '<span style="color:#9ca3af;">—</span>';
-
     const container = document.createElement('div');
     container.style.minWidth = '250px';
     container.style.fontFamily = "'Inter',sans-serif";
@@ -158,19 +142,16 @@
     });
     return container;
   }
-
   // ------------------------------------------------------------------
   // PANEL CHI TIẾT ĐẦY ĐỦ (gồm QSM, đầu mối, kỹ thuật)
   // ------------------------------------------------------------------
   function openLabDetailPanel(lab) {
     document.getElementById('lab-detail-panel')?.remove();
     document.getElementById('lab-detail-backdrop')?.remove();
-
     const backdrop = document.createElement('div');
     backdrop.id = 'lab-detail-backdrop';
     backdrop.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:20000;';
     backdrop.addEventListener('click', closeLabDetailPanel);
-
     const yn = (v) =>
       v ? '<span style="color:#16a34a;font-weight:600;">Có</span>' : '<span style="color:#9ca3af;">Không</span>';
     const row = (label, val) =>
@@ -178,14 +159,12 @@
          <div style="width:42%;color:#6b7280;">${esc(label)}</div>
          <div style="width:58%;font-weight:500;">${val}</div>
        </div>`;
-
     const contact =
       lab.head_name || lab.head_phone || lab.head_email
         ? `${row('Đầu mối (Trưởng khoa)', esc(lab.head_name || '—'))}
            ${row('Điện thoại đầu mối', lab.head_phone ? `<a href="tel:${esc(lab.head_phone)}">${esc(lab.head_phone)}</a>` : '—')}
            ${row('Email đầu mối', lab.head_email ? `<a href="mailto:${esc(lab.head_email)}">${esc(lab.head_email)}</a>` : '—')}`
         : row('Đầu mối liên hệ', '<span style="color:#9ca3af;">Chưa khai báo</span>');
-
     const caps = lab._caps || [];
     const capsHtml = caps.length
       ? `<table style="width:100%;border-collapse:collapse;font-size:12px;margin-top:4px;">
@@ -209,9 +188,7 @@
            </tbody>
          </table>`
       : '<span style="color:#9ca3af;font-style:italic;">Chưa khai báo năng lực.</span>';
-
     const info = tierInfo(lab._tier, lab.is_active);
-
     const panel = document.createElement('div');
     panel.id = 'lab-detail-panel';
     panel.style.cssText =
@@ -228,10 +205,8 @@
           <span style="display:inline-block;width:16px;height:16px;border-radius:50%;background:${info.color};"></span>
           <b style="font-size:14px;">${esc(info.label)}</b>
         </div>
-
         <div style="font-weight:bold;color:#0369a1;font-size:13px;margin:10px 0 4px;">📞 Đầu mối liên hệ</div>
         ${contact}
-
         <div style="font-weight:bold;color:#0369a1;font-size:13px;margin:14px 0 4px;">🏥 Thông tin chung</div>
         ${row('Địa chỉ', esc(lab.address || '—'))}
         ${row('Hotline', lab.phone ? `<a href="tel:${esc(lab.phone)}">${esc(lab.phone)}</a>` : '—')}
@@ -241,16 +216,13 @@
         ${row('Lĩnh vực ISO công nhận', esc(lab.iso15189_scope || '—'))}
         ${row('NS an toàn sinh học', lab.total_biosafety_staff ?? '—')}
         ${row('NS chuyên trách', lab.dedicated_staff ?? '—')}
-
         <div style="font-weight:bold;color:#0369a1;font-size:13px;margin:14px 0 4px;">✅ Chất lượng & Báo cáo</div>
         ${row('Ngoại kiểm', yn(lab.external_qa))}
         ${row('So sánh liên phòng', yn(lab.interlab))}
         ${row('Báo cáo ca (+) (TT54)', yn(lab.reports_positive))}
         ${row('Báo cáo định kỳ', yn(lab.periodic_report))}
-
         <div style="font-weight:bold;color:#0369a1;font-size:13px;margin:14px 0 4px;">🧪 Năng lực kỹ thuật</div>
         ${capsHtml}
-
         ${
           lab.capacity_needs
             ? `<div style="font-weight:bold;color:#0369a1;font-size:13px;margin:14px 0 4px;">📌 Nhu cầu nâng cao</div>
@@ -263,18 +235,18 @@
     document.body.appendChild(panel);
     panel.querySelector('#lab-detail-close').addEventListener('click', closeLabDetailPanel);
   }
-
   function closeLabDetailPanel() {
     document.getElementById('lab-detail-panel')?.remove();
     document.getElementById('lab-detail-backdrop')?.remove();
   }
-
   function createLabLayer(labs) {
     const useCluster = typeof L.markerClusterGroup === 'function';
     const group = useCluster
       ? L.markerClusterGroup({ maxClusterRadius: 50, spiderfyOnMaxZoom: true, chunkedLoading: true })
       : L.layerGroup();
     if (!useCluster) console.warn('[lab-map] Chưa nhúng Leaflet.markercluster — dùng marker thường.');
+
+    _markersByTier = {}; // reset mỗi lần dựng lại
 
     labs.forEach((lab) => {
       const marker = L.marker([lab.lat, lab.lng], { icon: labIcon(lab._tier, lab.is_active) });
@@ -283,9 +255,73 @@
         marker.bindPopup(buildLabPopupContent(lab), { maxWidth: 320 }).openPopup();
       });
       group.addLayer(marker);
+
+      // Gom marker theo cấp để highlight khi hover legend
+      const tierKey = lab.is_active && lab._tier >= 1 && lab._tier <= 5 ? lab._tier : 0;
+      (_markersByTier[tierKey] = _markersByTier[tierKey] || []).push({ marker, lab });
     });
     return group;
   }
+
+  // ------------------------------------------------------------------
+  // HIGHLIGHT MARKER THEO CẤP (hover legend)
+  //   CHỈ tác động marker PXN (qua _markersByTier), KHÔNG đụng marker khác
+  //   (RRT-ers, sự kiện...). An toàn với cluster: marker bị gom (không có
+  //   element) thì bỏ qua, không làm hỏng gì.
+  // ------------------------------------------------------------------
+  function _allLabMarkers() {
+    const out = [];
+    Object.values(_markersByTier).forEach((arr) =>
+      arr.forEach((o) => out.push(o))
+    );
+    return out;
+  }
+
+  window.__labHighlightTier = function (tier) {
+    let shown = 0;
+    let total = 0;
+    _allLabMarkers().forEach(({ marker, lab }) => {
+      const el = marker.getElement && marker.getElement();
+      if (!el) return; // đang bị gom trong cluster → bỏ qua
+      const isTarget =
+        (lab.is_active && lab._tier >= 1 && lab._tier <= 5 ? lab._tier : 0) === tier;
+      // CHỈ đổi opacity trên container (an toàn — không dời vị trí).
+      // Scale áp vào LỚP CON .lab-icon-inner (không có transform định vị).
+      el.style.transition = 'opacity .2s';
+      const inner = el.querySelector('.lab-icon-inner');
+      if (isTarget) {
+        el.style.opacity = '1';
+        if (inner) inner.style.transform = 'scale(1.6)';
+        shown++;
+      } else {
+        el.style.opacity = '0.25';
+        if (inner) inner.style.transform = '';
+      }
+    });
+    (_markersByTier[tier] || []).forEach(() => total++);
+    return { total, shown };
+  };
+
+  window.__labResetHighlight = function () {
+    _allLabMarkers().forEach(({ marker }) => {
+      const el = marker.getElement && marker.getElement();
+      if (!el) return;
+      el.style.opacity = ''; // KHÔNG đụng el.style.transform (Leaflet dùng để định vị)
+      const inner = el.querySelector('.lab-icon-inner');
+      if (inner) inner.style.transform = '';
+    });
+  };
+
+  // Gắn sự kiện hover cho legend (gọi sau khi legend đã vào DOM)
+  window.__labBindLegendHover = function (legendRoot) {
+    const root = legendRoot || document;
+    root.querySelectorAll('[data-lab-tier]').forEach((item) => {
+      const tier = parseInt(item.getAttribute('data-lab-tier'));
+      item.style.cursor = 'pointer';
+      item.addEventListener('mouseenter', () => window.__labHighlightTier(tier));
+      item.addEventListener('mouseleave', () => window.__labResetHighlight());
+    });
+  };
 
   window.LabMapLayer = {
     attach: async function (map, opts = {}) {
@@ -298,7 +334,6 @@
       _labLayer = createLabLayer(labs);
       if (opts.show) _labLayer.addTo(map);
       if (opts.standalone) return { layer: _labLayer, count: labs.length };
-
       const overlays = { '🧪 Phòng xét nghiệm': _labLayer };
       if (opts.otherOverlays && typeof opts.otherOverlays === 'object') {
         Object.entries(opts.otherOverlays).forEach(([name, layer]) => {
@@ -312,37 +347,37 @@
       }
       return { layer: _labLayer, count: labs.length, control: _layersControl };
     },
-
     reload: async function (map, opts = {}) {
       await loadLabs(true);
       return window.LabMapLayer.attach(map, opts);
     },
-
     getCache: function () { return _labsCache; },
     openDetail: function (lab) { openLabDetailPanel(lab); },
-
-    // Legend theo 5 CẤP NĂNG LỰC
+    highlightTier: function (t) { return window.__labHighlightTier(t); },
+    resetHighlight: function () { return window.__labResetHighlight(); },
+    bindLegendHover: function (root) { return window.__labBindLegendHover(root); },
+    // Legend theo 5 CẤP NĂNG LỰC — mỗi dòng có data-lab-tier để hover highlight
     legendHtml: function () {
-      const item = (color, text) =>
-        `<div style="display:flex;align-items:center;gap:6px;margin:2px 0;">
+      const item = (tier, color, text) =>
+        `<div data-lab-tier="${tier}" style="display:flex;align-items:center;gap:6px;margin:2px 0;padding:1px 3px;border-radius:4px;transition:background .15s;"
+              onmouseover="this.style.background='#f1f5f9'" onmouseout="this.style.background=''">
            <span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:${color};"></span>
            <span style="font-size:12px;">${text}</span>
          </div>`;
       return `
-        <hr style="margin:4px 0;">
-        <b style="font-size:12px;">Năng lực xét nghiệm</b>
-        ${item(TIER_INFO[5].color, 'Cấp 5')}
-        ${item(TIER_INFO[4].color, 'Cấp 4')}
-        ${item(TIER_INFO[3].color, 'Cấp 3')}
-        ${item(TIER_INFO[2].color, 'Cấp 2')}
-        ${item(TIER_INFO[1].color, 'Cấp 1')}
-        ${item(TIER_INFO[0].color, 'Chưa phân hạng / tạm ngừng')}`;
+        <hr style="margin:2px 0;">
+        <b style="font-size:10px;">Năng lực xét nghiệm</b>
+
+        ${item(5, TIER_INFO[5].color, 'Cấp 5')}
+        ${item(4, TIER_INFO[4].color, 'Cấp 4')}
+        ${item(3, TIER_INFO[3].color, 'Cấp 3')}
+        ${item(2, TIER_INFO[2].color, 'Cấp 2')}
+        ${item(1, TIER_INFO[1].color, 'Cấp 1')}
+        ${item(0, TIER_INFO[0].color, 'Chưa phân hạng / tạm ngừng')}`;
     },
   };
-
-  console.log('[lab-map-layer.js] ✅ Lớp PXN (5 cấp năng lực theo Bảng 1) sẵn sàng.');
+  console.log('[lab-map-layer.js] ✅ Lớp PXN (5 cấp + hover highlight) sẵn sàng.');
 })();
-
 /* ============================================================================
    GHÉP VÀO renderMapPage():
      if (window.LabMapLayer) {
@@ -351,5 +386,8 @@
          otherOverlays: { 'Thành viên RRT': markersLayerGroupInstance, 'Sự kiện': incidentsLayerGroup },
        });
      }
-   Legend: if (window.LabMapLayer) div.innerHTML += window.LabMapLayer.legendHtml();
+
+   LEGEND — sau khi chèn legendHtml() vào DOM, GẮN HOVER:
+     div.innerHTML += window.LabMapLayer.legendHtml();
+     window.LabMapLayer.bindLegendHover(div);   // ← thêm dòng này để kích hoạt highlight
 ============================================================================ */
