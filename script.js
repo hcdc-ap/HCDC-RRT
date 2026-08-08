@@ -9763,13 +9763,24 @@ document.addEventListener('DOMContentLoaded', function () {
     // (thay cho push -> draw -> pop cũ vốn bị mất filter khi user sort/search)
     if (!window._emerFilterRegistered) {
       window._emerFilterRegistered = true;
+      // Chuẩn hóa bỏ dấu tiếng Việt để khớp với data đã normalize của DataTable
+      const _stripVN = (s) =>
+        String(s ?? '')
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '')
+          .replace(/đ/g, 'd')
+          .replace(/Đ/g, 'D')
+          .trim()
+          .toLowerCase();
+
       $.fn.dataTable.ext.search.push(function (settings, data) {
         if (settings.nTable.id !== 'memberListTable') return true;
         const teamVal = $('#emer-filter-team').val() || 'all';
         const roleVal = $('#emer-filter-role').val() || 'all';
-        const matchTeam = teamVal === 'all' || data[2] === teamVal;
+        const matchTeam =
+          teamVal === 'all' || _stripVN(data[2]) === _stripVN(teamVal);
         const matchRole =
-          roleVal === 'all' || String(data[3]).includes(roleVal);
+          roleVal === 'all' || _stripVN(data[3]).includes(_stripVN(roleVal));
         return matchTeam && matchRole;
       });
     }
@@ -14176,32 +14187,53 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
     const name = p.name || p.tenXa || p.maXa || p.ma_xa || 'Chưa xác định';
     const quan = p.quan || p.tenQuan || p.QUAN || '';
     const danSo = p.danSo || p.DanSo || 0;
-    
+
     // Lấy thông tin diện tích, có bọc lót chữ hoa/thường tùy định dạng GeoJSON
     const dienTich = p.dienTich || p.DienTich || p.Shape_Area || 0;
 
     layer.on({
       mouseover: (e) => {
         const l = e.target;
-        l.setStyle({ weight: 1.3, color: '#000', fillOpacity: 0.63, dashArray: '' });
+        l.setStyle({
+          weight: 1.3,
+          color: '#000',
+          fillOpacity: 0.63,
+          dashArray: '',
+        });
         l.bringToFront();
       },
       mouseout: (e) => {
         if (populationLayer) populationLayer.resetStyle(e.target);
       },
       click: () => {
-        layer.bindPopup(`
+        layer
+          .bindPopup(
+            `
           <div style="text-align:center;min-width:160px;font-family:sans-serif;">
             <b style="color:#08519c;font-size:15px;">${escMap(name)}</b><br/>
-            ${quan ? `<span style="font-size:12px;color:#6b7280;">${escMap(quan)}</span><br/>` : ''}
+            ${
+              quan
+                ? `<span style="font-size:12px;color:#6b7280;">${escMap(
+                    quan
+                  )}</span><br/>`
+                : ''
+            }
             <hr style="margin:8px 0;border-top:1px dashed #cbd5e1;">
             <div style="text-align:left;font-size:13px;line-height:1.6;">
-              <b>Dân số:</b> <span style="color:#b91c1c;">${danSo.toLocaleString('vi-VN')}</span> người<br/>
-              <b>Diện tích:</b> ${dienTich ? Number(dienTich).toLocaleString('vi-VN') + ' km²' : 'N/A'}
+              <b>Dân số:</b> <span style="color:#b91c1c;">${danSo.toLocaleString(
+                'vi-VN'
+              )}</span> người<br/>
+              <b>Diện tích:</b> ${
+                dienTich
+                  ? Number(dienTich).toLocaleString('vi-VN') + ' km²'
+                  : 'N/A'
+              }
             </div>
           </div>
-        `).openPopup();
-      }
+        `
+          )
+          .openPopup();
+      },
     });
   }
 
@@ -14368,7 +14400,6 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
     // PXN
     if (layerVisible.labs && window.LabMapLayer) {
       html += `<div class="legend-section">${window.LabMapLayer.legendHtml()}</div>`;
-      
     }
     // BỔ SUNG: Chú giải Dân số
     if (layerVisible.population) {
@@ -14386,10 +14417,13 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
     div.innerHTML =
       html || '<span class="text-muted">Không có lớp nào bật.</span>';
     // Kích hoạt hover highlight cho legend PXN (SAU khi HTML đã vào DOM)
-    if (layerVisible.labs && window.LabMapLayer && window.LabMapLayer.bindLegendHover) {
+    if (
+      layerVisible.labs &&
+      window.LabMapLayer &&
+      window.LabMapLayer.bindLegendHover
+    ) {
       window.LabMapLayer.bindLegendHover(div);
     }
-      
   }
 
   function addLegend() {
@@ -14402,7 +14436,6 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
       return div;
     };
     legendControl.addTo(map);
-    
   }
   function refreshLegend() {
     const box = document.getElementById('map-legend-box');
@@ -14441,7 +14474,7 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
       style: choroStyle,
       onEachFeature: onEachFeatureChoropleth,
     });
-    
+
     // BỔ SUNG: Khởi tạo layer Dân số
     populationLayer = L.geoJSON(geojsonData, {
       style: populationStyle,
@@ -14703,7 +14736,8 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
 
     function _setVisibleByLayer(layer, on) {
       if (layer === choroplethLayer) layerVisible.choropleth = on;
-      else if (layer === populationLayer) layerVisible.population = on; // BỔ SUNG
+      else if (layer === populationLayer)
+        layerVisible.population = on; // BỔ SUNG
       else if (layer === membersLayer) layerVisible.members = on;
       else if (layer === incidentsLayer) layerVisible.incidents = on;
       else if (labLayer && layer === labLayer) layerVisible.labs = on;
