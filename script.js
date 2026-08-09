@@ -717,15 +717,26 @@ window.logout = async function () {
   console.log('👋 Logging out...');
 
   // ✅ 1. Stop Realtime subscriptions TRƯỚC
-  window.RealtimeManager.stop();
+  try {
+    window.RealtimeManager?.stop?.();
+  } catch (e) {
+    console.warn('⚠️ Lỗi dừng Realtime:', e);
+  }
 
-  // ✅ 2. Clear local state
+  // ✅ 2. Clear local state — XÓA ĐÚNG TÊN CACHE app đang dùng
   window.userSession = null;
   if (window.appState) {
     window.appState.appInitialized = false;
+    // Tên cache THẬT (trước đây xóa nhầm 'users'/'incidents' → không sạch)
+    window.appState.teamData = [];
+    window.appState.trackingIncidents = [];
+    window.appState.roster_schedules = [];
+    // Giữ xóa tên cũ cho an toàn (không lỗi nếu không tồn tại)
     window.appState.users = [];
     window.appState.incidents = [];
   }
+  // Đặt lại cờ đăng ký filter điều động để phiên mới không dùng lại filter cũ
+  window._emerFilterRegistered = false;
 
   // ✅ 3. Clear localStorage
   localStorage.removeItem('userSession');
@@ -743,7 +754,7 @@ window.logout = async function () {
     window.resetAppState();
   }
 
-  // ✅ 6. Redirect về login
+  // ✅ 6. Redirect về login (GIỮ NGUYÊN window.go — đúng cơ chế app)
   if (typeof window.go === 'function') {
     window.go('login');
   } else {
@@ -765,7 +776,19 @@ window.resetAppState = function () {
     notification: false,
   };
 
-  // Reset map
+  // --- Cache DỮ LIỆU phiên (QUAN TRỌNG: xóa để không rò sang tài khoản kế tiếp) ---
+  window.appState.teamData = []; // danh sách thành viên
+  window.appState.trackingIncidents = []; // sự kiện đang theo dõi
+  window.appState.roster_schedules = []; // lịch trực
+  window.appState.deployment_history = []; // nhật ký điều động
+  window.appState.notifications_list = []; // danh sách thông báo
+  window.appState.profiles = []; // hồ sơ người dùng (rất quan trọng)
+  window.appState.library = []; // thư viện tài liệu
+  window.appState.users = []; // (tên cũ, giữ cho an toàn)
+  window.appState.incidents = []; // (tên cũ, giữ cho an toàn)
+  window.appState.notifications = []; // (tên cũ, giữ cho an toàn)
+
+  // --- Reset map ---
   window.appState.map = null;
   window.appState.geojsonBaseLayer = null;
   window.appState.choroplethLayer = null;
@@ -774,7 +797,12 @@ window.resetAppState = function () {
   window.appState.mapCompanyData = [];
   window.appState.filteredData = [];
 
-  console.log('✅ appState reset');
+  // --- Cờ đăng ký filter điều động (đăng ký lại ở phiên mới) ---
+  window._emerFilterRegistered = false;
+
+  console.log(
+    '✅ appState reset (đã xóa toàn bộ cache dữ liệu phiên + bản đồ)'
+  );
 };
 // ========================================================================
 // APP BOOTSTRAP - KHỞI ĐỘNG ỨNG DỤNG
@@ -10162,10 +10190,21 @@ document.addEventListener('DOMContentLoaded', function () {
     );
     if (!typeElement) return;
     const type = typeElement.value;
-
     const groupNew = document.getElementById('group-new-incident');
     const groupAdd = document.getElementById('group-existing-incident');
     const select = document.getElementById('existingIncidentSelect');
+
+    // Vai trò tính 1 lần, dùng chung cả 2 nhánh
+    const role = (window.userSession?.role || '').toLowerCase();
+
+    // Helper: lọc sự kiện theo địa bàn cho ward_admin (dùng chung fetch + cache)
+    // ward_admin chỉ thấy sự kiện cùng mã xã của mình. Vai trò khác: giữ nguyên.
+    const scopeByWard = (list) => {
+      if (role !== 'ward_admin') return list;
+      const myMaXa = String(window.userSession?.workplace_ma_xa || '').trim();
+      if (!myMaXa) return []; // ward_admin không có mã xã → không thấy gì (an toàn)
+      return list.filter((inc) => String(inc.ma_xa || '').trim() === myMaXa);
+    };
 
     // Tìm hoặc tạo khung hiển thị thông tin thay thế nhân sự
     let replacementInfo = document.getElementById('replacement-info');
@@ -10177,7 +10216,6 @@ document.addEventListener('DOMContentLoaded', function () {
 
     if (type === 'new') {
       // Ẩn ô chọn xã với ward_admin — server tự gắn xã của họ
-      const role = (window.userSession?.role || '').toLowerCase();
       if (role === 'ward_admin') {
         const wardInput = document.getElementById('incidentWard');
         if (wardInput) {
@@ -10186,131 +10224,123 @@ document.addEventListener('DOMContentLoaded', function () {
           if (wardRow) wardRow.style.display = 'none';
         }
       }
-
       groupNew.style.display = 'block';
       groupAdd.style.display = 'none';
       replacementInfo.style.display = 'none';
-    } else {
-      groupNew.style.display = 'none';
-      groupAdd.style.display = 'block';
+      return;
+    }
 
-      // BƯỚC 1: Hiển thị trạng thái đang tải
-      select.innerHTML =
-        '<option value="">-- Đang tải dữ liệu từ máy chủ... --</option>';
-      select.disabled = true;
+    // ===== type === 'add' (bổ sung nhân sự vào sự kiện đang hoạt động) =====
+    groupNew.style.display = 'none';
+    groupAdd.style.display = 'block';
 
+    // BƯỚC 1: Hiển thị trạng thái đang tải
+    select.innerHTML =
+      '<option value="">-- Đang tải dữ liệu từ máy chủ... --</option>';
+    select.disabled = true;
+
+    try {
+      let activeIncidents = [];
+
+      // BƯỚC 2: LUÔN lấy dữ liệu MỚI NHẤT từ DB cho quyết định khẩn cấp.
+      // Cache trong bộ nhớ CHỈ dùng làm phương án dự phòng khi mạng lỗi.
       try {
-        let activeIncidents = [];
+        const { data, error } = await window.supabaseClient
+          .from('incidents')
+          .select('*')
+          .neq('status', 'closed')
+          .order('activation_time', { ascending: false });
+        if (error) throw error;
 
-        // BƯỚC 2: LUÔN lấy dữ liệu MỚI NHẤT từ DB cho quyết định khẩn cấp.
-        // Cache trong bộ nhớ CHỈ dùng làm phương án dự phòng khi mạng lỗi
-        // (trước đây ưu tiên cache -> danh sách sự kiện & số người từ chối
-        // có thể đã lỗi thời tại thời điểm admin ra quyết định thay thế).
-        try {
-          const { data, error } = await window.supabaseClient
-            .from('incidents')
-            .select('*')
-            .neq('status', 'closed')
-            .order('activation_time', { ascending: false });
-          if (error) throw error;
-          activeIncidents = data || [];
+        // Lọc địa bàn NGAY sau khi nhận (áp cho cả cache đồng bộ bên dưới)
+        activeIncidents = scopeByWard(data || []);
 
-          // Đồng bộ lại cache để các bước sau (nextToReviewBtn) dùng đúng dữ liệu
-          if (!window.appState) window.appState = {};
-          window.appState.trackingIncidents = activeIncidents;
-        } catch (fetchErr) {
-          console.warn(
-            '⚠️ Không tải được sự kiện mới nhất, dùng tạm cache:',
-            fetchErr
-          );
-          activeIncidents = (window.appState?.trackingIncidents || []).filter(
-            (inc) => inc.status !== 'closed'
-          );
-        }
+        // Đồng bộ cache cho các bước sau — LƯU BẢN ĐÃ LỌC (không rò xã khác)
+        if (!window.appState) window.appState = {};
+        window.appState.trackingIncidents = activeIncidents;
+      } catch (fetchErr) {
+        console.warn(
+          '⚠️ Không tải được sự kiện mới nhất, dùng tạm cache:',
+          fetchErr
+        );
+        // Fallback cache: PHẢI lọc lại địa bàn (tránh rò sự kiện xã khác khi mạng lỗi)
+        const cached = (window.appState?.trackingIncidents || []).filter(
+          (inc) => inc.status !== 'closed'
+        );
+        activeIncidents = scopeByWard(cached);
+      }
 
-        // BƯỚC 3: Đổ dữ liệu vào Dropdown (build chuỗi 1 lần + escape chống XSS)
-        const escOpt = (s) =>
-          typeof window.escapeHtml === 'function'
-            ? window.escapeHtml(String(s ?? ''))
-            : String(s ?? '')
-                .replace(/&/g, '&amp;')
-                .replace(/</g, '&lt;')
-                .replace(/>/g, '&gt;')
-                .replace(/"/g, '&quot;');
+      // BƯỚC 3: Đổ dữ liệu vào Dropdown (build chuỗi 1 lần + escape chống XSS)
+      const escOpt = (s) =>
+        typeof window.escapeHtml === 'function'
+          ? window.escapeHtml(String(s ?? ''))
+          : String(s ?? '')
+              .replace(/&/g, '&amp;')
+              .replace(/</g, '&lt;')
+              .replace(/>/g, '&gt;')
+              .replace(/"/g, '&quot;');
 
-        let optionsHtml =
-          '<option value="">-- Chọn sự kiện cần bổ sung/thay thế --</option>';
-
-        if (activeIncidents.length === 0) {
-          optionsHtml +=
-            '<option value="" disabled>(Không có sự kiện nào đang hoạt động)</option>';
-        } else {
-          activeIncidents.forEach((inc) => {
-            const eventName =
-              inc.event_name || inc.event || 'Sự kiện không tên';
-            const location =
-              inc.location_text || inc.location || 'Chưa rõ địa điểm';
-            const declined = inc.declined_members || '';
-            const statusIcon = inc.admin_activate ? '🔴' : '⚠️';
-
-            optionsHtml += `<option value="${escOpt(
-              inc.id
-            )}" data-declined="${escOpt(declined)}">
+      let optionsHtml =
+        '<option value="">-- Chọn sự kiện cần bổ sung/thay thế --</option>';
+      if (activeIncidents.length === 0) {
+        optionsHtml +=
+          '<option value="" disabled>(Không có sự kiện nào đang hoạt động)</option>';
+      } else {
+        activeIncidents.forEach((inc) => {
+          const eventName = inc.event_name || inc.event || 'Sự kiện không tên';
+          const location =
+            inc.location_text || inc.location || 'Chưa rõ địa điểm';
+          const declined = inc.declined_members || '';
+          const statusIcon = inc.admin_activate ? '🔴' : '⚠️';
+          optionsHtml += `<option value="${escOpt(
+            inc.id
+          )}" data-declined="${escOpt(declined)}">
             ${statusIcon} [ID: ${escOpt(
-              String(inc.id).substring(0, 5)
-            )}] ${escOpt(eventName)} (${escOpt(location)})
+            String(inc.id).substring(0, 5)
+          )}] ${escOpt(eventName)} (${escOpt(location)})
           </option>`;
-          });
+        });
+      }
+      select.innerHTML = optionsHtml;
+      select.disabled = false;
+
+      // BƯỚC 4: Xử lý sự kiện khi chọn 1 option
+      select.onchange = function () {
+        const selectedOption = select.options[select.selectedIndex];
+        if (!selectedOption || !selectedOption.value) {
+          replacementInfo.style.display = 'none';
+          return;
         }
-
-        select.innerHTML = optionsHtml;
-        select.disabled = false;
-
-        /* ===== HẾT KHỐI 8 — phần "// BƯỚC 4: Xử lý sự kiện khi chọn 1 option"
-   và toàn bộ catch của toggleActivationType giữ nguyên phía sau ===== */
-
-        // BƯỚC 4: Xử lý sự kiện khi chọn 1 option
-        select.onchange = function () {
-          const selectedOption = select.options[select.selectedIndex];
-          if (!selectedOption || !selectedOption.value) {
-            replacementInfo.style.display = 'none';
-            return;
-          }
-
-          const declinedStr = selectedOption.getAttribute('data-declined');
-          replacementInfo.style.display = 'block';
-
-          if (declinedStr) {
-            const declinedArr = declinedStr.split(';').filter(Boolean);
-            replacementInfo.innerHTML = `
+        const declinedStr = selectedOption.getAttribute('data-declined');
+        replacementInfo.style.display = 'block';
+        if (declinedStr) {
+          const declinedArr = declinedStr.split(';').filter(Boolean);
+          replacementInfo.innerHTML = `
             <div class="alert alert-danger mt-3 d-flex align-items-center" role="alert">
               <i class='bx bxs-error-circle fs-4 me-2'></i>
               <div>
                 <strong>Cần bổ sung thay thế ${
                   declinedArr.length
                 } nhân sự đã từ chối:</strong><br/>
-                <small>${declinedArr.join(', ')}</small>
+                <small>${escOpt(declinedArr.join(', '))}</small>
               </div>
-            </div>
-          `;
-          } else {
-            replacementInfo.innerHTML = `
+            </div>`;
+        } else {
+          replacementInfo.innerHTML = `
             <div class="alert alert-info mt-3 d-flex align-items-center" role="alert">
               <i class='bx bxs-info-circle fs-4 me-2'></i>
               <div>
                 <strong>Sự kiện đang diễn ra ổn định.</strong><br/>
                 <small>Hiện chưa có nhân sự nào từ chối. Lệnh này sẽ tăng cường thêm quân số.</small>
               </div>
-            </div>
-          `;
-          }
-        };
-      } catch (err) {
-        console.error('Lỗi tải sự kiện:', err);
-        select.innerHTML =
-          '<option value="">-- Lỗi tải dữ liệu, vui lòng thử lại --</option>';
-        select.disabled = false;
-      }
+            </div>`;
+        }
+      };
+    } catch (err) {
+      console.error('Lỗi tải sự kiện:', err);
+      select.innerHTML =
+        '<option value="">-- Lỗi tải dữ liệu, vui lòng thử lại --</option>';
+      select.disabled = false;
     }
   };
 
@@ -20421,6 +20451,7 @@ window.applyRolePermissions = function (role) {
     'btn-add-doc',
     'admin-rotation-controls',
     /*'btn-export-members',*/
+    'btn-map-find-lab',
     'btn-export-logistics',
     'btn-delete-roster',
     'btn-open-plan-modal',
