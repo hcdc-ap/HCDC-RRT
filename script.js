@@ -20451,6 +20451,7 @@ window.applyRolePermissions = function (role) {
     'btn-add-doc',
     'admin-rotation-controls',
     /*'btn-export-members',*/
+    'btn-find-lab',
     'btn-map-find-lab',
     'btn-export-logistics',
     'btn-delete-roster',
