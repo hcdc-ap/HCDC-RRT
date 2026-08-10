@@ -392,7 +392,7 @@
           <a href="#" data-target="page-team"><i class='bx bxs-group bx-sm'></i><span class="text">Thành viên</span></a>
         </li>
 
-        <li id="menu-training" data-roles="admin,manager">
+        <li id="menu-training">
           <a href="#" data-target="page-training"><i class='bx bxs-graduation bx-sm'></i><span class="text">Đào tạo</span></a>
         </li>
 
@@ -1511,7 +1511,7 @@
                 <i class='bx bx-search' style="color:#999; font-size: 20px;"></i>
                 <input type="text" id="training-search" class="training-search" placeholder="Tìm kiếm khóa học..." style="width: 550px;">
 
-                <button id="btn-create-course-trigger" class="btn btn-primary" onclick="openModal('modal-create-course')" style="display:none;"><i class="bx bx-plus" data-permission="admin"></i> Khóa Đào tạo</button>
+                <button id="btn-create-course-trigger" class="btn btn-primary" onclick="openModal('modal-create-course'); window.renderCourseAudiencePicker();" style="display:none;"><i class="bx bx-plus" data-permission="admin"></i> Khóa Đào tạo</button>
               </div>
             </div>
             <div id="course-grid-container" class="course-grid">
@@ -1530,7 +1530,7 @@
               </div>
               <div style="display:flex; gap:10px;">
                 <button class="btn btn-secondary" onclick="closeTrainingDossier()">Quay lại</button>
-                <button class="btn btn-primary" onclick="saveTrainingResultsClick()"><i class="bx fluentui-save-arrow-right-20-o"></i> Lưu Kết Quả</button>
+                <button id="btn-save-training" class="btn btn-primary" onclick="saveTrainingResultsClick()"><i class="bx fluentui-save-arrow-right-20-o"></i> Lưu Kết Quả</button>
               </div>
             </div>
 
@@ -1621,34 +1621,14 @@
 
                   <div class="row g-3">
                     <div class="col-md-6">
-                      <label for="new-course-team-select" class="form-label small text-muted">Lọc theo Đội (Team)</label>
-                      <select id="new-course-team-select" class="form-select">
-                        <option value="all">-- Tất cả Đội --</option>
-                        <option value="Team 1">Team 1</option>
-                        <option value="Team 2">Team 2</option>
-                        <option value="Team 3">Team 3</option>
-                        <option value="Team 4">Team 4</option>
-                        <option value="Team 5">Team 5</option>
-                        <option value="Team 6">Team 6</option>
-                        <option value="Team 7">Team 7</option>
-                        <option value="Team 8">Team 8</option>
-                        <option value="Team 9">Team 9</option>
-                        <option value="Team 10">Team 10</option>
-                      </select>
+                      <div id="new-course-team-wrap"></div>
                     </div>
 
                     <div class="col-md-6">
-                      <label for="new-course-role-select" class="form-label small text-muted">Lọc theo Vai trò (Position)</label>
-                      <select id="new-course-role-select" class="form-select">
-                        <option value="all">-- Tất cả Vai trò --</option>
-                        <option value="Leader">Đội trưởng</option>
-                        <option value="Epidemic">Cán bộ Dịch tễ</option>
-                        <option value="Member">Cán bộ Lấy mẫu</option>
-                        <option value="Engineer">Cán bộ Xử lý môi trường</option>
-                        <option value="Media">Cán bộ Truyền thông</option>
-                        <option value="Logistic">Hậu cần</option>
-                        <option value="Driver">Lái xe</option>
-                      </select>
+                      <div id="new-course-role-wrap"></div>
+                    </div>
+                    <div class="col-12 mt-2">
+                      <div id="new-course-audience-preview"></div>
                     </div>
                   </div>
                   <div class="mt-2">
