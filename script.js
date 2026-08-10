@@ -717,26 +717,15 @@ window.logout = async function () {
   console.log('👋 Logging out...');
 
   // ✅ 1. Stop Realtime subscriptions TRƯỚC
-  try {
-    window.RealtimeManager?.stop?.();
-  } catch (e) {
-    console.warn('⚠️ Lỗi dừng Realtime:', e);
-  }
+  window.RealtimeManager.stop();
 
-  // ✅ 2. Clear local state — XÓA ĐÚNG TÊN CACHE app đang dùng
+  // ✅ 2. Clear local state
   window.userSession = null;
   if (window.appState) {
     window.appState.appInitialized = false;
-    // Tên cache THẬT (trước đây xóa nhầm 'users'/'incidents' → không sạch)
-    window.appState.teamData = [];
-    window.appState.trackingIncidents = [];
-    window.appState.roster_schedules = [];
-    // Giữ xóa tên cũ cho an toàn (không lỗi nếu không tồn tại)
     window.appState.users = [];
     window.appState.incidents = [];
   }
-  // Đặt lại cờ đăng ký filter điều động để phiên mới không dùng lại filter cũ
-  window._emerFilterRegistered = false;
 
   // ✅ 3. Clear localStorage
   localStorage.removeItem('userSession');
@@ -754,7 +743,7 @@ window.logout = async function () {
     window.resetAppState();
   }
 
-  // ✅ 6. Redirect về login (GIỮ NGUYÊN window.go — đúng cơ chế app)
+  // ✅ 6. Redirect về login
   if (typeof window.go === 'function') {
     window.go('login');
   } else {
@@ -773,6 +762,7 @@ window.resetAppState = function () {
     analytics: false,
     dashboard: false,
     team: false,
+    training: false,
     notification: false,
   };
 
@@ -787,6 +777,7 @@ window.resetAppState = function () {
   window.appState.users = []; // (tên cũ, giữ cho an toàn)
   window.appState.incidents = []; // (tên cũ, giữ cho an toàn)
   window.appState.notifications = []; // (tên cũ, giữ cho an toàn)
+  window.appState.training_courses = [];
 
   // --- Reset map ---
   window.appState.map = null;
@@ -9791,24 +9782,13 @@ document.addEventListener('DOMContentLoaded', function () {
     // (thay cho push -> draw -> pop cũ vốn bị mất filter khi user sort/search)
     if (!window._emerFilterRegistered) {
       window._emerFilterRegistered = true;
-      // Chuẩn hóa bỏ dấu tiếng Việt để khớp với data đã normalize của DataTable
-      const _stripVN = (s) =>
-        String(s ?? '')
-          .normalize('NFD')
-          .replace(/[\u0300-\u036f]/g, '')
-          .replace(/đ/g, 'd')
-          .replace(/Đ/g, 'D')
-          .trim()
-          .toLowerCase();
-
       $.fn.dataTable.ext.search.push(function (settings, data) {
         if (settings.nTable.id !== 'memberListTable') return true;
         const teamVal = $('#emer-filter-team').val() || 'all';
         const roleVal = $('#emer-filter-role').val() || 'all';
-        const matchTeam =
-          teamVal === 'all' || _stripVN(data[2]) === _stripVN(teamVal);
+        const matchTeam = teamVal === 'all' || data[2] === teamVal;
         const matchRole =
-          roleVal === 'all' || _stripVN(data[3]).includes(_stripVN(roleVal));
+          roleVal === 'all' || String(data[3]).includes(roleVal);
         return matchTeam && matchRole;
       });
     }
@@ -10190,21 +10170,10 @@ document.addEventListener('DOMContentLoaded', function () {
     );
     if (!typeElement) return;
     const type = typeElement.value;
+
     const groupNew = document.getElementById('group-new-incident');
     const groupAdd = document.getElementById('group-existing-incident');
     const select = document.getElementById('existingIncidentSelect');
-
-    // Vai trò tính 1 lần, dùng chung cả 2 nhánh
-    const role = (window.userSession?.role || '').toLowerCase();
-
-    // Helper: lọc sự kiện theo địa bàn cho ward_admin (dùng chung fetch + cache)
-    // ward_admin chỉ thấy sự kiện cùng mã xã của mình. Vai trò khác: giữ nguyên.
-    const scopeByWard = (list) => {
-      if (role !== 'ward_admin') return list;
-      const myMaXa = String(window.userSession?.workplace_ma_xa || '').trim();
-      if (!myMaXa) return []; // ward_admin không có mã xã → không thấy gì (an toàn)
-      return list.filter((inc) => String(inc.ma_xa || '').trim() === myMaXa);
-    };
 
     // Tìm hoặc tạo khung hiển thị thông tin thay thế nhân sự
     let replacementInfo = document.getElementById('replacement-info');
@@ -10216,6 +10185,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     if (type === 'new') {
       // Ẩn ô chọn xã với ward_admin — server tự gắn xã của họ
+      const role = (window.userSession?.role || '').toLowerCase();
       if (role === 'ward_admin') {
         const wardInput = document.getElementById('incidentWard');
         if (wardInput) {
@@ -10224,123 +10194,131 @@ document.addEventListener('DOMContentLoaded', function () {
           if (wardRow) wardRow.style.display = 'none';
         }
       }
+
       groupNew.style.display = 'block';
       groupAdd.style.display = 'none';
       replacementInfo.style.display = 'none';
-      return;
-    }
+    } else {
+      groupNew.style.display = 'none';
+      groupAdd.style.display = 'block';
 
-    // ===== type === 'add' (bổ sung nhân sự vào sự kiện đang hoạt động) =====
-    groupNew.style.display = 'none';
-    groupAdd.style.display = 'block';
+      // BƯỚC 1: Hiển thị trạng thái đang tải
+      select.innerHTML =
+        '<option value="">-- Đang tải dữ liệu từ máy chủ... --</option>';
+      select.disabled = true;
 
-    // BƯỚC 1: Hiển thị trạng thái đang tải
-    select.innerHTML =
-      '<option value="">-- Đang tải dữ liệu từ máy chủ... --</option>';
-    select.disabled = true;
-
-    try {
-      let activeIncidents = [];
-
-      // BƯỚC 2: LUÔN lấy dữ liệu MỚI NHẤT từ DB cho quyết định khẩn cấp.
-      // Cache trong bộ nhớ CHỈ dùng làm phương án dự phòng khi mạng lỗi.
       try {
-        const { data, error } = await window.supabaseClient
-          .from('incidents')
-          .select('*')
-          .neq('status', 'closed')
-          .order('activation_time', { ascending: false });
-        if (error) throw error;
+        let activeIncidents = [];
 
-        // Lọc địa bàn NGAY sau khi nhận (áp cho cả cache đồng bộ bên dưới)
-        activeIncidents = scopeByWard(data || []);
+        // BƯỚC 2: LUÔN lấy dữ liệu MỚI NHẤT từ DB cho quyết định khẩn cấp.
+        // Cache trong bộ nhớ CHỈ dùng làm phương án dự phòng khi mạng lỗi
+        // (trước đây ưu tiên cache -> danh sách sự kiện & số người từ chối
+        // có thể đã lỗi thời tại thời điểm admin ra quyết định thay thế).
+        try {
+          const { data, error } = await window.supabaseClient
+            .from('incidents')
+            .select('*')
+            .neq('status', 'closed')
+            .order('activation_time', { ascending: false });
+          if (error) throw error;
+          activeIncidents = data || [];
 
-        // Đồng bộ cache cho các bước sau — LƯU BẢN ĐÃ LỌC (không rò xã khác)
-        if (!window.appState) window.appState = {};
-        window.appState.trackingIncidents = activeIncidents;
-      } catch (fetchErr) {
-        console.warn(
-          '⚠️ Không tải được sự kiện mới nhất, dùng tạm cache:',
-          fetchErr
-        );
-        // Fallback cache: PHẢI lọc lại địa bàn (tránh rò sự kiện xã khác khi mạng lỗi)
-        const cached = (window.appState?.trackingIncidents || []).filter(
-          (inc) => inc.status !== 'closed'
-        );
-        activeIncidents = scopeByWard(cached);
-      }
-
-      // BƯỚC 3: Đổ dữ liệu vào Dropdown (build chuỗi 1 lần + escape chống XSS)
-      const escOpt = (s) =>
-        typeof window.escapeHtml === 'function'
-          ? window.escapeHtml(String(s ?? ''))
-          : String(s ?? '')
-              .replace(/&/g, '&amp;')
-              .replace(/</g, '&lt;')
-              .replace(/>/g, '&gt;')
-              .replace(/"/g, '&quot;');
-
-      let optionsHtml =
-        '<option value="">-- Chọn sự kiện cần bổ sung/thay thế --</option>';
-      if (activeIncidents.length === 0) {
-        optionsHtml +=
-          '<option value="" disabled>(Không có sự kiện nào đang hoạt động)</option>';
-      } else {
-        activeIncidents.forEach((inc) => {
-          const eventName = inc.event_name || inc.event || 'Sự kiện không tên';
-          const location =
-            inc.location_text || inc.location || 'Chưa rõ địa điểm';
-          const declined = inc.declined_members || '';
-          const statusIcon = inc.admin_activate ? '🔴' : '⚠️';
-          optionsHtml += `<option value="${escOpt(
-            inc.id
-          )}" data-declined="${escOpt(declined)}">
-            ${statusIcon} [ID: ${escOpt(
-            String(inc.id).substring(0, 5)
-          )}] ${escOpt(eventName)} (${escOpt(location)})
-          </option>`;
-        });
-      }
-      select.innerHTML = optionsHtml;
-      select.disabled = false;
-
-      // BƯỚC 4: Xử lý sự kiện khi chọn 1 option
-      select.onchange = function () {
-        const selectedOption = select.options[select.selectedIndex];
-        if (!selectedOption || !selectedOption.value) {
-          replacementInfo.style.display = 'none';
-          return;
+          // Đồng bộ lại cache để các bước sau (nextToReviewBtn) dùng đúng dữ liệu
+          if (!window.appState) window.appState = {};
+          window.appState.trackingIncidents = activeIncidents;
+        } catch (fetchErr) {
+          console.warn(
+            '⚠️ Không tải được sự kiện mới nhất, dùng tạm cache:',
+            fetchErr
+          );
+          activeIncidents = (window.appState?.trackingIncidents || []).filter(
+            (inc) => inc.status !== 'closed'
+          );
         }
-        const declinedStr = selectedOption.getAttribute('data-declined');
-        replacementInfo.style.display = 'block';
-        if (declinedStr) {
-          const declinedArr = declinedStr.split(';').filter(Boolean);
-          replacementInfo.innerHTML = `
+
+        // BƯỚC 3: Đổ dữ liệu vào Dropdown (build chuỗi 1 lần + escape chống XSS)
+        const escOpt = (s) =>
+          typeof window.escapeHtml === 'function'
+            ? window.escapeHtml(String(s ?? ''))
+            : String(s ?? '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;');
+
+        let optionsHtml =
+          '<option value="">-- Chọn sự kiện cần bổ sung/thay thế --</option>';
+
+        if (activeIncidents.length === 0) {
+          optionsHtml +=
+            '<option value="" disabled>(Không có sự kiện nào đang hoạt động)</option>';
+        } else {
+          activeIncidents.forEach((inc) => {
+            const eventName =
+              inc.event_name || inc.event || 'Sự kiện không tên';
+            const location =
+              inc.location_text || inc.location || 'Chưa rõ địa điểm';
+            const declined = inc.declined_members || '';
+            const statusIcon = inc.admin_activate ? '🔴' : '⚠️';
+
+            optionsHtml += `<option value="${escOpt(
+              inc.id
+            )}" data-declined="${escOpt(declined)}">
+            ${statusIcon} [ID: ${escOpt(
+              String(inc.id).substring(0, 5)
+            )}] ${escOpt(eventName)} (${escOpt(location)})
+          </option>`;
+          });
+        }
+
+        select.innerHTML = optionsHtml;
+        select.disabled = false;
+
+        /* ===== HẾT KHỐI 8 — phần "// BƯỚC 4: Xử lý sự kiện khi chọn 1 option"
+   và toàn bộ catch của toggleActivationType giữ nguyên phía sau ===== */
+
+        // BƯỚC 4: Xử lý sự kiện khi chọn 1 option
+        select.onchange = function () {
+          const selectedOption = select.options[select.selectedIndex];
+          if (!selectedOption || !selectedOption.value) {
+            replacementInfo.style.display = 'none';
+            return;
+          }
+
+          const declinedStr = selectedOption.getAttribute('data-declined');
+          replacementInfo.style.display = 'block';
+
+          if (declinedStr) {
+            const declinedArr = declinedStr.split(';').filter(Boolean);
+            replacementInfo.innerHTML = `
             <div class="alert alert-danger mt-3 d-flex align-items-center" role="alert">
               <i class='bx bxs-error-circle fs-4 me-2'></i>
               <div>
                 <strong>Cần bổ sung thay thế ${
                   declinedArr.length
                 } nhân sự đã từ chối:</strong><br/>
-                <small>${escOpt(declinedArr.join(', '))}</small>
+                <small>${declinedArr.join(', ')}</small>
               </div>
-            </div>`;
-        } else {
-          replacementInfo.innerHTML = `
+            </div>
+          `;
+          } else {
+            replacementInfo.innerHTML = `
             <div class="alert alert-info mt-3 d-flex align-items-center" role="alert">
               <i class='bx bxs-info-circle fs-4 me-2'></i>
               <div>
                 <strong>Sự kiện đang diễn ra ổn định.</strong><br/>
                 <small>Hiện chưa có nhân sự nào từ chối. Lệnh này sẽ tăng cường thêm quân số.</small>
               </div>
-            </div>`;
-        }
-      };
-    } catch (err) {
-      console.error('Lỗi tải sự kiện:', err);
-      select.innerHTML =
-        '<option value="">-- Lỗi tải dữ liệu, vui lòng thử lại --</option>';
-      select.disabled = false;
+            </div>
+          `;
+          }
+        };
+      } catch (err) {
+        console.error('Lỗi tải sự kiện:', err);
+        select.innerHTML =
+          '<option value="">-- Lỗi tải dữ liệu, vui lòng thử lại --</option>';
+        select.disabled = false;
+      }
     }
   };
 
@@ -11132,52 +11110,34 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
     try {
       if (typeof showLoadingSpinner === 'function') showLoadingSpinner(true);
 
-      // 1. Tải dữ liệu trực tiếp từ 2 bảng (Sửa lỗi "trắng bóc")
-      const [coursesRes, recordsRes] = await Promise.all([
-        supabaseClient.from('training_courses').select('*'),
-        supabaseClient.from('training_records').select('*'),
-      ]);
+      // Gọi tải dữ liệu 1 lần. Hàm loadTrainingData giờ đã xử lý việc giấu khóa học theo quyền.
+      await window.loadTrainingData();
+      const { courses, records } = window.appState.training;
 
-      if (coursesRes.error) throw coursesRes.error;
-
-      // 2. Map dữ liệu Supabase về định dạng giao diện cần
-      const courses = (coursesRes.data || []).map((item) => ({
-        id: item.id,
-        name: item.course_name, // Map từ course_name
-        date: item.training_date
-          ? new Date(item.training_date).toLocaleDateString('vi-VN')
-          : 'Chưa rõ',
-        rawDate: new Date(item.training_date), // Để so sánh today
-        location: item.location,
-      }));
-
-      const records = (recordsRes.data || []).map((r) => ({
-        ...r,
-        courseId: r.course_id, // Map từ course_id trong DB
-      }));
-
-      // --- PHÂN QUYỀN ADMIN ---
       const isAdmin =
         (window.userSession?.role || '').toLowerCase() === 'admin';
       const btnCreate = document.getElementById('btn-create-course-trigger');
       if (btnCreate) btnCreate.style.display = isAdmin ? 'block' : 'none';
 
-      // 3. Reset container
       container.innerHTML = '';
-      if (courses.length === 0) {
+
+      // Nếu khóa học rỗng, báo ngay, chặn vẽ thẻ
+      if (!courses || courses.length === 0) {
         container.innerHTML =
-          '<p class="text-muted text-center mt-4">Chưa có khóa đào tạo nào.</p>';
-        if (typeof loadTrainingData === 'function') loadTrainingData();
+          '<p class="text-muted text-center mt-4">Bạn chưa tham gia Khóa đào tạo nào.</p>';
+        // Biểu đồ sẽ tự đọc dữ liệu rỗng và vẽ biểu đồ trống
+        if (typeof renderTrainingAnalytics === 'function')
+          renderTrainingAnalytics();
         return;
       }
 
       const today = new Date();
       today.setHours(0, 0, 0, 0);
 
-      // 4. Vẽ từng thẻ khóa học
       courses.forEach((c) => {
+        // Chỉ đếm các học viên hợp lệ thuộc quyền người đang xem
         const recordsThisCourse = records.filter(
-          (r) => String(r.courseId) === String(c.id)
+          (r) => String(r.course_id || r.courseId) === String(c.id)
         );
         const hasGraded = recordsThisCourse.some(
           (r) => r.result === 'pass' || r.result === 'fail'
@@ -11188,17 +11148,18 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
         let badgeClass = 'bg-primary';
         let cardClass = 'course-card cc-gen';
         let cardStyle = '';
+        const rawDate = c.training_date ? new Date(c.training_date) : null;
 
         if (hasGraded) {
           statusText = 'Graded';
           badgeClass = 'bg-success';
           cardClass = 'course-card cc-spec';
-        } else if (c.rawDate) {
-          if (c.rawDate < today) {
+        } else if (rawDate) {
+          if (rawDate < today) {
             statusText = 'Completed';
             badgeClass = 'bg-secondary';
             cardStyle = 'border-top: 5px solid #6c757d;';
-          } else if (c.rawDate.getTime() === today.getTime()) {
+          } else if (rawDate.getTime() === today.getTime()) {
             statusText = 'Happening';
             badgeClass = 'bg-danger spinner-grow spinner-grow-sm';
             cardStyle = 'border-top: 5px solid #dc3545;';
@@ -11206,58 +11167,59 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
         }
 
         const deleteBtn = isAdmin
-          ? `
-                <button class="btn-delete-course" 
-                        onclick="event.stopPropagation(); deleteCourseConfirm('${
-                          c.id
-                        }', '${escapeHtml(c.name)}', event)" 
-                        title="Xóa khóa học"
-                        style="position: absolute; bottom: 15px; right: 15px; width: 30px; height: 30px; background: #ffebee; color: #d32f2f; border: none; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; z-index: 10;">
-                    <i class='bx bx-trash'></i>
-                </button>`
+          ? `<button class="btn-delete-course"
+                    onclick="event.stopPropagation(); deleteCourseConfirm('${
+                      c.id
+                    }', '${escapeHtml(c.course_name || c.name || '')}', event)"
+                    title="Xóa khóa học"
+                    style="position: absolute; bottom: 15px; right: 15px; width: 30px; height: 30px; background: #ffebee; color: #d32f2f; border: none; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; z-index: 10;">
+                <i class='bx bx-trash'></i>
+            </button>`
           : '';
 
+        const displayDate = c.training_date
+          ? new Date(c.training_date).toLocaleDateString('vi-VN')
+          : 'Chưa rõ';
+
         const html = `
-            <div class="${cardClass}" style="${cardStyle}" data-course-id="${
+        <div class="${cardClass}" style="${cardStyle}" data-course-id="${
           c.id
-        }" data-name="${escapeHtml(c.name).toLowerCase()}">
-                <span class="course-badge badge ${badgeClass}" style="position: absolute; top: 15px; right: 15px; padding: 5px 10px; border-radius: 12px; font-size: 11px; color: white;">
-                    ${statusText}
-                </span>
-                ${deleteBtn}
-                <div onclick="openTrainingDossier('${
-                  c.id
-                }')" style="cursor: pointer;">
-                    <h5 style="margin: 0 0 10px 0; font-weight: bold; color: #333; font-size: 16px;">${escapeHtml(
-                      c.name
-                    )}</h5>
-                    <div style="font-size: 13px; color: #666; line-height: 1.5;">
-                        <i class="fa-solid fa-location-dot"></i> ${escapeHtml(
-                          c.location || 'Chưa xác định'
-                        )}<br>
-                        <i class="fa-regular fa-calendar"></i> ${c.date}
-                    </div>
-                    <div style="margin-top: 15px; display: flex; justify-content: space-between; align-items: center; border-top: 1px solid #eee; padding-top: 10px; font-size: 13px;">
-                        <small class="text-muted">ID: ${c.id.substring(
-                          0,
-                          8
-                        )}...</small>
-                        <small><strong>${totalTrainees}</strong> học viên</small>
-                    </div>
+        }" data-name="${escapeHtml(
+          c.course_name || c.name || ''
+        ).toLowerCase()}">
+            <span class="course-badge badge ${badgeClass}" style="position: absolute; top: 15px; right: 15px; padding: 5px 10px; border-radius: 12px; font-size: 11px; color: white;">
+                ${statusText}
+            </span>
+            ${deleteBtn}
+            <div onclick="openTrainingDossier('${
+              c.id
+            }')" style="cursor: pointer;">
+                <h5 style="margin: 0 0 10px 0; font-weight: bold; color: #333; font-size: 16px;">${escapeHtml(
+                  c.course_name || c.name || ''
+                )}</h5>
+                <div style="font-size: 13px; color: #666; line-height: 1.5;">
+                    <i class="fa-solid fa-location-dot"></i> ${escapeHtml(
+                      c.location || 'Chưa xác định'
+                    )}<br>
+                    <i class="fa-regular fa-calendar"></i> ${displayDate}
                 </div>
-            </div>`;
+                <div style="margin-top: 15px; display: flex; justify-content: space-between; align-items: center; border-top: 1px solid #eee; padding-top: 10px; font-size: 13px;">
+                    <small class="text-muted">ID: ${String(c.id).substring(
+                      0,
+                      8
+                    )}...</small>
+                    <small><strong>${totalTrainees}</strong> học viên</small>
+                </div>
+            </div>
+        </div>`;
 
         container.insertAdjacentHTML('beforeend', html);
       });
 
-      // 5. Tìm kiếm
       const searchInput = document.getElementById('training-search');
-      if (searchInput) {
-        searchInput.onkeyup = window.filterTrainingCourses;
-      }
+      if (searchInput) searchInput.onkeyup = window.filterTrainingCourses;
 
-      // 6. Vẽ biểu đồ
-      await window.loadTrainingData();
+      // Lúc này records đã được lọc sạch, biểu đồ sẽ tự động đọc đúng
       if (typeof renderTrainingAnalytics === 'function')
         renderTrainingAnalytics();
     } catch (err) {
@@ -11331,7 +11293,7 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
         supabaseClient.from('training_records').select('*'),
       ]);
 
-      // Fetch profiles để lấy tên, email VÀ TEAM
+      // Bổ sung lấy workplace_ma_xa để cấp quyền cho Ward Admin
       const userIds = [
         ...new Set(
           (recordsRes.data || [])
@@ -11339,44 +11301,84 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
             .filter(Boolean)
         ),
       ];
-
       let profilesMap = {};
 
       if (userIds.length > 0) {
         const { data: profiles } = await supabaseClient
           .from('profiles')
-          .select('id, full_name, email, team,position,phone') // ✅ Lấy thêm team
+          .select(
+            'id, full_name, email, team, position, phone, workplace_ma_xa'
+          )
           .in('id', userIds);
 
         (profiles || []).forEach((p) => {
           profilesMap[p.id] = {
             fullName: p.full_name || 'N/A',
             email: p.email || '',
-            team: p.team || 'N/A', // ✅ Lưu team
-            postion: p.position || 'N/A', // ✅ Lưu team
-            phone: p.phone || '', // ✅ Lưu team
+            team: p.team || 'N/A',
+            position: p.position || 'N/A',
+            phone: p.phone || '',
+            workplace_ma_xa: p.workplace_ma_xa || '',
           };
         });
       }
 
+      const role = (window.userSession?.role || '').toLowerCase();
+      const myId = window.userSession?.id;
+      const myMaXa = String(window.userSession?.workplace_ma_xa || '').trim();
+
+      // Map dữ liệu thô
+      let rawRecords = (recordsRes.data || []).map((r) => {
+        const pData = profilesMap[r.profile_id || r.user_id] || {};
+        return {
+          ...r,
+          courseId: r.course_id,
+          fullName: pData.fullName || 'Chưa cập nhật',
+          email: pData.email || '',
+          team: pData.team || '',
+          phone: pData.phone || '',
+          position: pData.position || '',
+          workplace_ma_xa: pData.workplace_ma_xa || '',
+        };
+      });
+
+      // 🚨 CHỐT CHẶN PHÂN QUYỀN 1: Lọc Danh sách học viên (Records)
+      let scopedRecords = rawRecords;
+      if (role !== 'admin') {
+        if (role === 'ward_admin') {
+          // Ward admin chỉ quản lý người cùng mã xã
+          scopedRecords = rawRecords.filter(
+            (r) => String(r.workplace_ma_xa) === myMaXa
+          );
+        } else {
+          // User thường chỉ quản lý chính mình
+          scopedRecords = rawRecords.filter(
+            (r) => String(r.profile_id || r.user_id) === String(myId)
+          );
+        }
+      }
+
+      // 🚨 CHỐT CHẶN PHÂN QUYỀN 2: Lọc Khóa học (Courses)
+      let scopedCourses = coursesRes.data || [];
+      if (role !== 'admin') {
+        // Chỉ cho phép hiển thị các lớp có chứa ID nằm trong danh sách học viên đã lọc ở trên
+        const validCourseIds = [
+          ...new Set(
+            scopedRecords.map((r) => String(r.course_id || r.courseId))
+          ),
+        ];
+        scopedCourses = scopedCourses.filter((c) =>
+          validCourseIds.includes(String(c.id))
+        );
+      }
+
+      // Lưu vào State toàn cục
       window.appState = window.appState || {};
       window.appState.training = {
-        courses: coursesRes.data || [],
-        records: (recordsRes.data || []).map((r) => {
-          const profileData = profilesMap[r.profile_id || r.user_id] || {};
-          return {
-            ...r,
-            fullName: profileData.fullName || 'Chưa cập nhật',
-            email: profileData.email || '',
-            team: profileData.team || '', // ✅ Thêm team vào record
-            phone: profileData.phone || '', // ✅ Thêm team vào record
-            position: profileData.postion || '', // ✅ Thêm team vào record
-          };
-        }),
-        profilesMap: profilesMap, // ✅ Lưu map để dùng cho biểu đồ
+        courses: scopedCourses,
+        records: scopedRecords,
+        profilesMap: profilesMap,
       };
-
-      console.log('✅ Training data loaded:', window.appState.training);
     } catch (err) {
       console.error('Lỗi loadTrainingData:', err);
     }
@@ -11385,12 +11387,17 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
   // ========================================================================
   // OPEN TRAINING DOSSIER - FIX HIỂN THỊ TÊN HỌC VIÊN
   // ========================================================================
+  // ============================================================================
+  // openTrainingDossier — CÓ PHÂN QUYỀN XEM + ẨN CHẤM ĐIỂM cho non-admin
+  //   • admin      : xem đủ + chấm điểm (select result, ô note, checkbox điểm danh)
+  //   • ward_admin : chỉ xem học viên cùng ward, KẾT QUẢ dạng chữ (không sửa được)
+  //   • user       : chỉ xem record của chính mình, dạng chữ
+  //   Nút "Lưu kết quả" cũng ẩn với non-admin (xử lý ở phần HTML/‌render nút — xem ghi chú cuối).
+  // ============================================================================
   window.openTrainingDossier = async function (courseId) {
-    // Đảm bảo data đã load
     if (!window.appState?.training?.courses) {
       await window.loadTrainingData();
     }
-
     const course = window.appState.training.courses.find(
       (c) => String(c.id) === String(courseId)
     );
@@ -11398,14 +11405,15 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
       showToast('Không tìm thấy khóa học!', 'error');
       return;
     }
-
     window.currentCourseId = courseId;
+
+    const isAdmin = (window.userSession?.role || '').toLowerCase() === 'admin';
 
     // UI Switch
     document.getElementById('training-list-view').style.display = 'none';
     document.getElementById('training-dossier-view').classList.add('active');
 
-    // Điền thông tin khóa học
+    // Thông tin khóa học
     document.getElementById('td-title').textContent =
       course.course_name || course.name || 'Không tên';
     document.getElementById('td-date').textContent = course.training_date
@@ -11416,60 +11424,93 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
     document.getElementById('td-desc').textContent =
       course.description || course.desc || '';
 
-    // Render danh sách học viên - FIX: dùng profile_id hoặc user_id
-    const records = window.appState.training.records.filter(
+    // Lấy records của khóa này
+    let records = window.appState.training.records.filter(
       (r) => String(r.course_id) === String(courseId)
     );
+
+    // ✅ PHÂN QUYỀN XEM: lọc theo vai trò (admin: tất cả; ward_admin: cùng ward; user: của mình)
+    if (typeof window.scopeTrainingRecords === 'function') {
+      records = await window.scopeTrainingRecords(
+        records,
+        window.appState.training.profilesMap
+      );
+    }
 
     const tbody = document.getElementById('trainee-list-body');
     tbody.innerHTML = '';
 
+    // Ẩn/hiện nút "Lưu kết quả" theo quyền (nếu nút có id 'btn-save-training')
+    const saveBtn = document.getElementById('btn-save-training');
+    if (saveBtn) saveBtn.style.display = isAdmin ? '' : 'none';
+
     if (records.length === 0) {
       tbody.innerHTML =
-        '<tr><td colspan="5" class="text-center">Chưa có học viên.</td></tr>';
-    } else {
-      records.forEach((r) => {
-        // ✅ Lấy tên từ profile_id hoặc user_id
-        const fullName = r.fullName || 'Chưa cập nhật';
-        const userId = r.profile_id || r.user_id;
-        const email = r.email;
-        const phone = r.phone;
-        const team = r.team;
-        const position = r.position;
-        const row = `
-        <tr data-userid="${userId}">
-          <td><b>${escapeHtml(fullName)}</b></td>
-          <td>${escapeHtml(team)}</td>
-          <td>${escapeHtml(position)}</td>
-          <td>${escapeHtml(phone)}</td>
-          <td>${escapeHtml(email)}</td>
-          <td class="text-center">
-            <input type="checkbox" class="chk-attendance" ${
-              r.attendance ? 'checked' : ''
-            }>
-          </td>
-          <td>
-            <select class="form-select result-select st-${
-              r.result || 'pending'
-            }" onchange="this.className='form-select result-select st-'+this.value">
-              <option value="pending" ${
-                r.result === 'pending' ? 'selected' : ''
-              }>Chờ</option>
-              <option value="pass" ${
-                r.result === 'pass' ? 'selected' : ''
-              }>Đạt</option>
-              <option value="fail" ${
-                r.result === 'fail' ? 'selected' : ''
-              }>Không đạt</option>
-            </select>
-          </td>
-          <td><input type="text" class="note-input" value="${escapeHtml(
-            r.note || ''
-          )}"></td>
-        </tr>`;
-        tbody.insertAdjacentHTML('beforeend', row);
-      });
+        '<tr><td colspan="7" class="text-center text-muted">Chưa có học viên (hoặc không có dữ liệu trong phạm vi của bạn).</td></tr>';
+      return;
     }
+
+    // Nhãn kết quả dạng chữ (cho non-admin)
+    const resultLabel = (v) =>
+      v === 'pass'
+        ? '<span class="badge bg-success">Đạt</span>'
+        : v === 'fail'
+        ? '<span class="badge bg-danger">Không đạt</span>'
+        : '<span class="badge bg-secondary">Chờ</span>';
+
+    records.forEach((r) => {
+      const fullName = r.fullName || 'Chưa cập nhật';
+      const userId = r.profile_id || r.user_id;
+      const email = r.email || '';
+      const phone = r.phone || '';
+      const team = r.team || '';
+      const position = r.position || '';
+
+      // Cột điểm danh: admin = checkbox sửa được; non-admin = icon tĩnh
+      const attendanceCell = isAdmin
+        ? `<input type="checkbox" class="chk-attendance" ${
+            r.attendance ? 'checked' : ''
+          }>`
+        : r.attendance
+        ? '<i class="bx bx-check text-success"></i>'
+        : '<i class="bx bx-x text-muted"></i>';
+
+      // Cột kết quả: admin = select sửa được; non-admin = badge tĩnh
+      const resultCell = isAdmin
+        ? `<select class="form-select result-select st-${r.result || 'pending'}"
+                 onchange="this.className='form-select result-select st-'+this.value">
+           <option value="pending" ${
+             r.result === 'pending' ? 'selected' : ''
+           }>Chờ</option>
+           <option value="pass" ${
+             r.result === 'pass' ? 'selected' : ''
+           }>Đạt</option>
+           <option value="fail" ${
+             r.result === 'fail' ? 'selected' : ''
+           }>Không đạt</option>
+         </select>`
+        : resultLabel(r.result);
+
+      // Cột ghi chú: admin = input; non-admin = text tĩnh
+      const noteCell = isAdmin
+        ? `<input type="text" class="note-input" value="${escapeHtml(
+            r.note || ''
+          )}">`
+        : `<span class="text-muted">${escapeHtml(r.note || '')}</span>`;
+
+      const row = `
+      <tr data-userid="${userId}">
+        <td><b>${escapeHtml(fullName)}</b></td>
+        <td>${escapeHtml(team)}</td>
+        <td>${escapeHtml(position)}</td>
+        <td>${escapeHtml(phone)}</td>
+        <td>${escapeHtml(email)}</td>
+        <td class="text-center">${attendanceCell}</td>
+        <td>${resultCell}</td>
+        <td>${noteCell}</td>
+      </tr>`;
+      tbody.insertAdjacentHTML('beforeend', row);
+    });
   };
   // TỰ ĐỘNG ĐỔI MÀU SELECT KHI MỞ LẠI TRANG HOẶC SAU KHI LƯU
   document.addEventListener('DOMContentLoaded', function () {
@@ -11484,49 +11525,291 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
     document.getElementById('training-list-view').style.display = 'block';
   };
 
+  // ============================================================================
+  // BỘ CHỌN ĐỐI TƯỢNG ĐÀO TẠO (modal Tạo khóa học) — bản chống lỗi
+  //   Luồng: chọn Đội (nhiều) + chọn Vị trí (nhiều) → xem trước học viên khớp (AND).
+  //   Nguồn người dùng: ưu tiên appState.users → teamData → query profiles.
+  // ============================================================================
+
+  const _POSITIONS = [
+    { value: 'Leader', label: 'Đội trưởng' },
+    { value: 'Epidemic', label: 'Cán bộ Dịch tễ' },
+    { value: 'Member', label: 'Cán bộ Lấy mẫu' },
+    { value: 'Engineer', label: 'Cán bộ Xử lý môi trường' },
+    { value: 'Media', label: 'Cán bộ Truyền thông' },
+    { value: 'Logistic', label: 'Hậu cần' },
+    { value: 'Driver', label: 'Lái xe' },
+  ];
+
+  const _escT = (s) =>
+    window.escapeHtml
+      ? window.escapeHtml(String(s ?? ''))
+      : String(s ?? '')
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;');
+
+  // 🚨 1. TÁCH HÀM LỌC ĐỘI RA NGOÀI ĐỂ KHÔNG BỊ "MẤT TRÍ NHỚ" KHI ĐÓNG/MỞ MODAL
+  window._audFilterTeams = function (kw) {
+    kw = String(kw || '')
+      .toLowerCase()
+      .trim();
+    const wrap = document.getElementById('new-course-team-wrap');
+    if (!wrap) return;
+
+    wrap.querySelectorAll('.course-team-chk-item').forEach((item) => {
+      const txt = item.textContent.toLowerCase();
+      if (txt.includes(kw)) {
+        // Bỏ ẩn, trả lại class flex để hiển thị đẹp như cũ
+        item.classList.remove('d-none');
+        item.classList.add('d-flex');
+      } else {
+        // 🚨 DÙNG d-none ĐỂ KHẮC CHẾ d-flex CỦA BOOTSTRAP
+        item.classList.remove('d-flex');
+        item.classList.add('d-none');
+      }
+    });
+  };
+
+  window._getAudienceUsers = async function () {
+    if (Array.isArray(window.appState?.users) && window.appState.users.length) {
+      return window.appState.users;
+    }
+    if (
+      Array.isArray(window.appState?.teamData) &&
+      window.appState.teamData.length
+    ) {
+      return window.appState.teamData;
+    }
+    if (typeof window.getInitialData === 'function') {
+      try {
+        await window.getInitialData();
+      } catch (e) {}
+      if (Array.isArray(window.appState?.users) && window.appState.users.length)
+        return window.appState.users;
+      if (
+        Array.isArray(window.appState?.teamData) &&
+        window.appState.teamData.length
+      )
+        return window.appState.teamData;
+    }
+    try {
+      const { data } = await window.supabaseClient
+        .from('profiles')
+        .select('id, full_name, username, email, team, position, role');
+      return data || [];
+    } catch (e) {
+      console.error('[training] Không lấy được danh sách người dùng:', e);
+      return [];
+    }
+  };
+
+  window.renderCourseAudiencePicker = async function () {
+    const teamHost = document.getElementById('new-course-team-wrap');
+    const roleHost = document.getElementById('new-course-role-wrap');
+    if (!teamHost || !roleHost) {
+      console.warn(
+        '[training] Thiếu #new-course-team-wrap hoặc #new-course-role-wrap.'
+      );
+      return;
+    }
+    teamHost.innerHTML =
+      '<div class="text-muted small"><span class="spinner-border spinner-border-sm"></span> Đang tải...</div>';
+
+    const users = await window._getAudienceUsers();
+    window._audienceUsersCache = users;
+
+    const teams = [
+      ...new Set(
+        users
+          .map((u) => String(u.team || '').trim())
+          .filter((t) => t && t !== 'No team')
+      ),
+    ].sort((a, b) => a.localeCompare(b, 'vi'));
+
+    const wardTeams = teams.filter((t) => /phường|xã|đặc khu/i.test(t));
+    const hcdcTeams = teams.filter((t) => !/phường|xã|đặc khu/i.test(t));
+
+    const chk = (cls, val, label) => `
+    <label class="d-flex align-items-center gap-2 py-1 px-2 aud-item ${cls}-item" style="cursor:pointer;font-size:13px;">
+      <input type="checkbox" class="form-check-input mt-0 ${cls}" value="${_escT(
+      val
+    )}">
+      <span>${_escT(label)}</span>
+    </label>`;
+
+    // 🚨 2. GẮN HÀM TÌM KIẾM TRỰC TIẾP VÀO THUỘC TÍNH oninput ĐỂ ĐẢM BẢO LUÔN HOẠT ĐỘNG
+    teamHost.innerHTML = `
+    <label class="form-label small text-muted d-block mb-1">Chọn Đội (Team) — chọn nhiều</label>
+    <div class="d-flex gap-2 mb-2">
+      <button type="button" class="btn btn-sm btn-outline-secondary" onclick="window._audSelectAll('course-team-chk', true)">Chọn tất cả</button>
+      <button type="button" class="btn btn-sm btn-outline-secondary" onclick="window._audSelectAll('course-team-chk', false)">Bỏ chọn</button>
+      <input type="text" oninput="window._audFilterTeams(this.value)" class="form-control form-control-sm aud-team-search-input" placeholder="Tìm đội..." style="max-width:150px;">
+    </div>
+    <div style="max-height:170px;overflow-y:auto;border:1px solid #e5e7eb;border-radius:8px;padding:6px;">
+      ${
+        hcdcTeams.length
+          ? `<div class="fw-bold small text-primary px-2 pt-1 aud-group">Đội HCDC</div>${hcdcTeams
+              .map((t) => chk('course-team-chk', t, t))
+              .join('')}`
+          : ''
+      }
+      ${
+        wardTeams.length
+          ? `<div class="fw-bold small text-success px-2 pt-2 aud-group">Đội phường/xã</div>${wardTeams
+              .map((t) => chk('course-team-chk', t, t))
+              .join('')}`
+          : ''
+      }
+      ${
+        teams.length === 0
+          ? '<div class="text-muted small px-2">Chưa có đội nào (kiểm tra dữ liệu người dùng).</div>'
+          : ''
+      }
+    </div>`;
+
+    // --- Khối VỊ TRÍ ---
+    roleHost.innerHTML = `
+    <label class="form-label small text-muted d-block mb-1">Chọn Vị trí (Position) — chọn nhiều</label>
+    <div class="d-flex gap-2 mb-2">
+      <button type="button" class="btn btn-sm btn-outline-secondary" onclick="window._audSelectAll('course-role-chk', true)">Chọn tất cả</button>
+      <button type="button" class="btn btn-sm btn-outline-secondary" onclick="window._audSelectAll('course-role-chk', false)">Bỏ chọn</button>
+    </div>
+    <div style="max-height:170px;overflow-y:auto;border:1px solid #e5e7eb;border-radius:8px;padding:6px;">
+      ${_POSITIONS
+        .map((p) => chk('course-role-chk', p.value, p.label))
+        .join('')}
+    </div>`;
+
+    document
+      .querySelectorAll('.course-team-chk, .course-role-chk')
+      .forEach((c) => c.addEventListener('change', window._audUpdatePreview));
+
+    window._audUpdatePreview();
+  };
+
+  window._audSelectAll = function (cls, on) {
+    document.querySelectorAll('.' + cls).forEach((c) => {
+      const item = c.closest('label');
+      // 🚨 3. CHỈ CHECK NHỮNG MỤC ĐANG HIỂN THỊ (không bị ẩn bởi ô tìm kiếm)
+      if (!item || !item.classList.contains('d-none')) {
+        c.checked = on;
+      }
+    });
+    window._audUpdatePreview();
+  };
+
+  window.getSelectedCourseTeams = function () {
+    return [...document.querySelectorAll('.course-team-chk:checked')].map(
+      (c) => c.value
+    );
+  };
+  window.getSelectedCourseRoles = function () {
+    return [...document.querySelectorAll('.course-role-chk:checked')].map(
+      (c) => c.value
+    );
+  };
+
+  window.getCourseAudience = function () {
+    const users = Array.isArray(window._audienceUsersCache)
+      ? window._audienceUsersCache
+      : [];
+    const teams = new Set(window.getSelectedCourseTeams());
+    const roles = new Set(window.getSelectedCourseRoles());
+    const allTeams = teams.size === 0;
+    const allRoles = roles.size === 0;
+
+    return users.filter((m) => {
+      if (!m.id) return false;
+      const t = String(m.team || '').trim();
+      const p = String(m.position || m.role || '').trim();
+      return (allTeams || teams.has(t)) && (allRoles || roles.has(p));
+    });
+  };
+
+  window._audUpdatePreview = function () {
+    const host = document.getElementById('new-course-audience-preview');
+    if (!host) return;
+    const list = window.getCourseAudience();
+    const posLabel = (v) =>
+      _POSITIONS.find((p) => p.value === v)?.label || v || '—';
+
+    if (list.length === 0) {
+      host.innerHTML =
+        '<div class="alert alert-warning py-2 mb-0 small"><i class="bx bx-error-circle"></i> Không có học viên nào khớp lựa chọn.</div>';
+      return;
+    }
+
+    const rows = list
+      .slice(0, 200)
+      .map(
+        (m, i) => `<tr>
+      <td class="text-muted">${i + 1}</td>
+      <td>${_escT(m.full_name || m.username || m.email || 'N/A')}</td>
+      <td>${_escT(m.team || '—')}</td>
+      <td>${_escT(posLabel(m.position || m.role))}</td>
+    </tr>`
+      )
+      .join('');
+
+    host.innerHTML = `
+    <div class="small fw-bold text-success mb-1"><i class="bx bx-user-check"></i> Đối tượng được đào tạo: ${
+      list.length
+    } học viên</div>
+    <div style="max-height:220px;overflow-y:auto;border:1px solid #e5e7eb;border-radius:8px;">
+      <table class="table table-sm table-hover mb-0" style="font-size:12.5px;">
+        <thead class="table-light" style="position:sticky;top:0;"><tr><th style="width:36px;">#</th><th>Họ tên</th><th>Đội</th><th>Vị trí</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+    ${
+      list.length > 200
+        ? '<div class="small text-muted mt-1">Hiển thị 200/' +
+          list.length +
+          '.</div>'
+        : ''
+    }`;
+  };
   // 5. Submit tạo khóa học (SUPABASE)
+
+  // ============================================================================
+  // submitCreateCourse — dùng ĐÚNG danh sách đối tượng đã xem trước
+  //   (getCourseAudience = Team đã chọn AND Vị trí đã chọn). Nhất quán 100%
+  //   với danh sách admin nhìn thấy trong khung xem trước.
+  // ============================================================================
   window.submitCreateCourse = async function () {
     const name = document.getElementById('new-course-name').value;
     const date = document.getElementById('new-course-date').value;
     const loc = document.getElementById('new-course-loc').value;
     const desc = document.getElementById('new-course-desc')?.value || '';
     const file = document.getElementById('new-course-file')?.value || '';
-    const teamFilter = document.getElementById('new-course-team-select').value;
-    const roleFilter = document.getElementById('new-course-role-select').value;
 
     if (!name || !date) {
       showToast('Vui lòng nhập tên khóa học và ngày tổ chức.', 'warning');
       return;
     }
 
-    // ✅ Đảm bảo appState.users đã load
+    // Đảm bảo có danh sách người dùng
     if (!window.appState?.users?.length) {
-      await window.getInitialData?.(); // Hoặc fetch profiles riêng
+      await window.getInitialData?.();
     }
 
-    // Lọc thành viên
-    let membersToInsert = [];
-    if (window.appState.users && Array.isArray(window.appState.users)) {
-      membersToInsert = window.appState.users.filter((m) => {
-        const memberTeam = String(m.team || '').trim();
-        const memberPos = String(m.position || m.role || '').trim();
-        const teamMatch = teamFilter === 'all' || memberTeam === teamFilter;
-        const roleMatch = roleFilter === 'all' || memberPos === roleFilter;
-        return teamMatch && roleMatch && m.id; // Chỉ lấy user có id
-      });
-    }
+    // Đối tượng = đúng danh sách xem trước (Team AND Vị trí)
+    const membersToInsert =
+      typeof window.getCourseAudience === 'function'
+        ? window.getCourseAudience()
+        : [];
 
     const doCallServer = async () => {
       if (typeof window.closeModal === 'function') {
         window.closeModal('modal-create-course');
       } else {
-        document.getElementById('modal-create-course').style.display = 'none';
+        const el = document.getElementById('modal-create-course');
+        if (el) el.style.display = 'none';
       }
-
       if (typeof showLoadingSpinner === 'function') showLoadingSpinner(true);
-
       try {
-        // Bước 1: Tạo khóa học
         const { data: createdCourse, error: courseErr } = await supabaseClient
           .from('training_courses')
           .insert([
@@ -11541,24 +11824,20 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
           ])
           .select()
           .single();
-
         if (courseErr) throw courseErr;
 
-        // Bước 2: Tạo training_records
         if (membersToInsert.length > 0 && createdCourse?.id) {
           const recordsData = membersToInsert.map((user) => ({
             course_id: createdCourse.id,
             user_id: user.id,
-            profile_id: user.id, // ✅ Thêm profile_id nếu bảng có cột này
+            profile_id: user.id,
             attendance: false,
             result: 'pending',
             note: '',
           }));
-
           const { error: recordErr } = await supabaseClient
             .from('training_records')
             .insert(recordsData);
-
           if (recordErr) throw recordErr;
         }
 
@@ -11566,8 +11845,6 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
           `Đã tạo khóa học với ${membersToInsert.length} học viên!`,
           'success'
         );
-
-        // ✅ Refresh data và UI
         await window.loadTrainingData();
         if (typeof window.renderTrainingPage === 'function') {
           await window.renderTrainingPage();
@@ -11576,22 +11853,37 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
         console.error('Lỗi tạo khóa học:', err);
         showToast('Lỗi: ' + err.message, 'error');
       } finally {
-        if (typeof hideLoadingSpinner === 'function') {
-          hideLoadingSpinner();
-        } else if (typeof showLoadingSpinner === 'function') {
+        if (typeof hideLoadingSpinner === 'function') hideLoadingSpinner();
+        else if (typeof showLoadingSpinner === 'function')
           showLoadingSpinner(false);
-        }
       }
     };
 
     if (membersToInsert.length === 0) {
       showToastConfirm(
-        '⚠️ Không tìm thấy thành viên nào. Tạo khóa học rỗng?',
+        '⚠️ Không có học viên nào khớp lựa chọn. Tạo khóa học rỗng?',
         doCallServer
       );
     } else {
       doCallServer();
     }
+  };
+
+  // ============================================================================
+  // (B) PHÂN QUYỀN XEM — lọc records theo vai trò (client-side, Bước 1)
+  //     • admin      : xem tất cả (giữ nguyên)
+  //     • ward_admin : chỉ record của học viên CÙNG ward (workplace_ma_xa)
+  //     • user khác  : chỉ record CỦA CHÍNH MÌNH
+  //     Gọi hàm này để lọc mảng records trước khi hiển thị/thống kê.
+  //     LƯU Ý: đây là lọc GIAO DIỆN. Bảo mật thật cần RLS (Bước 2).
+  // ============================================================================
+  // ============================================================
+  // 3. VÔ HIỆU HÓA BỘ LỌC CŨ (Để tránh xung đột với openTrainingDossier)
+  // ============================================================
+  window.scopeTrainingRecords = async function (records, profilesMap) {
+    // Dữ liệu đã được khóa phân quyền triệt để ở hàm loadTrainingData.
+    // Trả về mảng gốc để openTrainingDossier không cần lọc lại nữa.
+    return records;
   };
   // 6. Lưu kết quả học tập (SUPABASE)
   window.saveTrainingResultsClick = async function () {
@@ -20444,7 +20736,6 @@ window.applyRolePermissions = function (role) {
     }
   });
 
-  // 3. ẨN/HIỆN CÁC NÚT ĐẶC BIỆT THEO ID CỤ THỂ -> ADMIN VÀ WARD_ADMIN ĐỀU THẤY
   // 3. ẨN/HIỆN CÁC NÚT ĐẶC BIỆT THEO ID CỤ THỂ -> ADMIN VÀ WARD_ADMIN ĐỀU THẤY
   const adminOnlyIds = [
     'btn-create-course-trigger',
