@@ -671,18 +671,10 @@ window.enterDashboard = async function () {
 
     // 🔥 ĐOẠN CODE CHỐNG TRẮNG MÀN HÌNH (ĐẶT ĐÚNG CHỖ RỒI NHÉ) 🔥
     setTimeout(() => {
-      // Chắc chắn rằng giao diện tổng Dashboard đã được bật
-      if (typeof window.go === 'function') {
-        window.go('dashboard');
-      }
-
-      // Tìm đúng cái nút Menu RRT trong file HTML và bấm mở nội dung
-      const defaultMenu = document.getElementById('menu-dashboard');
-      if (defaultMenu) {
-        defaultMenu.click();
-      } else {
-        console.warn('⚠️ Không tìm thấy nút #menu-rrt trong HTML');
-      }
+      window.go?.('dashboard');
+      document.getElementById('menu-dashboard')?.click();
+      // Đóng profile menu phòng khi click làm nó mở
+      $('.profile-menu, .notification-menu').removeClass('show').hide();
     }, 150);
 
     // ✅ 9. START REALTIME SYNC (sau khi load xong)
@@ -717,15 +709,30 @@ window.logout = async function () {
   console.log('👋 Logging out...');
 
   // ✅ 1. Stop Realtime subscriptions TRƯỚC
-  window.RealtimeManager.stop();
+  try {
+    window.RealtimeManager?.stop?.();
+  } catch (e) {
+    console.warn('⚠️ Lỗi dừng Realtime:', e);
+  }
 
-  // ✅ 2. Clear local state
+  // ✅ 2. Clear local state — XÓA ĐÚNG TÊN CACHE app đang dùng
   window.userSession = null;
   if (window.appState) {
     window.appState.appInitialized = false;
-    window.appState.users = [];
-    window.appState.incidents = [];
+    window.appState.teamData = []; // danh sách thành viên
+    window.appState.trackingIncidents = []; // sự kiện đang theo dõi
+    window.appState.roster_schedules = []; // lịch trực
+    window.appState.deployment_history = []; // nhật ký điều động
+    window.appState.notifications_list = []; // danh sách thông báo
+    window.appState.profiles = []; // hồ sơ người dùng (rất quan trọng)
+    window.appState.library = []; // thư viện tài liệu
+    window.appState.users = []; // (tên cũ, giữ cho an toàn)
+    window.appState.incidents = []; // (tên cũ, giữ cho an toàn)
+    window.appState.notifications = []; // (tên cũ, giữ cho an toàn)
+    window.appState.training_courses = [];
   }
+  // Đặt lại cờ đăng ký filter điều động để phiên mới không dùng lại filter cũ
+  window._emerFilterRegistered = false;
 
   // ✅ 3. Clear localStorage
   localStorage.removeItem('userSession');
@@ -743,7 +750,7 @@ window.logout = async function () {
     window.resetAppState();
   }
 
-  // ✅ 6. Redirect về login
+  // ✅ 6. Redirect về login (GIỮ NGUYÊN window.go — đúng cơ chế app)
   if (typeof window.go === 'function') {
     window.go('login');
   } else {
