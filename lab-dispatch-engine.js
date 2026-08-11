@@ -34,10 +34,38 @@
   //   near = gần (phút đi thật) · free = còn công suất · fast = trả KQ nhanh
   //   qual = chất lượng (QSM) · net = phân cấp mạng lưới
   const PRESETS = {
-    urgent:   { near: 0.40, free: 0.10, fast: 0.30, qual: 0.10, net: 0.10, label: '⚡ Khẩn — ưu tiên tốc độ' },
-    balanced: { near: 0.25, free: 0.20, fast: 0.20, qual: 0.20, net: 0.15, label: '⚖️ Cân bằng' },
-    capacity: { near: 0.15, free: 0.45, fast: 0.15, qual: 0.15, net: 0.10, label: '📦 Nhiều mẫu — ưu tiên công suất' },
-    quality:  { near: 0.15, free: 0.10, fast: 0.15, qual: 0.40, net: 0.20, label: '🏅 Ưu tiên chất lượng (QSM)' },
+    urgent: {
+      near: 0.4,
+      free: 0.1,
+      fast: 0.3,
+      qual: 0.1,
+      net: 0.1,
+      label: '⚡ Khẩn — ưu tiên tốc độ',
+    },
+    balanced: {
+      near: 0.25,
+      free: 0.2,
+      fast: 0.2,
+      qual: 0.2,
+      net: 0.15,
+      label: '⚖️ Cân bằng',
+    },
+    capacity: {
+      near: 0.15,
+      free: 0.45,
+      fast: 0.15,
+      qual: 0.15,
+      net: 0.1,
+      label: '📦 Nhiều mẫu — ưu tiên công suất',
+    },
+    quality: {
+      near: 0.15,
+      free: 0.1,
+      fast: 0.15,
+      qual: 0.4,
+      net: 0.2,
+      label: '🏅 Ưu tiên chất lượng (QSM & năng lực xét nghiệm)',
+    },
   };
 
   function haversineKm(lat1, lng1, lat2, lng2) {
@@ -73,7 +101,9 @@
       };
     } catch (err) {
       clearTimeout(timer);
-      const km = +haversineKm(originLat, originLng, destLat, destLng).toFixed(2);
+      const km = +haversineKm(originLat, originLng, destLat, destLng).toFixed(
+        2
+      );
       return {
         km,
         minutes: Math.round((km / 30) * 60),
@@ -112,24 +142,59 @@
   //   diemMangLuoi  = 100*(network_tier/5)             phân cấp mạng lưới (0..5)
   //   tổng = Σ diem_i * weight_i
   // --------------------------------------------------------------------------
+  // ============================================================================
+  // scoreAndRank — SỬA CÔNG THỨC 5 CHIỀU (xử lý trường hợp dữ liệu ĐỒNG NHẤT)
+  // ----------------------------------------------------------------------------
+  // VẤN ĐỀ CŨ: khi mọi phòng cùng 1 giá trị (VD turnaround_hours=24 mặc định),
+  //   diem = 100*(1 - x/max) = 100*(1 - 1) = 0 → tiêu chí đó "ăn" mất điểm oan,
+  //   dù thực chất các phòng KHÔNG khác nhau ở tiêu chí này.
+  // CÁCH SỬA: khi min==max (mọi phòng bằng nhau) ở một tiêu chí → cho ĐIỂM TRUNG
+  //   TÍNH (50) cho tất cả, thay vì 0. Tiêu chí "trung lập" khi không phân biệt được.
+  //   Đồng thời chuẩn hóa theo KHOẢNG [min,max] (không phải chia cho max) → phân biệt
+  //   tốt hơn khi giá trị sát nhau. Áp dụng cho cả 3 tiêu chí có "hướng":
+  //     gần (phút ít = tốt), nhanh (turnaround ít = tốt), trống (còn nhiều = tốt).
+  // ============================================================================
   function scoreAndRank(routed, weights) {
     if (!routed.length) return [];
 
-    const maxMinutes = Math.max(...routed.map((r) => r.route.minutes || 0), 1);
-    const maxTurnaround = Math.max(...routed.map((r) => r.turnaround_hours ?? 0), 1);
+    // Gom các mảng giá trị để tính min/max từng tiêu chí
+    const minutesArr = routed.map((r) => r.route.minutes || 0);
+    const turnaroundArr = routed.map((r) => r.turnaround_hours ?? null);
+
+    const minMinutes = Math.min(...minutesArr);
+    const maxMinutes = Math.max(...minutesArr);
+
+    // turnaround: chỉ tính trên giá trị có thật (bỏ null); nếu tất cả null/đồng nhất → xử lý riêng
+    const validTa = turnaroundArr.filter((v) => v != null);
+    const minTa = validTa.length ? Math.min(...validTa) : null;
+    const maxTa = validTa.length ? Math.max(...validTa) : null;
+
+    // Helper chuẩn hóa "ít hơn = tốt hơn" theo khoảng [min,max].
+    //   - Nếu min==max (mọi phòng bằng nhau) → trả 50 (trung lập, không phân biệt).
+    //   - value nhỏ nhất → 100 điểm; lớn nhất → 0 điểm.
+    const scoreLowerBetter = (value, mn, mx) => {
+      if (value == null || mn == null || mx == null) return 50; // thiếu dữ liệu → trung lập
+      if (mx === mn) return 50; // đồng nhất → trung lập
+      return 100 * (1 - (value - mn) / (mx - mn));
+    };
 
     const scored = routed.map((r) => {
       const minutes = r.route.minutes || 0;
       const remaining = r.remaining_today ?? 0;
       const maxCap = r.max_capacity_per_day || 1;
-      const turnaround = r.turnaround_hours ?? maxTurnaround;
-      const qsm = r.qsm_level ?? 0;              // 0..5
-      const netTier = r.capability_tier ?? 0;    // 0..5 (chỉ số TÍNH từ QSM + kỹ thuật)
+      const turnaround = r.turnaround_hours ?? null;
+      const qsm = r.qsm_level ?? 0; // 0..5
+      const netTier = r.capability_tier ?? 0; // 0..5
 
-      const diemGan = 100 * (1 - minutes / maxMinutes);
+      // GẦN: phút ít = tốt (chuẩn hóa theo khoảng, đồng nhất → 50)
+      const diemGan = scoreLowerBetter(minutes, minMinutes, maxMinutes);
+      // TRỐNG: còn nhiều chỗ = tốt (tỉ lệ còn lại / công suất; giữ nguyên logic tốt)
       const diemTrong = 100 * Math.max(0, Math.min(1, remaining / maxCap));
-      const diemNhanh = 100 * (1 - turnaround / maxTurnaround);
+      // NHANH: turnaround ít = tốt (chuẩn hóa theo khoảng; đồng nhất/null → 50)
+      const diemNhanh = scoreLowerBetter(turnaround, minTa, maxTa);
+      // CHẤT LƯỢNG: QSM 0..5
       const diemChatLuong = 100 * Math.max(0, Math.min(1, qsm / 5));
+      // MẠNG LƯỚI: tier 0..5
       const diemMangLuoi = 100 * Math.max(0, Math.min(1, netTier / 5));
 
       const total =
@@ -230,7 +295,9 @@
 
     // [2] OSRM đường thật cho từng ứng viên
     const routed = await routeAll(originLat, originLng, list);
-    meta.osrmFailures = routed.filter((r) => r.route.source === 'haversine').length;
+    meta.osrmFailures = routed.filter(
+      (r) => r.route.source === 'haversine'
+    ).length;
 
     // [3] Chấm điểm 5 chiều & xếp hạng
     const ranked = scoreAndRank(routed, weights);
