@@ -366,14 +366,14 @@
          </div>`;
       return `
         <hr style="margin:2px 0;">
-        <b style="font-size:10px;">Năng lực xét nghiệm</b>
+        <b style="font-size: 14px; display: inline-block; margin-bottom: 4px;">Năng lực xét nghiệm</b>
 
         ${item(5, TIER_INFO[5].color, 'Cấp 5')}
         ${item(4, TIER_INFO[4].color, 'Cấp 4')}
         ${item(3, TIER_INFO[3].color, 'Cấp 3')}
         ${item(2, TIER_INFO[2].color, 'Cấp 2')}
         ${item(1, TIER_INFO[1].color, 'Cấp 1')}
-        ${item(0, TIER_INFO[0].color, 'Chưa phân hạng / tạm ngừng')}`;
+        ${item(0, TIER_INFO[0].color, 'Chưa phân hạng/tạm ngừng')}`;
     },
   };
   console.log('[lab-map-layer.js] ✅ Lớp PXN (5 cấp + hover highlight) sẵn sàng.');
