@@ -210,7 +210,7 @@
                     </div>
                   </div>
                   <div id="disp-advanced" class="d-none mt-2 pt-2 border-top">
-                  <small class="text-muted d-block mb-2"> Chọn 1 trong 4 chế độ (⚡Khẩn/ ⚖️ Cân bằng/ 📦 Nhiều mẫu/ 🏅 Chất lượng) hoặc điều chỉnh trọng số của 5 tiêu chí sau:</small>
+                  <small class="text-muted d-block mb-2"> Chọn 1 trong 4 chế độ (⚡Khẩn/ ⚖️ Cân bằng/ 📦 Nhiều mẫu/ 🏅 Chất lượng) hoặc điều chỉnh trọng số của 5 tiêu chí:</small>
                   <div class="row g-2">
                     <div class="col-md-4">
                       <label class="form-label mb-0"><small>🟢 Gần nhất <span id="w-near">25</span>%</small></label>
