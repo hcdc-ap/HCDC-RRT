@@ -14705,47 +14705,96 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
   }
 
   // ============================================================
-  // 4. LEGEND (tự ẩn/hiện phần theo lớp đang bật) + STATS
+  // 4. LEGEND (Hỏi trực tiếp bản đồ - Tự động hiển thị/ẩn)
   // ============================================================
   function renderLegendContent(div) {
-    let html = '';
-    // Choropleth
-    if (layerVisible.choropleth) {
-      const grades = [0, 1, 2, 4, 6],
-        labels = ['0', '1', '2–3', '4–5', '> 5'];
-      html += '<div class="legend-section"><b>RRT-ers/Phường</b><br>';
-      grades.forEach(
-        (g, i) =>
-          (html += `<i style="background:${getColor(g)}"></i> ${labels[i]}<br>`)
-      );
-      html += '</div>';
+    // 1. Đồng bộ cỡ chữ và khoảng cách dòng cho toàn bộ bảng chú giải
+    div.style.fontSize = '13px';
+    div.style.lineHeight = '1.6';
+
+    const sections = []; // Mảng chứa các khối nội dung
+
+    // ==========================================
+    // KHỐI 1: THỐNG KÊ TỔNG QUAN (Luôn hiển thị)
+    // ==========================================
+    const activeCount = incidentData.filter((i) =>
+      ['active', 'pending', 'monitoring'].includes((i.status || '').toLowerCase())
+    ).length;
+
+    sections.push(`
+      <div class="legend-section">
+        <b style="font-size: 14px; display: inline-block; margin-bottom: 4px;">Thống kê</b><br>
+        <span style="color:#0369a1; font-weight:bold;"><i class='bx bx-group'></i> Nhân sự RRT:</span> 
+        <b>${filteredData.length}</b>/${companyData.length}<br>
+        <span style="color:#dc2626; font-weight:bold;"><i class='bx bx-alarm-exclamation'></i> Sự kiện kích hoạt:</span> 
+        <b>${activeCount}</b>
+      </div>
+    `);
+
+    // ==========================================
+    // KHỐI 2: CHÚ GIẢI BẢN ĐỒ (Ẩn/Hiện theo Layer)
+    // ==========================================
+    
+    // 1. Lớp Sự kiện (Incidents)
+    if (incidentsLayer && map.hasLayer(incidentsLayer)) {
+      sections.push(`
+        <div class="legend-section">
+          <b style="font-size: 14px; display: inline-block; margin-bottom: 4px;">Sự kiện</b><br>
+          <span class="incident-marker-active" style="display:inline-block;width:12px;height:12px;"></span> Đang kích hoạt<br>
+          <span class="incident-marker-resolved" style="display:inline-block;width:10px;height:10px;"></span> Đã kết thúc
+        </div>
+      `);
     }
-    // Sự cố
-    if (layerVisible.incidents) {
-      html += `<div class="legend-section"><hr style="margin:4px 0;">
-        <span class="incident-marker-active" style="display:inline-block;width:12px;height:12px;"></span> Sự kiện đang kích hoạt<br>
-        <span class="incident-marker-resolved" style="display:inline-block;width:10px;height:10px;"></span> Sự kiện đã kết thúc</div>`;
-    }
-    // PXN
+
+    // 2. Lớp Phòng Xét Nghiệm (Labs)
     if (layerVisible.labs && window.LabMapLayer) {
-      html += `<div class="legend-section">${window.LabMapLayer.legendHtml()}</div>`;
+      sections.push(`
+        <div class="legend-section">
+          ${window.LabMapLayer.legendHtml()}
+        </div>
+      `);
     }
-    // BỔ SUNG: Chú giải Dân số
-    if (layerVisible.population) {
+
+    // 3. Lớp Dân số (Hành chính)
+    if (populationLayer && map.hasLayer(populationLayer)) {
       const pGrades = [0, 5000, 15000, 30000, 50000];
       const pLabels = ['< 5k', '5k - 15k', '15k - 30k', '30k - 50k', '> 50k'];
-      html +=
-        '<div class="legend-section"><hr style="margin:4px 0;"><b>Dân số (người)</b><br>';
+      let popHtml = `
+        <div class="legend-section">
+          <b style="font-size: 14px; display: inline-block; margin-bottom: 4px;">Dân số (người)</b><br>
+      `;
       pGrades.forEach((g, i) => {
-        html += `<i style="background:${getPopColor(g + 1)}"></i> ${
-          pLabels[i]
-        }<br>`;
+        popHtml += `<i style="background:${getPopColor(g + 1)}"></i> ${pLabels[i]}<br>`;
       });
-      html += '</div>';
+      popHtml += '</div>';
+      sections.push(popHtml);
     }
-    div.innerHTML =
-      html || '<span class="text-muted">Không có lớp nào bật.</span>';
-    // Kích hoạt hover highlight cho legend PXN (SAU khi HTML đã vào DOM)
+
+    // 4. Lớp Choropleth (RRT-ers/Phường)
+    if (choroplethLayer && map.hasLayer(choroplethLayer)) {
+      const grades = [0, 1, 2, 4, 6];
+      const labels = ['0', '1', '2–3', '4–5', '> 5'];
+      let choroHtml = `
+        <div class="legend-section">
+          <b style="font-size: 14px; display: inline-block; margin-bottom: 4px;">RRT-ers/Phường</b><br>
+      `;
+      grades.forEach((g, i) => {
+        choroHtml += `<i style="background:${getColor(g)}"></i> ${labels[i]}<br>`;
+      });
+      choroHtml += '</div>';
+      sections.push(choroHtml);
+    }
+
+    // ==========================================
+    // RENDER: Tự động chèn gạch nối đứt nét giữa các khối
+    // ==========================================
+    const dividerHtml = '<hr style="margin: 8px 0; border: 0; border-top: 1px dashed #cbd5e1;">';
+    
+    div.innerHTML = sections.length > 0 
+      ? sections.join(dividerHtml) 
+      : '<span class="text-muted">Không có dữ liệu.</span>';
+
+    // Kích hoạt hover cho PXN
     if (
       layerVisible.labs &&
       window.LabMapLayer &&
@@ -14771,29 +14820,7 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
     if (box) renderLegendContent(box);
   }
 
-  function updateStatsControl() {
-    if (!map) return;
-    if (!statsControl) {
-      statsControl = L.control({ position: 'topright' });
-      statsControl.onAdd = function () {
-        const div = L.DomUtil.create('div', 'map-stats');
-        div.id = 'map-stats-box';
-        return div;
-      };
-      statsControl.addTo(map);
-    }
-    const box = document.getElementById('map-stats-box');
-    if (box) {
-      const activeCount = incidentData.filter((i) =>
-        ['active', 'pending', 'monitoring'].includes(
-          (i.status || '').toLowerCase()
-        )
-      ).length;
-      box.innerHTML =
-        `👥 Hiển thị: <b>${filteredData.length}</b>/${companyData.length} thành viên` +
-        `<br>🚨 Sự kiện đang mở: <b>${activeCount}</b>`;
-    }
-  }
+  
 
   // ============================================================
   // 5. XÂY LAYER (1 lần) + control thống nhất
@@ -14886,7 +14913,7 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
     // Cập nhật nội dung — KHÔNG remove/tạo lại layer
     fillMembersLayer();
     refreshChoropleth();
-    updateStatsControl();
+    refreshLegend();
 
     // Zoom theo kết quả
     // Kiểm tra tọa độ có thực sự nằm trong vùng hợp lệ (VN, quanh TP.HCM)
@@ -15041,9 +15068,11 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
       '🏙️ Hành chính/ Dân số': populationLayer, // BỔ SUNG: Đưa vào Control
       '🗺️ RRT-ers/ Phường': choroplethLayer,
       '👥 RRT-ers': membersLayer,
-      '🚨 Sự kiện': incidentsLayer,
+      '🚨 Sự kiện khẩn cấp': incidentsLayer,
     };
     if (labLayer) overlays['🧪 Phòng xét nghiệm'] = labLayer;
+
+    // ... (phần trên giữ nguyên: khởi tạo labLayer và layersControl) ...
 
     if (layersControl) {
       layersControl.remove();
@@ -15053,24 +15082,16 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
       .layers(null, overlays, { collapsed: false, position: 'topright' })
       .addTo(map);
 
-    // Đồng bộ layerVisible + legend khi bật/tắt lớp qua control
-    map.off('overlayadd.mapv2').on('overlayadd.mapv2', (e) => {
-      _setVisibleByLayer(e.layer, true);
-      refreshLegend();
-    });
-    map.off('overlayremove.mapv2').on('overlayremove.mapv2', (e) => {
-      _setVisibleByLayer(e.layer, false);
-      refreshLegend();
-    });
+    // 🚨 SỰ KIỆN GỌN NHẤT: Cứ click bật/tắt lớp là gọi vẽ lại Legend!
+    map.on('overlayadd overlayremove', function (e) {
+      // Bắt riêng trạng thái cho lớp Phòng Xét Nghiệm (vì nó load từ module rời)
+      if (e.name && e.name.includes('Phòng xét nghiệm')) {
+        layerVisible.labs = e.type === 'overlayadd';
+      }
 
-    function _setVisibleByLayer(layer, on) {
-      if (layer === choroplethLayer) layerVisible.choropleth = on;
-      else if (layer === populationLayer)
-        layerVisible.population = on; // BỔ SUNG
-      else if (layer === membersLayer) layerVisible.members = on;
-      else if (layer === incidentsLayer) layerVisible.incidents = on;
-      else if (labLayer && layer === labLayer) layerVisible.labs = on;
-    }
+      // Gọi vẽ lại Legend. Hàm renderLegendContent sẽ tự nhìn lên bản đồ để quét các lớp còn lại.
+      refreshLegend();
+    });
   }
 
   // ============================================================
@@ -15239,13 +15260,12 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
         buildLayersOnce(); // tạo layer ổn định + bật mặc định
         await setupLayersControl(); // control thống nhất (gồm PXN)
         addLegend();
-        updateStatsControl();
+        refreshLegend();
       } else {
         // Quay lại trang: cập nhật nội dung, không tạo lại control
         fillMembersLayer();
         fillIncidentsLayer();
         refreshChoropleth();
-        updateStatsControl();
         refreshLegend();
         setTimeout(() => map.invalidateSize(), 200);
       }
