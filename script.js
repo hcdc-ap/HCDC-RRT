@@ -14577,7 +14577,7 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
       const lon = parseFloat(c.lon ?? c.longitude);
       if (isNaN(lat) || isNaN(lon)) return;
       const marker = L.circleMarker([lat, lon], {
-        radius: 5,
+        radius: 4,
         fillColor: industryColors[c.department] || '#FF5722',
         color: '#000',
         weight: 1,
@@ -14626,8 +14626,8 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
         className: isActive
           ? 'incident-marker-active'
           : 'incident-marker-resolved',
-        iconSize: isActive ? [16, 16] : [10, 10],
-        iconAnchor: isActive ? [8, 8] : [5, 5],
+        iconSize: isActive ? [13, 13] : [10, 10],
+        iconAnchor: isActive ? [7, 7] : [5, 5],
       });
 
       // Dịch email thành tên hiển thị
@@ -14718,7 +14718,9 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
     // KHỐI 1: THỐNG KÊ TỔNG QUAN (Luôn hiển thị)
     // ==========================================
     const activeCount = incidentData.filter((i) =>
-      ['active', 'pending', 'monitoring'].includes((i.status || '').toLowerCase())
+      ['active', 'pending', 'monitoring'].includes(
+        (i.status || '').toLowerCase()
+      )
     ).length;
 
     sections.push(`
@@ -14734,7 +14736,7 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
     // ==========================================
     // KHỐI 2: CHÚ GIẢI BẢN ĐỒ (Ẩn/Hiện theo Layer)
     // ==========================================
-    
+
     // 1. Lớp Sự kiện (Incidents)
     if (incidentsLayer && map.hasLayer(incidentsLayer)) {
       sections.push(`
@@ -14764,7 +14766,9 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
           <b style="font-size: 14px; display: inline-block; margin-bottom: 4px;">Dân số (người)</b><br>
       `;
       pGrades.forEach((g, i) => {
-        popHtml += `<i style="background:${getPopColor(g + 1)}"></i> ${pLabels[i]}<br>`;
+        popHtml += `<i style="background:${getPopColor(g + 1)}"></i> ${
+          pLabels[i]
+        }<br>`;
       });
       popHtml += '</div>';
       sections.push(popHtml);
@@ -14779,7 +14783,9 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
           <b style="font-size: 14px; display: inline-block; margin-bottom: 4px;">RRT-ers/Phường</b><br>
       `;
       grades.forEach((g, i) => {
-        choroHtml += `<i style="background:${getColor(g)}"></i> ${labels[i]}<br>`;
+        choroHtml += `<i style="background:${getColor(g)}"></i> ${
+          labels[i]
+        }<br>`;
       });
       choroHtml += '</div>';
       sections.push(choroHtml);
@@ -14788,11 +14794,13 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
     // ==========================================
     // RENDER: Tự động chèn gạch nối đứt nét giữa các khối
     // ==========================================
-    const dividerHtml = '<hr style="margin: 8px 0; border: 0; border-top: 1px dashed #cbd5e1;">';
-    
-    div.innerHTML = sections.length > 0 
-      ? sections.join(dividerHtml) 
-      : '<span class="text-muted">Không có dữ liệu.</span>';
+    const dividerHtml =
+      '<hr style="margin: 8px 0; border: 0; border-top: 1px dashed #cbd5e1;">';
+
+    div.innerHTML =
+      sections.length > 0
+        ? sections.join(dividerHtml)
+        : '<span class="text-muted">Không có dữ liệu.</span>';
 
     // Kích hoạt hover cho PXN
     if (
@@ -14819,8 +14827,6 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
     const box = document.getElementById('map-legend-box');
     if (box) renderLegendContent(box);
   }
-
-  
 
   // ============================================================
   // 5. XÂY LAYER (1 lần) + control thống nhất
@@ -15054,7 +15060,7 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
   // 11. CONTROL LAYERS THỐNG NHẤT (tất cả lớp qua đây)
   // ============================================================
   async function setupLayersControl() {
-    // Lớp PXN: lấy từ module LabMapLayer (Bước 1). Nó tự tạo cluster group.
+    // 1. Lớp PXN: lấy từ module LabMapLayer. Nó tự tạo cluster group.
     let labLayer = null;
     if (window.LabMapLayer) {
       const res = await window.LabMapLayer.attach(map, {
@@ -15064,36 +15070,55 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
       labLayer = res?.layer || null;
     }
 
-    const overlays = {
-      '🏙️ Hành chính/ Dân số': populationLayer, // BỔ SUNG: Đưa vào Control
-      '🗺️ RRT-ers/ Phường': choroplethLayer,
-      '👥 RRT-ers': membersLayer,
-      '🚨 Sự kiện khẩn cấp': incidentsLayer,
-    };
-    if (labLayer) overlays['🧪 Phòng xét nghiệm'] = labLayer;
+    // 2. Khai báo danh sách các lớp phủ (Overlays - Checkbox)
+    const overlays = {};
 
-    // ... (phần trên giữ nguyên: khởi tạo labLayer và layersControl) ...
+    // Đưa lớp Tên địa danh vào trên cùng (nếu đã tạo ở renderMapPage)
+    if (window.mapLabelsLayer) {
+      overlays['🏷️ Địa danh'] = window.mapLabelsLayer;
+    }
 
+    // Đưa các lớp nghiệp vụ vào
+    overlays['🏙️ Hành chính/ Dân số'] = populationLayer;
+    overlays['🗺️ RRT-ers/ Phường'] = choroplethLayer;
+    overlays['👥 RRT-ers'] = membersLayer;
+    overlays['🚨 Sự kiện khẩn cấp'] = incidentsLayer;
+
+    if (labLayer) {
+      overlays['🧪 Phòng xét nghiệm'] = labLayer;
+    }
+
+    // 3. Xóa control cũ (nếu có) khi load lại trang để không bị nhân bản
     if (layersControl) {
       layersControl.remove();
       layersControl = null;
     }
+
+    // 4. Lấy danh sách Basemaps (Bản đồ nền) từ biến toàn cục
+    const basemaps = window.mapBasemaps || null;
+
+    // 5. Khởi tạo Control Layers kết hợp cả Basemaps và Overlays
     layersControl = L.control
-      .layers(null, overlays, { collapsed: false, position: 'topright' })
+      .layers(basemaps, overlays, { collapsed: false, position: 'topright' })
       .addTo(map);
 
-    // 🚨 SỰ KIỆN GỌN NHẤT: Cứ click bật/tắt lớp là gọi vẽ lại Legend!
-    map.on('overlayadd overlayremove', function (e) {
-      // Bắt riêng trạng thái cho lớp Phòng Xét Nghiệm (vì nó load từ module rời)
-      if (e.name && e.name.includes('Phòng xét nghiệm')) {
-        layerVisible.labs = e.type === 'overlayadd';
-      }
+    // ============================================================
+    // 🚨 BẮT SỰ KIỆN: Đồng bộ bảng chú giải (Legend) khi bật/tắt lớp
+    // LƯU Ý: Dùng map.off().on() để tránh bị lặp sự kiện khi quay lại trang
+    // ============================================================
+    map
+      .off('overlayadd overlayremove')
+      .on('overlayadd overlayremove', function (e) {
+        // Bắt riêng trạng thái cho lớp Phòng Xét Nghiệm (vì nó load từ module rời)
+        if (e.name && e.name.includes('Phòng xét nghiệm')) {
+          layerVisible.labs = e.type === 'overlayadd';
+        }
 
-      // Gọi vẽ lại Legend. Hàm renderLegendContent sẽ tự nhìn lên bản đồ để quét các lớp còn lại.
-      refreshLegend();
-    });
+        // Gọi vẽ lại Legend. Hàm renderLegendContent sẽ tự quét map.hasLayer()
+        // để quyết định vẽ/ẩn HTML của các lớp nghiệp vụ.
+        refreshLegend();
+      });
   }
-
   // ============================================================
   // 12. LUỒNG CHÍNH
   // ============================================================
@@ -15104,7 +15129,6 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
       geojsonData = window.appState.mapGeoData;
 
       // Profiles
-      // Lấy thông tin phân quyền và định danh cá nhân của người dùng
       const role = (window.userSession?.role || '').toLowerCase();
       const isAdmin = role === 'admin';
       const isWardAdmin = role === 'ward_admin';
@@ -15116,15 +15140,12 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
       // =================================================================
       // 1. KÉO VÀ LỌC DỮ LIỆU NHÂN SỰ (PROFILES)
       // =================================================================
-      // 🚨 Bổ sung gọi thêm 'workplace_ma_xa' để không bị sót thành viên
       const { data: profData, error: profErr } = await window.supabaseClient
         .from('profiles')
         .select(
           'email, full_name, team, department, ma_xa, latitude, longitude, ward, workplace_ma_xa, fax'
         );
 
-      // Tạo từ điển toàn cục để dịch tên Nhân sự tham gia sự cố
-      // (Giúp dịch tên được cả những người từ HCDC hoặc phường khác xuống chi viện)
       window.globalUserMap = new Map();
 
       if (!profErr && profData) {
@@ -15147,11 +15168,8 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
           allUsers = allUsers.filter((u) => {
             const isMe =
               myEmail !== '' && String(u.email || '').toLowerCase() === myEmail;
-
-            // Ưu tiên đối chiếu workplace_ma_xa (địa bàn công tác thực tế) để đồng bộ với trang Thành viên
             const uMaXa = String(u.workplace_ma_xa || u.ma_xa || '').trim();
             const isMyWard = myMaXa !== '' && uMaXa === myMaXa;
-
             return isMe || isMyWard;
           });
         }
@@ -15162,13 +15180,6 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
       }
       filteredData = [...companyData];
 
-      // =================================================================
-      // 1. KÉO VÀ LỌC DỮ LIỆU NHÂN SỰ (PROFILES) - Giữ nguyên như bạn vừa sửa
-      // =================================================================
-      // ... [Đoạn code kéo Profiles của bạn ở đây] ...
-
-      // 🚨 BƯỚC ĐỆM QUAN TRỌNG: Lấy danh sách email của TẤT CẢ nhân sự thuộc trạm/phường mình
-      // (Vì companyData lúc này đã được lọc chỉ chứa người của phường mình)
       const myStaffEmails = companyData
         .map((u) =>
           String(u.email || '')
@@ -15177,21 +15188,16 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
         )
         .filter(Boolean);
 
-      // =================================================================
-      // 🚨 KIỂM TRA MÔI TRƯỜNG & DANH SÁCH LÍNH TRƯỚC KHI LỌC
-      // =================================================================
-      // Nới lỏng điều kiện role để phòng hờ lỗi đánh máy trong Database
-
       console.log('👉 [X-RAY] QUYỀN HẠN:', {
         role,
         isAdmin,
         isWardAdmin,
         myMaXa,
       });
-      console.log('👉 [X-RAY] DANH SÁCH EMAIL LÍNH CỦA TÔI:', myStaffEmails);
+      console.log('👉 [X-RAY] DANH SÁCH EMAIL:', myStaffEmails);
 
       // =================================================================
-      // 2. KÉO VÀ LỌC DỮ LIỆU SỰ CỐ (INCIDENTS) - CÓ BÁO CÁO CHI TIẾT
+      // 2. KÉO VÀ LỌC DỮ LIỆU SỰ CỐ (INCIDENTS)
       // =================================================================
       const { data: incData, error: incErr } = await window.supabaseClient
         .from('incidents')
@@ -15213,10 +15219,8 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
             const isMyStaffAssigned = myStaffEmails.some((staffEmail) =>
               rawMembersString.includes(staffEmail)
             );
-
             const isAccepted = isMyWard || isMyStaffAssigned || isAssignedToMe;
 
-            // IN BÁO CÁO CHO NHỮNG SỰ KIỆN BỊ LOẠI
             if (!isAccepted) {
               console.log(`❌ ĐÃ LOẠI SỰ KIỆN: "${inc.event_name}"`, {
                 ma_xa_su_kien: inc.ma_xa,
@@ -15230,7 +15234,6 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
                 isAssignedToMe,
               });
             }
-
             return isAccepted;
           } else {
             return isAssignedToMe;
@@ -15238,31 +15241,120 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
         });
       }
       incidentData = allIncidents;
-
-      // Đặt thêm console.log ở đây để bạn kiểm chứng xem sự kiện HCDC đã lọt qua lưới lọc chưa
       console.log('🎯 SỰ KIỆN SAU KHI LỌC QUYỀN:', incidentData);
 
-      // Khởi tạo bản đồ (1 lần)
+      // =================================================================
+      // 3. KHỞI TẠO BẢN ĐỒ VÀ CÁC LỚP BASEMAP XỊN XÒ
+      // =================================================================
       if (!map) {
         map = L.map('containerMap', {
           center: [10.77, 106.7],
           zoom: 10,
           zoomControl: true,
         });
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-          opacity: 0.5,
-        }).addTo(map);
+
+        const lightNoLabels = L.tileLayer(
+          'https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png',
+          {
+            opacity: 0.8,
+            attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
+            maxZoom: 20,
+          }
+        );
+
+        const darkNoLabels = L.tileLayer(
+          'https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png',
+          {
+            opacity: 0.8,
+            attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
+            maxZoom: 20,
+          }
+        );
+
+        const satelliteMap = L.tileLayer(
+          'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+          {
+            attribution: 'Tiles &copy; Esri &mdash; Source: Esri',
+            maxZoom: 19,
+          }
+        );
+
+        // ------------------------------------------------------------------
+        // TẠO LỚP CHỈ CHỨA CHỮ ĐỊA DANH (Labels Only) + 2 QUẦN ĐẢO
+        // ------------------------------------------------------------------
+        window.mapLabelsLayer = L.layerGroup(); // Tạo nhóm chứa tất cả nhãn
+
+        // Thêm nhãn địa danh cơ bản từ CartoDB
+        const cartoLabels = L.tileLayer(
+          'https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png',
+          {
+            pane: 'overlayPane',
+            maxZoom: 20,
+          }
+        ).addTo(window.mapLabelsLayer);
+
+        // Chèn CSS cho nhãn Hoàng Sa, Trường Sa (nếu chưa có)
+        const customLabelStyle = `
+          .vn-island-label {
+            font-size: 11px;
+            font-weight: 700;
+            color: #008b99;
+            text-align: center;
+            white-space: nowrap;
+            text-shadow: 1px 1px 0px #fff, -1px -1px 0px #fff, 1px -1px 0px #fff, -1px 1px 0px #fff;
+            pointer-events: none;
+          }
+        `;
+        if (!document.getElementById('island-label-style')) {
+          const s = document.createElement('style');
+          s.id = 'island-label-style';
+          s.innerHTML = customLabelStyle;
+          document.head.appendChild(s);
+        }
+
+        // Tọa độ 2 quần đảo
+        const ISLANDS_COORD = {
+          'Hoàng Sa': [16.5, 112.0],
+          'Trường Sa': [9.0, 114.0],
+        };
+
+        // Tạo marker nhãn và thêm vào window.mapLabelsLayer
+        Object.entries(ISLANDS_COORD).forEach(([name, coords]) => {
+          const islandLabel = L.marker(coords, {
+            icon: L.divIcon({
+              className: 'vn-island-label',
+              html: `🏝️ ${name}<br><span style="font-size:8px;font-weight:400;color:#64748b">Việt Nam</span>`,
+              iconSize: [100, 40],
+              iconAnchor: [50, 20],
+            }),
+            interactive: false,
+          });
+          islandLabel.addTo(window.mapLabelsLayer);
+        });
+
+        // Đặt bản đồ Sáng màu (Không chữ) làm mặc định ban đầu
+        lightNoLabels.addTo(map);
+
+        window.mapBasemaps = {
+          'Carto (Light)': lightNoLabels,
+          'Carto (Dark)': darkNoLabels,
+          'Satelite': satelliteMap,
+        };
+
+        // Lớp viền ranh giới hành chính cơ bản
         geojsonBaseLayer = L.geoJSON(geojsonData, {
           style: { fillColor: 'transparent', color: '#bcbcbc', weight: 1 },
           interactive: false,
         }).addTo(map);
+
         setupMapPlugins();
-        buildLayersOnce(); // tạo layer ổn định + bật mặc định
-        await setupLayersControl(); // control thống nhất (gồm PXN)
+        buildLayersOnce();
+
+        await setupLayersControl();
+
         addLegend();
         refreshLegend();
       } else {
-        // Quay lại trang: cập nhật nội dung, không tạo lại control
         fillMembersLayer();
         fillIncidentsLayer();
         refreshChoropleth();
