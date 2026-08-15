@@ -2910,79 +2910,20 @@ document.addEventListener('DOMContentLoaded', function () {
           return data;
         };
 
-        // ✅ TẢI INCIDENTS: Tải 100 sự kiện mới nhất (Không lọc ma_xa để còn bắt được lính đi hỗ trợ phường khác)
-        const fetchIncidents = async () => {
-          const { data, error } = await window.supabaseClient
-            .from('incidents')
-            .select('id, initial_selected_members, members, created_at')
-            .order('created_at', { ascending: false })
-            .limit(100);
-
-          if (error) throw error;
-          return data;
-        };
-
         // 🚨 GỠ BỎ HOÀN TOÀN CACHE ĐỂ DỮ LIỆU LUÔN TƯƠI 100%
-        const [profiles, incidents] = await Promise.all([
+        const [profiles] = await Promise.all([
           fetchProfiles(),
-          fetchIncidents(),
+          // Không cần fetchIncidents ở đây nữa vì ta đã xóa khối đồng bộ
         ]);
 
-        const safeProfiles = profiles || [];
-        const safeIncidents = incidents || [];
-
-        // =======================================================
-        // 🔄 ĐỒNG BỘ TRẠNG THÁI XÁC NHẬN TỪ SỰ KIỆN GẦN NHẤT
-        // =======================================================
-        const updatedProfiles = safeProfiles.map((p) => ({
-          ...p,
-          approval_status: null,
-        }));
-
-        safeIncidents.forEach((incident) => {
-          // Regex siêu bảo vệ: Cắt theo dấu phẩy, chấm phẩy, khoảng trắng, xuống dòng & Xóa dấu <>
-          const calledEmails = String(incident.initial_selected_members || '')
-            .split(/[,;\s\n]+/)
-            .map((e) => e.replace(/[<>]/g, '').trim().toLowerCase())
-            .filter(Boolean);
-
-          const confirmedEmails = String(incident.members || '')
-            .split(/[,;\s\n]+/)
-            .map((e) => e.replace(/[<>]/g, '').trim().toLowerCase())
-            .filter(Boolean);
-
-          const involvedEmails = [
-            ...new Set([...calledEmails, ...confirmedEmails]),
-          ];
-
-          involvedEmails.forEach((email) => {
-            const profileIndex = updatedProfiles.findIndex(
-              (p) => String(p.email || '').toLowerCase() === email
-            );
-
-            if (profileIndex !== -1) {
-              // KHÓA TRẠNG THÁI: Chỉ nhận diện sự kiện mới nhất có mặt người này
-              if (!updatedProfiles[profileIndex].approval_status) {
-                if (confirmedEmails.includes(email)) {
-                  updatedProfiles[profileIndex].approval_status = 'approved';
-                } else if (calledEmails.includes(email)) {
-                  updatedProfiles[profileIndex].approval_status = 'pending';
-                }
-              }
-            }
-          });
-        });
-
-        // Đưa người không đi sự kiện về mặc định
-        updatedProfiles.forEach((p) => {
-          if (!p.approval_status) p.approval_status = 'none';
-        });
+        // KHÔNG LÀM GÌ CẢ, DÙNG NGUYÊN BẢN DATA TỪ SUPABASE!
+        const updatedProfiles = profiles || []; 
 
         // =======================================================
         // 🚀 RENDER CÁC COMPONENT BÊN DƯỚI
         // =======================================================
 
-        // 1. KPI Cards (Giờ KPI đã tự fetch data, ta cứ gọi lại để nó trigger chạy)
+        // 1. KPI Cards 
         if (typeof updateKpiCards === 'function') {
           updateKpiCards();
         }
@@ -4900,12 +4841,14 @@ document.addEventListener('DOMContentLoaded', function () {
 
   // --- Helper Functions for UI Updates (Client-side) ---
 
+// =================================================================
+  // CẬP NHẬT BẢNG BÁO CÁO GẦN ĐÂY
+  // =================================================================
   function updateRecentReportsTable(reports) {
     const tbody = document.getElementById('recent-report-body');
     tbody.innerHTML = '';
 
     if (!reports || reports.length === 0) {
-      // Nhớ đổi colspan thành 5 vì bảng giờ có 5 cột
       tbody.innerHTML = `<tr><td colspan="5" class="text-center text-muted">Không có hồ sơ gần đây.</td></tr>`;
       return;
     }
@@ -4913,15 +4856,19 @@ document.addEventListener('DOMContentLoaded', function () {
     reports.forEach((report) => {
       const row = document.createElement('tr');
 
-      // Ánh xạ dữ liệu từ bảng profiles mới
       const name = report.full_name || 'Chưa cập nhật';
       const date = new Date(
         report.updated_at || report.created_at || Date.now()
       ).toLocaleDateString('vi-VN');
       const shortId = report.id ? String(report.id).substring(0, 8) : '';
-      const status = report.approval_status || 'pending';
+      
+      // Sửa lỗi trường hợp approval_status bị null, rỗng hoặc chứa chữ 'none'
+      let rawStatus = report.approval_status;
+      if (rawStatus === null || rawStatus === undefined || rawStatus === '' || rawStatus === 'none') {
+        rawStatus = 'pending'; // Ép về pending thay vì hiện chữ none
+      }
+      const status = rawStatus;
 
-      // Tạo HTML cho 1 dòng dữ liệu
       row.innerHTML = `
             <td data-label="User"><b>${
               window.escapeHtml ? window.escapeHtml(name) : name
@@ -4950,13 +4897,16 @@ document.addEventListener('DOMContentLoaded', function () {
                             title="Phê duyệt">
                         <i class='bx bx-check'></i>
                     </button>
-
                 </div>
             </td>
         `;
       tbody.appendChild(row);
     });
   }
+
+  // =================================================================
+  // CẬP NHẬT DANH SÁCH VIỆC CẦN LÀM (TO-DO LIST)
+  // =================================================================
   function updateTodoList(todos) {
     const listContainer = document.getElementById('todo-list');
     listContainer.innerHTML = '';
@@ -4977,14 +4927,24 @@ document.addEventListener('DOMContentLoaded', function () {
     // GOM NHÓM DỮ LIỆU
     const groups = todos.reduce(
       (acc, item) => {
-        const status = item.approval_status || item.status || 'pending';
+        // Làm sạch và đồng nhất status thành chữ thường để so sánh
+        let rawStatus = item.approval_status || item.status || '';
+        if (rawStatus === 'none' || rawStatus === null) rawStatus = ''; // Ép các giá trị lạ về rỗng
+        const status = String(rawStatus).toLowerCase().trim();
+
         const text = item.text || `Hồ sơ: ${item.full_name || 'Không tên'}`;
         const isDone = item.done || status === 'approved';
         const task = { text, done: isDone };
 
-        if (status === 'pending') acc.pending.push(task);
-        else if (status === 'edit') acc.edit.push(task);
-        else acc.other.push(task);
+        // Phân loại: Chỉ những status có giá trị cụ thể mới vào 2 cột đầu
+        if (status === 'pending') {
+            acc.pending.push(task);
+        } else if (status === 'edit') {
+            acc.edit.push(task);
+        } else {
+            // Còn lại (đã approved, hoặc dữ liệu bị trống/none từ xa xưa) cho vào cột Đã xử lý
+            acc.other.push(task);
+        }
 
         return acc;
       },
@@ -5011,7 +4971,6 @@ document.addEventListener('DOMContentLoaded', function () {
     columnsConfig.forEach((col) => {
       if (col.data.length === 0) return;
 
-      // Khối bao bọc toàn bộ cột
       const colDiv = document.createElement('div');
       colDiv.className = 'todo-column';
       colDiv.style.background = 'var(--light)';
@@ -5019,34 +4978,29 @@ document.addEventListener('DOMContentLoaded', function () {
       colDiv.style.borderRadius = '12px';
       colDiv.style.listStyle = 'none';
 
-      // ---------------------------------------------------------
       // 1. TẠO THANH TIÊU ĐỀ CÓ THỂ CLICK ĐỂ THU GỌN
-      // ---------------------------------------------------------
       const headerWrapper = document.createElement('div');
       headerWrapper.style.display = 'flex';
       headerWrapper.style.justifyContent = 'space-between';
       headerWrapper.style.alignItems = 'center';
-      headerWrapper.style.cursor = 'pointer'; // Hiển thị hình bàn tay khi hover
+      headerWrapper.style.cursor = 'pointer'; 
       headerWrapper.style.marginBottom = '15px';
-      headerWrapper.style.userSelect = 'none'; // Chống bôi đen chữ khi click liên tục
+      headerWrapper.style.userSelect = 'none'; 
 
       const headerTitle = document.createElement('h6');
       headerTitle.style.margin = '0';
       headerTitle.innerHTML = `<strong>${col.title}</strong> <span style="opacity: 0.6; font-size: 0.9em;">(${col.data.length})</span>`;
 
-      // Thêm icon mũi tên (Sử dụng thư viện Boxicons của bạn)
       const toggleIcon = document.createElement('i');
       toggleIcon.className = 'bx bx-chevron-down';
       toggleIcon.style.fontSize = '24px';
-      toggleIcon.style.transition = 'transform 0.3s ease'; // Hiệu ứng xoay mượt mà
+      toggleIcon.style.transition = 'transform 0.3s ease'; 
 
       headerWrapper.appendChild(headerTitle);
       headerWrapper.appendChild(toggleIcon);
       colDiv.appendChild(headerWrapper);
 
-      // ---------------------------------------------------------
       // 2. TẠO HỘP CHỨA TÁC VỤ VÀ ĐỔ DỮ LIỆU VÀO
-      // ---------------------------------------------------------
       const tasksWrapper = document.createElement('div');
 
       col.data.forEach((todo) => {
@@ -5062,7 +5016,7 @@ document.addEventListener('DOMContentLoaded', function () {
         taskCard.className = `task-card ${taskClass}`;
         taskCard.style.padding = '12px';
         taskCard.style.marginBottom = '10px';
-        taskCard.style.backgroundColor = '#fff'; // Đổi nền thẻ thành trắng để nổi bật trên nền xám
+        taskCard.style.backgroundColor = '#fff';
         taskCard.style.borderRadius = '8px';
         taskCard.style.borderLeft = '4px solid var(--blue)';
         taskCard.style.boxShadow = '0 2px 4px rgba(0,0,0,0.05)';
@@ -5073,30 +5027,31 @@ document.addEventListener('DOMContentLoaded', function () {
 
       colDiv.appendChild(tasksWrapper);
 
-      // ---------------------------------------------------------
       // 3. GẮN SỰ KIỆN CLICK ĐỂ ẨN/HIỆN
-      // ---------------------------------------------------------
       let isCollapsed = false;
       headerWrapper.addEventListener('click', () => {
         isCollapsed = !isCollapsed;
         if (isCollapsed) {
-          tasksWrapper.style.display = 'none'; // Giấu các thẻ đi
-          toggleIcon.style.transform = 'rotate(-90deg)'; // Xoay mũi tên hướng sang phải
+          tasksWrapper.style.display = 'none'; 
+          toggleIcon.style.transform = 'rotate(-90deg)'; 
         } else {
-          tasksWrapper.style.display = 'block'; // Hiện lại các thẻ
-          toggleIcon.style.transform = 'rotate(0deg)'; // Xoay mũi tên cắm xuống
+          tasksWrapper.style.display = 'block'; 
+          toggleIcon.style.transform = 'rotate(0deg)'; 
         }
       });
 
       listContainer.appendChild(colDiv);
       if (col.id === 'other') {
-        headerWrapper.click();
+        headerWrapper.click(); // Thu gọn cột "Đã xử lý" theo mặc định
       }
     });
   }
 
-  // Example function to get CSS class for status badges
+  // =================================================================
+  // GET STATUS BADGE CLASS
+  // =================================================================
   function getStatusBadgeClass(status) {
+    if (!status) return 'pending';
     switch (status.toLowerCase()) {
       case 'on duty':
         return 'approved';
