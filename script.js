@@ -7435,6 +7435,9 @@ document.addEventListener('DOMContentLoaded', function () {
         }
       };
     }
+    if (typeof window.bindTeamStatsButton === 'function') {
+      window.bindTeamStatsButton(inc);
+    }
     // 3. Nút AAR (Màu xanh)
     const btnAar = document.getElementById('btn-open-aar-modal');
     if (btnAar) {
