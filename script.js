@@ -1815,32 +1815,48 @@ document.addEventListener('DOMContentLoaded', function () {
   }
   //8.AAR
 
-  const aarForm = document.getElementById('aarForm');
-  if (aarForm) {
+  // ============================================================================
+  // (A) SỬA FORM SUBMIT AAR — tôn trọng lựa chọn "Đóng / Giữ trạng thái"
+  //     Thay listener submit của #aarForm bằng bản này.
+  // ============================================================================
+  (function () {
+    const aarForm = document.getElementById('aarForm');
+    if (!aarForm) return;
+
     aarForm.addEventListener('submit', async function (e) {
       e.preventDefault();
-
-      // 1. Bật loading
       customShowLoading(true);
 
       const formData = new FormData(this);
       const aarData = {};
       formData.forEach((value, key) => (aarData[key] = value));
 
-      // Lấy thông tin user từ session cục bộ
-      const adminName = window.userSession?.username || 'admin';
+      const adminName =
+        window.userSession?.username ||
+        window.userSession?.full_name ||
+        'admin';
       const incidentId = document.getElementById('aar-incident-id')?.value;
-
       if (!incidentId) {
-        showToast('Lỗi: Không tìm thấy ID ổ dịch!', 'error');
+        showToast('Lỗi: Không tìm thấy ID sự kiện!', 'error');
         customShowLoading(false);
         return;
       }
 
+      // 🔧 TÔN TRỌNG LỰA CHỌN: đóng hay giữ trạng thái (từ dropdown problem_status)
+      const nextStatus =
+        aarData.problem_status === 'active' ? 'active' : 'closed';
+      const willClose = nextStatus === 'closed';
+
       try {
-        // 2. CẬP NHẬT TRỰC TIẾP VÀO SUPABASE
-        // Chúng ta lưu dữ liệu AAR vào cột 'aar_data' (kiểu JSONB)
-        const { error } = await supabaseClient
+        const { data: currentIncident, error: fetchErr } = await supabaseClient
+          .from('incidents')
+          .select('members, event_name')
+          .eq('id', incidentId)
+          .single();
+        if (fetchErr) throw fetchErr;
+
+        // Cập nhật AAR + trạng thái theo lựa chọn
+        const { error: updateErr } = await supabaseClient
           .from('incidents')
           .update({
             aar_data: {
@@ -1848,28 +1864,48 @@ document.addEventListener('DOMContentLoaded', function () {
               submitted_by: adminName,
               submitted_at: new Date().toISOString(),
             },
-            status: 'closed', // Cập nhật trạng thái kết thúc ổ dịch
+            status: nextStatus, // ← 'closed' hoặc 'active' theo dropdown, KHÔNG cứng nữa
           })
           .eq('id', incidentId);
+        if (updateErr) throw updateErr;
 
-        if (error) throw error;
+        // Chỉ gửi thông báo KẾT THÚC khi thực sự đóng
+        if (willClose) {
+          const membersStr = currentIncident?.members || '';
+          const memberEmails = membersStr
+            .split(/[,;\s\n]+/)
+            .map((e) => e.replace(/[<>]/g, '').trim().toLowerCase())
+            .filter(Boolean);
+          if (memberEmails.length > 0) {
+            const notificationsPayload = memberEmails.map((email) => ({
+              user_email: email,
+              incident_id: incidentId,
+              notification_type: 'ket_thuc',
+              message: `Sự kiện "${
+                currentIncident.event_name || 'Nhiệm vụ'
+              }" đã được Giám đốc đóng lại. Đội RRT kết thúc nhiệm vụ tại hiện trường.`,
+            }));
+            const { error: notifErr } = await supabaseClient
+              .from('notifications')
+              .insert(notificationsPayload);
+            if (notifErr)
+              console.error('Lỗi gửi thông báo kết thúc:', notifErr);
+          }
+        }
 
-        // 3. THÀNH CÔNG
-        showToast('Đánh giá thành công!', 'success');
+        showToast(
+          willClose
+            ? 'Đã lưu đánh giá và đóng sự kiện!'
+            : 'Đã lưu đánh giá, sự kiện vẫn đang xử lý.',
+          'success'
+        );
 
-        // Đóng modal
-        if (typeof window.closeModal === 'function') {
+        if (typeof window.closeModal === 'function')
           window.closeModal('aarModal');
-        } else {
-          $('#aarModal').modal('hide');
-        }
+        else $('#aarModal').modal('hide');
 
-        // 4. KHÔNG CẦN GỌI LẠI GET_INITIAL_DATA
-        // Nhờ Realtime, các bảng Tracking đã tự động cập nhật dữ liệu mới từ Database
-        // Bạn chỉ cần gọi lại hàm render để cập nhật hiển thị nếu cần
-        if (typeof window.renderTrackingPage === 'function') {
+        if (typeof window.renderTrackingPage === 'function')
           window.renderTrackingPage();
-        }
       } catch (err) {
         console.error('Lỗi gửi AAR:', err);
         showToast('Gửi AAR thất bại: ' + err.message, 'error');
@@ -1877,7 +1913,7 @@ document.addEventListener('DOMContentLoaded', function () {
         customShowLoading(false);
       }
     });
-  }
+  })();
 
   // --- Lấy các phần tử DOM ---
   const accountLink = document.getElementById('accountLink');
@@ -2917,13 +2953,13 @@ document.addEventListener('DOMContentLoaded', function () {
         ]);
 
         // KHÔNG LÀM GÌ CẢ, DÙNG NGUYÊN BẢN DATA TỪ SUPABASE!
-        const updatedProfiles = profiles || []; 
+        const updatedProfiles = profiles || [];
 
         // =======================================================
         // 🚀 RENDER CÁC COMPONENT BÊN DƯỚI
         // =======================================================
 
-        // 1. KPI Cards 
+        // 1. KPI Cards
         if (typeof updateKpiCards === 'function') {
           updateKpiCards();
         }
@@ -4841,7 +4877,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
   // --- Helper Functions for UI Updates (Client-side) ---
 
-// =================================================================
+  // =================================================================
   // CẬP NHẬT BẢNG BÁO CÁO GẦN ĐÂY
   // =================================================================
   function updateRecentReportsTable(reports) {
@@ -4861,10 +4897,15 @@ document.addEventListener('DOMContentLoaded', function () {
         report.updated_at || report.created_at || Date.now()
       ).toLocaleDateString('vi-VN');
       const shortId = report.id ? String(report.id).substring(0, 8) : '';
-      
+
       // Sửa lỗi trường hợp approval_status bị null, rỗng hoặc chứa chữ 'none'
       let rawStatus = report.approval_status;
-      if (rawStatus === null || rawStatus === undefined || rawStatus === '' || rawStatus === 'none') {
+      if (
+        rawStatus === null ||
+        rawStatus === undefined ||
+        rawStatus === '' ||
+        rawStatus === 'none'
+      ) {
         rawStatus = 'pending'; // Ép về pending thay vì hiện chữ none
       }
       const status = rawStatus;
@@ -4938,12 +4979,12 @@ document.addEventListener('DOMContentLoaded', function () {
 
         // Phân loại: Chỉ những status có giá trị cụ thể mới vào 2 cột đầu
         if (status === 'pending') {
-            acc.pending.push(task);
+          acc.pending.push(task);
         } else if (status === 'edit') {
-            acc.edit.push(task);
+          acc.edit.push(task);
         } else {
-            // Còn lại (đã approved, hoặc dữ liệu bị trống/none từ xa xưa) cho vào cột Đã xử lý
-            acc.other.push(task);
+          // Còn lại (đã approved, hoặc dữ liệu bị trống/none từ xa xưa) cho vào cột Đã xử lý
+          acc.other.push(task);
         }
 
         return acc;
@@ -4983,9 +5024,9 @@ document.addEventListener('DOMContentLoaded', function () {
       headerWrapper.style.display = 'flex';
       headerWrapper.style.justifyContent = 'space-between';
       headerWrapper.style.alignItems = 'center';
-      headerWrapper.style.cursor = 'pointer'; 
+      headerWrapper.style.cursor = 'pointer';
       headerWrapper.style.marginBottom = '15px';
-      headerWrapper.style.userSelect = 'none'; 
+      headerWrapper.style.userSelect = 'none';
 
       const headerTitle = document.createElement('h6');
       headerTitle.style.margin = '0';
@@ -4994,7 +5035,7 @@ document.addEventListener('DOMContentLoaded', function () {
       const toggleIcon = document.createElement('i');
       toggleIcon.className = 'bx bx-chevron-down';
       toggleIcon.style.fontSize = '24px';
-      toggleIcon.style.transition = 'transform 0.3s ease'; 
+      toggleIcon.style.transition = 'transform 0.3s ease';
 
       headerWrapper.appendChild(headerTitle);
       headerWrapper.appendChild(toggleIcon);
@@ -5032,11 +5073,11 @@ document.addEventListener('DOMContentLoaded', function () {
       headerWrapper.addEventListener('click', () => {
         isCollapsed = !isCollapsed;
         if (isCollapsed) {
-          tasksWrapper.style.display = 'none'; 
-          toggleIcon.style.transform = 'rotate(-90deg)'; 
+          tasksWrapper.style.display = 'none';
+          toggleIcon.style.transform = 'rotate(-90deg)';
         } else {
-          tasksWrapper.style.display = 'block'; 
-          toggleIcon.style.transform = 'rotate(0deg)'; 
+          tasksWrapper.style.display = 'block';
+          toggleIcon.style.transform = 'rotate(0deg)';
         }
       });
 
@@ -7546,58 +7587,78 @@ document.addEventListener('DOMContentLoaded', function () {
       }
     }
 
+    // ============================================================================
+    // (B) SỬA HIỂN THỊ AAR trong openDossierView — đọc từ inc.aar_data (jsonb)
+    // ----------------------------------------------------------------------------
+    // THAY cả khối "--- TAB PREVIEW AAR ---" trong openDossierView bằng đoạn này.
+    // Lý do: AAR lưu vào cột aar_data (JSON) với key aar_summary/aar_issues/
+    //        aar_lessons_learned — KHÔNG phải cột riêng inc.aar_summary...
+    // ============================================================================
+
     // --- TAB PREVIEW AAR ---
-    // --- TAB PREVIEW AAR ---
-    if (inc.aar_summary || isClosed) {
-      if (document.getElementById('aar-content-placeholder'))
-        document.getElementById('aar-content-placeholder').style.display =
-          'none';
-      if (document.getElementById('aar-content-real'))
-        document.getElementById('aar-content-real').style.display = 'block';
+    {
+      const aar = inc.aar_data || {}; // ← nguồn đúng: cột jsonb
+      const aarSummary = aar.aar_summary || '';
+      const aarIssues = aar.aar_issues || '';
+      const aarLessons = aar.aar_lessons_learned || '';
+      const aarAdmin = aar.submitted_by || inc.aar_admin || 'admin';
 
-      // Điền nội dung (Giữ nguyên)
-      // --- SỬ DỤNG HÀM FORMAT ĐỂ HIỂN THỊ ĐẸP HƠN ---
-      if (document.getElementById('view-aar-summary')) {
-        document.getElementById('view-aar-summary').innerHTML =
-          formatAarDisplay(inc.aar_summary);
-      }
+      const hasAAR = !!(aarSummary || aarIssues || aarLessons);
 
-      // Đối với Vấn đề & Bài học, nếu muốn đẹp thì cũng dùng hàm, còn không thì giữ nguyên textContent hoặc chỉ replace xuống dòng
-      if (document.getElementById('view-aar-issues')) {
-        // Thay thế xuống dòng \n thành <br> để dễ đọc hơn
-        const raw = inc.aar_issues || '';
-        document.getElementById('view-aar-issues').innerHTML = raw
-          ? raw.replace(/\n/g, '<br>')
-          : '<span class="text-muted fst-italic">(Chưa cập nhật)</span>';
-      }
+      if (hasAAR || isClosed) {
+        if (document.getElementById('aar-content-placeholder'))
+          document.getElementById('aar-content-placeholder').style.display =
+            'none';
+        if (document.getElementById('aar-content-real'))
+          document.getElementById('aar-content-real').style.display = 'block';
 
-      if (document.getElementById('view-aar-lessons')) {
-        const raw = inc.aar_lessons_learned || '';
-        document.getElementById('view-aar-lessons').innerHTML = raw
-          ? raw.replace(/\n/g, '<br>')
-          : '<span class="text-muted fst-italic">(Chưa cập nhật)</span>';
-      }
-      if (document.getElementById('view-aar-admin'))
-        document.getElementById('view-aar-admin').textContent =
-          getName(inc.aar_admin) || 'admin';
+        // Tóm tắt — dùng hàm format nếu có
+        if (document.getElementById('view-aar-summary')) {
+          document.getElementById('view-aar-summary').innerHTML =
+            typeof formatAarDisplay === 'function'
+              ? formatAarDisplay(aarSummary)
+              : aarSummary
+              ? window.escapeHtml(aarSummary).replace(/\n/g, '<br>')
+              : '<span class="text-muted fst-italic">(Chưa cập nhật)</span>';
+        }
 
-      // 🔥 THÊM LOGIC MỚI: ĐIỀU KHIỂN BADGE TRẠNG THÁI 🔥
-      // Logic này đi kèm với việc bạn đã sửa HTML thêm 2 cái div id="aar-badge-closed" và id="aar-badge-active"
-      if (isClosed) {
-        // Trường hợp 1: Đã đóng thật sự (Status = Closed)
-        if ($('#aar-badge-closed').length) $('#aar-badge-closed').show();
-        if ($('#aar-badge-active').length) $('#aar-badge-active').hide();
+        // Vấn đề
+        if (document.getElementById('view-aar-issues')) {
+          document.getElementById('view-aar-issues').innerHTML = aarIssues
+            ? window.escapeHtml(aarIssues).replace(/\n/g, '<br>')
+            : '<span class="text-muted fst-italic">(Chưa cập nhật)</span>';
+        }
+
+        // Bài học
+        if (document.getElementById('view-aar-lessons')) {
+          document.getElementById('view-aar-lessons').innerHTML = aarLessons
+            ? window.escapeHtml(aarLessons).replace(/\n/g, '<br>')
+            : '<span class="text-muted fst-italic">(Chưa cập nhật)</span>';
+        }
+
+        // Người đánh giá
+        if (document.getElementById('view-aar-admin')) {
+          const getNameLocal =
+            typeof getName === 'function' ? getName : (x) => x || 'admin';
+          document.getElementById('view-aar-admin').textContent =
+            getNameLocal(aarAdmin) || 'admin';
+        }
+
+        // Badge trạng thái
+        if (isClosed) {
+          if ($('#aar-badge-closed').length) $('#aar-badge-closed').show();
+          if ($('#aar-badge-active').length) $('#aar-badge-active').hide();
+        } else {
+          if ($('#aar-badge-closed').length) $('#aar-badge-closed').hide();
+          if ($('#aar-badge-active').length) $('#aar-badge-active').show();
+        }
       } else {
-        // Trường hợp 2: Có AAR nhưng vẫn đang mở (Status = Active)
-        if ($('#aar-badge-closed').length) $('#aar-badge-closed').hide();
-        if ($('#aar-badge-active').length) $('#aar-badge-active').show();
+        if (document.getElementById('aar-content-placeholder'))
+          document.getElementById('aar-content-placeholder').style.display =
+            'block';
+        if (document.getElementById('aar-content-real'))
+          document.getElementById('aar-content-real').style.display = 'none';
       }
-    } else {
-      if (document.getElementById('aar-content-placeholder'))
-        document.getElementById('aar-content-placeholder').style.display =
-          'block';
-      if (document.getElementById('aar-content-real'))
-        document.getElementById('aar-content-real').style.display = 'none';
     }
 
     // --- ACTION BAR (XỬ LÝ 3 TRẠNG THÁI) ---
@@ -15296,7 +15357,7 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
         window.mapBasemaps = {
           'Carto (Light)': lightNoLabels,
           'Carto (Dark)': darkNoLabels,
-          'Satelite': satelliteMap,
+          Satelite: satelliteMap,
         };
 
         // Lớp viền ranh giới hành chính cơ bản
@@ -20073,24 +20134,29 @@ document.addEventListener('DOMContentLoaded', () => {
 // ============================================================
 // QUẢN LÝ AAR (After Action Review)
 // ============================================================
-// 1. Mở Modal AAR (Đã sửa scope window)
+// ============================================================================
+// openAarModal — SỬA đọc dữ liệu cũ từ incident.aar_data (jsonb), KHÔNG cột riêng
+//   Bug cũ: điền form từ incident.aar_summary/aar_issues/aar_lessons (không tồn tại
+//   hoặc sai key) → mở lại AAR bị trống. Nguồn đúng: incident.aar_data.{key}.
+// ============================================================================
 window.openAarModal = async function (incident, isViewOnly) {
-  // 1. Reset form (Giữ nguyên DOM logic)
+  // 1. Reset form
   const form = document.getElementById('aarForm');
   if (form) form.reset();
 
-  // 2. Điền thông tin cơ bản
+  // 2. Thông tin cơ bản
   $('#aar-incident-id').val(incident.id);
   $('#aar-incident-id-display').text(incident.id);
   $('#aar-location-display').text(incident.location_text || 'N/A');
   $('#aar-event-display').text(incident.event_name || 'N/A');
 
-  // 3. Điền dữ liệu cũ (Dựa trên cấu trúc object incident bạn truyền vào)
-  $('#aar-summary').val(incident.aar_summary || '');
-  $('#aar-issues').val(incident.aar_issues || '');
-  $('#aar-lessons-learned').val(incident.aar_lessons || '');
+  // 3. Điền dữ liệu cũ TỪ aar_data (jsonb) — đúng key theo name= của form
+  const aar = incident.aar_data || {};
+  $('#aar-summary').val(aar.aar_summary || '');
+  $('#aar-issues').val(aar.aar_issues || '');
+  $('#aar-lessons-learned').val(aar.aar_lessons_learned || '');
 
-  // 4. Logic View-Only
+  // 4. View-only cho non-admin (hoặc khi gọi xem kết quả)
   const isView =
     isViewOnly || window.userSession?.role?.toLowerCase() !== 'admin';
   $('#aar-summary').prop('disabled', isView);
@@ -20098,28 +20164,24 @@ window.openAarModal = async function (incident, isViewOnly) {
   $('#aar-lessons-learned').prop('disabled', isView);
   $('#aar-status').prop('disabled', isView);
 
-  if (isView) {
-    $('#btn-submit-aar').hide();
-    $('#aar-status').val('closed');
-  } else {
-    $('#btn-submit-aar').show();
-    $('#aar-status').val('closed');
-  }
+  // Trạng thái dropdown: nếu đã có lựa chọn cũ thì khôi phục, không thì mặc định theo status
+  const savedStatus =
+    aar.problem_status || (incident.status === 'closed' ? 'closed' : 'closed');
+  $('#aar-status').val(savedStatus);
 
-  // 5. Tải nhật ký từ Supabase
+  if (isView) $('#btn-submit-aar').hide();
+  else $('#btn-submit-aar').show();
+
+  // 5. Tải nhật ký
   window.currentIncidentLogs = [];
-
   try {
     const { data: logs, error } = await supabaseClient
       .from('incident_logs')
       .select('*')
       .eq('incident_id', incident.id)
       .order('created_at', { ascending: true });
-
     if (error) throw error;
-
     window.currentIncidentLogs = logs || [];
-    console.log('Đã tải xong nhật ký cho modal AAR.');
   } catch (err) {
     console.error('Lỗi tải log:', err);
     showToast('Lỗi tải nhật ký: ' + err.message, 'error');
