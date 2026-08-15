@@ -154,7 +154,7 @@
         </table>
       </div>
       <div class="small text-muted">
-        <i class='bx bx-info-circle'></i> Dùng để điều xe, vật tư theo số quân xác nhận của mỗi đội.
+        <i class='bx bx-info-circle'></i> Dùng để phân công nhiệm vụ, điều xe, vật tư theo số thành viên xác nhận tham gia.
       </div>`;
   }
 
