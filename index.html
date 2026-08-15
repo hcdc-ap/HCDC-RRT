@@ -1127,6 +1127,9 @@
               </div>
               <div style="display:flex; gap:10px;">
                 <button class="btn btn-light border" onclick="closeDossierView()"><i class='bx bx-arrow-back'></i> Quay lại</button>
+                <button class="btn btn-outline-dark" id="btn-team-stats" style="display:none;">
+                  <i class='bx bx-bar-chart-alt-2'></i> Thống kê
+                </button>
                 <button class="btn btn-warning" id="btn-open-plan-modal" style="display:none;"><i class='bx bx-map-alt'></i> Phương án (IAP)</button>
                 <button class="btn btn-info" id="btn-find-lab"><i class="bx bx-test-tube"></i> Xét nghiệm</button>
 
@@ -3445,6 +3448,7 @@
   <script src="utils/error-handler.js"></script>
   <script src="utils/debounce.js"></script>
   <script src="script.js"></script>
+  <script src="team-reponse-stats.js"></script>
   <script src="fix-patches.js"></script>
   <script src="lab-admin.js"></script>
   <script src="lab-dispatch-engine.js"></script>
