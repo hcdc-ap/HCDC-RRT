@@ -7131,11 +7131,16 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   }
 
+  // ============================================================================
+  // renderTrackingPage — THÊM "Thời gian kết thúc" cho thẻ sự kiện đã đóng.
+  //   Nguồn: created_at (SỚM NHẤT) của notification 'ket_thuc' theo incident_id.
+  //   Query 1 LẦN cho các sự kiện closed đang hiển thị, rồi tra map khi render.
+  // ============================================================================
   window.renderTrackingPage = async function (forceFetch = false) {
     const container = document.getElementById('event-grid-container');
     if (!container) return;
 
-    // 1. Tải dữ liệu (Giữ nguyên logic fetch)
+    // 1. Tải dữ liệu
     if (
       forceFetch ||
       !window.appState.trackingIncidents ||
@@ -7143,12 +7148,10 @@ document.addEventListener('DOMContentLoaded', function () {
     ) {
       container.innerHTML =
         '<div class="text-center p-4"><span class="spinner-border text-primary"></span><p>Đang tải sự kiện...</p></div>';
-
       const { data, error } = await window.supabaseClient
         .from('incidents')
         .select('*')
         .order('created_at', { ascending: false });
-
       if (error) {
         console.error('Lỗi Supabase:', error);
         container.innerHTML = `<p class="text-center text-danger">Lỗi tải dữ liệu: ${error.message}</p>`;
@@ -7159,41 +7162,65 @@ document.addEventListener('DOMContentLoaded', function () {
 
     let incidents = window.appState.trackingIncidents;
 
-    // 2. Logic Phân quyền xem sự cố
-    // 2. Logic Phân quyền xem sự cố
+    // 2. Phân quyền xem sự cố
     const role = (window.userSession?.role || '').toLowerCase();
     const myEmail = String(window.userSession?.email || '')
       .toLowerCase()
       .trim();
     const myMaXa = String(window.userSession?.workplace_ma_xa || '').trim();
-
     if (role === 'admin') {
       // admin: thấy tất cả — không lọc
     } else {
-      // Gom chung logic cho ward_admin và user thường
       incidents = incidents.filter((inc) => {
-        // Điều kiện 1: Xảy ra trên địa bàn quản lý (Chỉ áp dụng cho ward_admin)
         const isMyWard =
           role === 'ward_admin' &&
           myMaXa &&
           String(inc.ma_xa || '').trim() === myMaXa;
-
-        // Điều kiện 2: Tài khoản có tên trong danh sách tham gia hoặc được mời
         const members = String(inc.members || '').toLowerCase();
         const initial = String(
           inc.initial_selected_members || ''
         ).toLowerCase();
         const declined = String(inc.declined_members || '').toLowerCase();
-
         const hasJoined = members.includes(myEmail);
         const isInvited =
           initial.includes(myEmail) && !declined.includes(myEmail);
-
-        // HIỂN THỊ NẾU: Là sự cố địa phương HOẶC được đích thân điều động
         return isMyWard || hasJoined || isInvited;
       });
     }
-    // 3. Logic tìm kiếm & ngày tháng (Giữ nguyên)
+
+    // 2b. Lấy THỜI GIAN KẾT THÚC cho các sự kiện đã đóng (1 query duy nhất)
+    const closureTimeMap = new Map(); // incident_id -> created_at (sớm nhất)
+    try {
+      const closedIds = incidents
+        .filter((i) => i.status === 'closed')
+        .map((i) => i.id)
+        .filter(Boolean);
+      if (closedIds.length) {
+        const { data: closureNotifs } = await window.supabaseClient
+          .from('notifications')
+          .select('incident_id, created_at')
+          .eq('notification_type', 'ket_thuc')
+          .in('incident_id', closedIds);
+        (closureNotifs || []).forEach((n) => {
+          const cur = closureTimeMap.get(n.incident_id);
+          if (!cur || new Date(n.created_at) < new Date(cur)) {
+            closureTimeMap.set(n.incident_id, n.created_at);
+          }
+        });
+      }
+    } catch (e) {
+      console.warn('[tracking] Không lấy được thời gian kết thúc:', e);
+    }
+
+    const fmtVN = (t) =>
+      t
+        ? new Date(t).toLocaleString('vi-VN', {
+            timeZone: 'Asia/Ho_Chi_Minh',
+            hour12: false,
+          })
+        : 'N/A';
+
+    // 3. Tìm kiếm & ngày tháng
     const searchKey = (
       document.getElementById('tracking-search-input')?.value || ''
     ).toLowerCase();
@@ -7209,16 +7236,18 @@ document.addEventListener('DOMContentLoaded', function () {
     container.innerHTML = '';
     let hasResult = false;
 
-    // 4. RENDER GIAO DIỆN ĐẸP
+    // 4. Render
     incidents.forEach((inc) => {
-      // Mapping cột cho đúng DB của bạn
       const eventName = String(inc.event_name || 'Không có tên');
       const location = String(inc.location_text || 'N/A');
       const id = String(inc.id || '');
       const timestamp = inc.created_at
-        ? new Date(inc.created_at).toLocaleString('vi-VN')
+        ? new Date(inc.created_at).toLocaleString('vi-VN', {
+            timeZone: 'Asia/Ho_Chi_Minh',
+            hour12: false,
+          })
         : 'N/A';
-      // 3 trạng thái phản hồi: ✅ xác nhận · ❌ từ chối · ⏳ chờ
+
       const countList = (s) =>
         String(s || '')
           .split(';')
@@ -7227,10 +7256,8 @@ document.addEventListener('DOMContentLoaded', function () {
       const declinedCount = countList(inc.declined_members);
       const invitedCount = countList(inc.initial_selected_members);
       const respondedCount = confirmedCount + declinedCount;
-      // Chờ = tổng được mời - đã phản hồi (không âm, phòng dữ liệu cũ thiếu cột)
       const pendingCount = Math.max(0, invitedCount - respondedCount);
 
-      // Bộ lọc search
       if (
         searchKey &&
         !eventName.toLowerCase().includes(searchKey) &&
@@ -7238,13 +7265,12 @@ document.addEventListener('DOMContentLoaded', function () {
       )
         return;
 
-      // Bộ lọc ngày
       if (startDateVal || endDateVal) {
         const incTs = new Date(inc.created_at).getTime();
         if (incTs < startTs || incTs > endTs) return;
       }
-
       hasResult = true;
+
       const isClosed = inc.status === 'closed';
       const cardClass = isClosed
         ? 'event-card ev-closed'
@@ -7252,50 +7278,58 @@ document.addEventListener('DOMContentLoaded', function () {
       const badgeClass = isClosed
         ? 'ev-status st-closed'
         : 'ev-status st-active';
-      const statusText = isClosed ? '✔ Đã kết thúc' : '🔴 Đang xử lý';
-
+      const statusText = isClosed ? '✔ Đã kết thúc' : '🔴 Đang kích hoạt';
       const incString = encodeURIComponent(JSON.stringify(inc));
       const adminName =
         typeof window.getUserName === 'function'
           ? window.getUserName(inc.admin_activate)
           : 'admin';
 
-      // HTML ĐẸP NHƯ CŨ
+      // Dòng thời gian kết thúc (chỉ khi đã đóng VÀ có dữ liệu)
+      const closureTime = isClosed ? closureTimeMap.get(inc.id) : null;
+      const closureLine = closureTime
+        ? `<br><i class='bx bx-check-circle' style="color:#16a34a;"></i> Kết thúc: ${fmtVN(
+            closureTime
+          )}`
+        : '';
+
       container.insertAdjacentHTML(
         'beforeend',
         `
-            <div class="${cardClass}" onclick="openDossierView('${incString}')" style="cursor:pointer;">
-                <span class="${badgeClass}">${statusText}</span>
-                <h5 style="margin: 0 0 10px 0; font-weight: bold; color: #333; padding-right: 90px;">${escapeHtml(
-                  eventName
-                )}</h5>
-                
-                <div style="font-size: 13px; color: #666;">
-                    <i class='bx bx-map'></i> ${escapeHtml(location)}<br>
-                    <i class='bx bx-time'></i> ${timestamp}
-                </div>
-                
-                <div style="margin-top: 15px; display: flex; justify-content: space-between; align-items: end; border-top: 1px solid #eee; padding-top: 10px;">
-                     <div style="font-size: 10px; color: #888;">
-                        <span style="font-family: monospace;">#${id.substring(
-                          0,
-                          8
-                        )}</span><br>
-                        <i class='bx bxs-user-badge'></i> <b>${escapeHtml(
-                          adminName
-                        )}</b>
-                     </div>
-                     <small style="text-align:right; line-height:1.6; font-size: 12px;">
-                        <strong>${respondedCount}</strong>${
+          <div class="${cardClass}" onclick="openDossierView('${incString}')" style="cursor:pointer;">
+              <span class="${badgeClass}">${statusText}</span>
+              <h5 style="margin: 0 0 10px 0; font-weight: bold; color: #333; padding-right: 90px;">${escapeHtml(
+                eventName
+              )}</h5>
+
+              <div style="font-size: 13px; color: #666;">
+                  <i class='bx bx-map'></i> Địa điểm: ${escapeHtml(
+                    location
+                  )}<br>
+                  <i class='bx bx-time'></i> Kích hoạt: ${timestamp}${closureLine}
+              </div>
+
+              <div style="margin-top: 15px; display: flex; justify-content: space-between; align-items: end; border-top: 1px solid #eee; padding-top: 10px;">
+                   <div style="font-size: 10px; color: #888;">
+                      <span style="font-family: monospace;">#${id.substring(
+                        0,
+                        8
+                      )}</span><br>
+                      <i class='bx bxs-user-badge'></i> <b>${escapeHtml(
+                        adminName
+                      )}</b>
+                   </div>
+                   <small style="text-align:right; line-height:1.6; font-size: 12px;">
+                      <strong>${respondedCount}</strong>${
           invitedCount > 0 ? `/${invitedCount}` : ''
         } phản hồi<br>
-                        <span style="color:#16a34a;" title="Xác nhận tham gia">✅ ${confirmedCount}</span> ·
-                        <span style="color:#dc2626;" title="Từ chối">❌ ${declinedCount}</span> ·
-                        <span style="color:#d97706;" title="Chưa phản hồi">⏳ ${pendingCount}</span>
-                     </small>
-                </div>
-            </div>
-        `
+                      <span style="color:#16a34a;" title="Xác nhận tham gia">✅ ${confirmedCount}</span> ·
+                      <span style="color:#dc2626;" title="Từ chối">❌ ${declinedCount}</span> ·
+                      <span style="color:#d97706;" title="Chưa phản hồi">⏳ ${pendingCount}</span>
+                   </small>
+              </div>
+          </div>
+      `
       );
     });
 
@@ -10142,11 +10176,16 @@ document.addEventListener('DOMContentLoaded', function () {
       const nameEl = document.getElementById('incidentName');
       if (nameEl) nameEl.value = '';
       const now = new Date();
-      document.getElementById('activationTime').value = now.toLocaleString('vi-VN', {
-        timeZone: 'Asia/Ho_Chi_Minh', hour12: false,
-      });
+      document.getElementById('activationTime').value = now.toLocaleString(
+        'vi-VN',
+        {
+          timeZone: 'Asia/Ho_Chi_Minh',
+          hour12: false,
+        }
+      );
       // Điền sẵn template vào ô Chi tiết (giờ tập trung mặc định = giờ hiện tại VN)
-      window.fillActivationDetailTemplate && window.fillActivationDetailTemplate();
+      window.fillActivationDetailTemplate &&
+        window.fillActivationDetailTemplate();
 
       window.tempSelectedEmails = selectedEmails;
       $('#emergencyDetailsModal').modal('show');
@@ -10555,11 +10594,14 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         // E. HIỂN THỊ LÊN GIAO DIỆN REVIEW (bản gọn gàng, không tràn)
-        $('#reviewEventName').text(eventName);   // ← THÊM DÒNG NÀY
+        $('#reviewEventName').text(eventName); // ← THÊM DÒNG NÀY
         $('#reviewTime').text(time);
         $('#reviewLocation').text(location);
         $('#reviewDetails').html(
-          (window.escapeHtml ? window.escapeHtml(details) : details).replace(/\n/g, '<br>')
+          (window.escapeHtml ? window.escapeHtml(details) : details).replace(
+            /\n/g,
+            '<br>'
+          )
         );
         $('#reviewMemberCount').text(emailsToCheck.length);
 
@@ -10649,10 +10691,10 @@ document.addEventListener('DOMContentLoaded', function () {
         window.tempActivationData = {
           type: type,
           incidentId: incidentId,
-          eventName: eventName,     // ← MỚI: tên sự kiện ngắn gọn
+          eventName: eventName, // ← MỚI: tên sự kiện ngắn gọn
           time: time,
           location: location,
-          details: details,         // giờ tập trung + chi tiết (vào thông báo)
+          details: details, // giờ tập trung + chi tiết (vào thông báo)
           members: emailsToCheck,
           latitude: lat,
           longitude: lng,
@@ -10858,9 +10900,12 @@ document.addEventListener('DOMContentLoaded', function () {
           memberEmails.length > 0 &&
           typeof window.createSystemNotification === 'function'
         ) {
-          const notifMsg = data.details && data.details.trim()
-          ? data.details
-          : `Đã ${data.type === 'new' ? 'kích hoạt sự kiện' : 'bổ sung nhân lực'}: ${data.eventName || ''}`;
+          const notifMsg =
+            data.details && data.details.trim()
+              ? data.details
+              : `Đã ${
+                  data.type === 'new' ? 'kích hoạt sự kiện' : 'bổ sung nhân lực'
+                }: ${data.eventName || ''}`;
 
           await window.createSystemNotification(
             memberEmails,
@@ -10910,41 +10955,41 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
  dùng trong handler này (server tự tra UUID). Nếu nơi khác trong file
  không tham chiếu chúng thì không cần giữ lại.
 ============================================================================ */
-// ============================================================================
-// RENDER SẴN TEXT MẪU vào ô "Chi tiết sự kiện" (#incidentDetails) khi mở modal.
-//   Mẫu: Thời gian tập trung / Địa điểm tập trung / Chi tiết sự kiện
-//   Giờ tập trung mặc định = giờ hiện tại (VN), admin sửa được (đi sau thì đổi).
-// GHÉP: gọi window.fillActivationDetailTemplate() trong handler nút Kích hoạt
-//       (#btn-activate-emergency) — xem EDIT 2 trong incident-name-separation.md.
-// ============================================================================
-window.fillActivationDetailTemplate = function (opts) {
-  opts = opts || {};
-  const ta = document.getElementById('incidentDetails');
-  if (!ta) {
-    console.warn('[activation] Không tìm thấy #incidentDetails');
-    return;
-  }
-  // Chỉ điền nếu đang TRỐNG (không ghi đè nội dung admin đang gõ dở)
-  if (ta.value && ta.value.trim() !== '') return;
+  // ============================================================================
+  // RENDER SẴN TEXT MẪU vào ô "Chi tiết sự kiện" (#incidentDetails) khi mở modal.
+  //   Mẫu: Thời gian tập trung / Địa điểm tập trung / Chi tiết sự kiện
+  //   Giờ tập trung mặc định = giờ hiện tại (VN), admin sửa được (đi sau thì đổi).
+  // GHÉP: gọi window.fillActivationDetailTemplate() trong handler nút Kích hoạt
+  //       (#btn-activate-emergency) — xem EDIT 2 trong incident-name-separation.md.
+  // ============================================================================
+  window.fillActivationDetailTemplate = function (opts) {
+    opts = opts || {};
+    const ta = document.getElementById('incidentDetails');
+    if (!ta) {
+      console.warn('[activation] Không tìm thấy #incidentDetails');
+      return;
+    }
+    // Chỉ điền nếu đang TRỐNG (không ghi đè nội dung admin đang gõ dở)
+    if (ta.value && ta.value.trim() !== '') return;
 
-  const now = new Date().toLocaleString('vi-VN', {
-    timeZone: 'Asia/Ho_Chi_Minh',
-    hour12: false,
-  });
-  const diaDiemMacDinh =
-    opts.defaultLocation ||
-    'Trung tâm Kiểm soát bệnh tật Thành phố Hồ Chí Minh - 366A Âu Dương Lân, phường Chánh Hưng, Thành phố Hồ Chí Minh';
+    const now = new Date().toLocaleString('vi-VN', {
+      timeZone: 'Asia/Ho_Chi_Minh',
+      hour12: false,
+    });
+    const diaDiemMacDinh =
+      opts.defaultLocation ||
+      'Trung tâm Kiểm soát bệnh tật Thành phố Hồ Chí Minh - 366A Âu Dương Lân, phường Chánh Hưng, Thành phố Hồ Chí Minh';
 
-  ta.value =
-    `Thời gian tập trung: ${now}\n` +
-    `Địa điểm tập trung: ${diaDiemMacDinh}\n` +
-    `Chi tiết sự kiện: `;
+    ta.value =
+      `Thời gian tập trung: ${now}\n` +
+      `Địa điểm tập trung: ${diaDiemMacDinh}\n` +
+      `Chi tiết sự kiện: `;
 
-  // Con trỏ vào cuối để admin gõ tiếp phần "Chi tiết sự kiện:"
-  const pos = ta.value.length;
-  ta.focus();
-  ta.setSelectionRange(pos, pos);
-};
+    // Con trỏ vào cuối để admin gõ tiếp phần "Chi tiết sự kiện:"
+    const pos = ta.value.length;
+    ta.focus();
+    ta.setSelectionRange(pos, pos);
+  };
   /**
    * Xử lý sau khi kích hoạt khẩn cấp thành công
    * Hàm này tự động chạy KHI NGƯỜI DÙNG BẤM ĐÓNG MODAL CHÚC MỪNG.
@@ -14418,11 +14463,18 @@ window.fillActivationDetailTemplate = function (opts) {
     }
     .incident-marker-resolved {
       background-color: #6b7280; border-radius: 50%; border: 2px solid #fff;
+      box-shadow: 0 0 0 rgba(107, 114, 128, 0.4);   /* ← đổi từ đỏ sang xám */
+      animation: pulse-grey 4.5s infinite;
     }
     @keyframes pulse-red {
       0% { box-shadow: 0 0 0 0 rgba(255, 0, 0, 0.7); }
       70% { box-shadow: 0 0 0 15px rgba(255, 0, 0, 0); }
       100% { box-shadow: 0 0 0 0 rgba(255, 0, 0, 0); }
+    }
+    @keyframes pulse-grey {
+      0% { box-shadow: 0 0 0 0 rgba(107, 114, 128, 0.7); }
+      70% { box-shadow: 0 0 0 15px rgba(107, 114, 128, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(107, 114, 128, 0); }
     }
     .map-legend, .map-stats {
       background: #fff; padding: 8px 12px; border-radius: 8px;
@@ -14662,13 +14714,58 @@ window.fillActivationDetailTemplate = function (opts) {
     });
   }
 
-  function fillIncidentsLayer() {
+  // ============================================================================
+  // fillIncidentsLayer — THÊM "Thời gian kết thúc" cho sự kiện đã đóng.
+  //   Nguồn: created_at (SỚM NHẤT) của notification type 'ket_thuc' theo incident_id.
+  //   Query 1 LẦN trước vòng lặp (không query trong forEach) → nhanh, không lỗi async.
+  //   Hàm thành ASYNC → nơi gọi nên: await fillIncidentsLayer();
+  //   (nếu gọi rời không await vẫn chạy, chỉ là không đợi — thường OK).
+  // ============================================================================
+  async function fillIncidentsLayer() {
     incidentsLayer.clearLayers();
-
-    // Dùng trực tiếp dữ liệu đã được Radar quét chuẩn xác ở trên
     const visibleIncidents = incidentData || [];
-    const usedCoords = new Set();
 
+    // ── Lấy THỜI GIAN KẾT THÚC cho các sự kiện đã đóng (1 query duy nhất) ──
+    const closureTimeMap = new Map(); // incident_id -> created_at (sớm nhất)
+    try {
+      const closedIds = visibleIncidents
+        .filter(
+          (i) =>
+            !['active', 'pending', 'monitoring'].includes(
+              (i.status || '').toLowerCase()
+            )
+        )
+        .map((i) => i.id)
+        .filter(Boolean);
+
+      if (closedIds.length) {
+        const { data: closureNotifs } = await window.supabaseClient
+          .from('notifications')
+          .select('incident_id, created_at')
+          .eq('notification_type', 'ket_thuc')
+          .in('incident_id', closedIds);
+
+        // Mỗi sự kiện có nhiều notif ket_thuc (mỗi thành viên 1) → lấy SỚM NHẤT
+        (closureNotifs || []).forEach((n) => {
+          const cur = closureTimeMap.get(n.incident_id);
+          if (!cur || new Date(n.created_at) < new Date(cur)) {
+            closureTimeMap.set(n.incident_id, n.created_at);
+          }
+        });
+      }
+    } catch (e) {
+      console.warn('[map] Không lấy được thời gian kết thúc:', e);
+    }
+
+    const fmtVN = (t) =>
+      t
+        ? new Date(t).toLocaleString('vi-VN', {
+            timeZone: 'Asia/Ho_Chi_Minh',
+            hour12: false,
+          })
+        : 'N/A';
+
+    const usedCoords = new Set();
     visibleIncidents.forEach((inc) => {
       let lat = parseFloat(inc.latitude ?? inc.lat);
       let lon = parseFloat(inc.longitude ?? inc.lon);
@@ -14684,7 +14781,6 @@ window.fillActivationDetailTemplate = function (opts) {
       const isActive = ['active', 'pending', 'monitoring'].includes(
         (inc.status || '').toLowerCase()
       );
-
       const icon = L.divIcon({
         className: isActive
           ? 'incident-marker-active'
@@ -14693,16 +14789,14 @@ window.fillActivationDetailTemplate = function (opts) {
         iconAnchor: isActive ? [7, 7] : [5, 5],
       });
 
-      // Dịch email thành tên hiển thị
+      // Dịch email → tên hiển thị
       let membersListHtml =
         '<span style="color:#9ca3af;font-style:italic;">Chưa có nhân sự</span>';
       if (inc.members) {
-        // Cắt chuỗi bằng cả dấu phẩy, chấm phẩy, khoảng trắng, xuống dòng
         const emails = String(inc.members)
           .split(/[,;\s\n]+/)
           .map((e) => e.replace(/[<>]/g, '').trim())
           .filter(Boolean);
-
         if (emails.length) {
           membersListHtml = emails
             .map((email) => {
@@ -14712,7 +14806,6 @@ window.fillActivationDetailTemplate = function (opts) {
                 (window.companyData || []).find(
                   (x) => String(x.email || '').toLowerCase() === key
                 );
-
               if (u) {
                 const name = u.full_name || u.fullName || email;
                 const team =
@@ -14723,46 +14816,48 @@ window.fillActivationDetailTemplate = function (opts) {
                     : '';
                 return `• <b>${escMap(name)}</b>${team}`;
               }
-              // Giấu bớt các từ khóa không phải email rác lọt vào
               return email.includes('@') ? `• ${escMap(email)}` : '';
             })
             .join('<br/>');
         }
       }
 
+      // Dòng "Thời gian kết thúc" chỉ hiện khi đã đóng VÀ có dữ liệu
+      const closureTime = !isActive ? closureTimeMap.get(inc.id) : null;
+      const closureRow = closureTime
+        ? `<b style="color:#1f2937;">Thời gian kết thúc:</b> ${fmtVN(
+            closureTime
+          )}<br/>`
+        : '';
+
       const marker = L.marker([lat, lon], { icon });
       marker.bindPopup(`
-        <div style="min-width:250px;font-family:'Inter',sans-serif;">
-          <h6 style="color:${
-            isActive ? '#dc2626' : '#4b5563'
-          };margin-bottom:8px;font-weight:bold;border-bottom:1px solid #e5e7eb;padding-bottom:5px;">
-            ${isActive ? '🚨 ĐANG KÍCH HOẠT' : '✅ ĐÃ KẾT THÚC'}
-          </h6>
-          <b style="color:#1f2937;">Sự kiện:</b> ${escMap(
-            inc.event_name || 'Không rõ'
-          )}<br/>
-          <b style="color:#1f2937;">Địa điểm:</b> ${escMap(
-            inc.location_text || 'N/A'
-          )}<br/>
-          <b style="color:#1f2937;">Thời gian:</b> ${
-            inc.activation_time
-              ? new Date(inc.activation_time).toLocaleString('vi-VN', {
-                  hour12: false,
-                })
-              : 'N/A'
-          }<br/>
-          <hr style="margin:10px 0;border-top:1px dashed #cbd5e1;" />
-          <b style="color:#0369a1;"><i class='bx bx-group'></i> Nhân sự tham gia:</b>
-          <div style="max-height:120px;overflow-y:auto;font-size:13px;color:#4b5563;margin-top:4px;padding-left:4px;border-left:2px solid #e2e8f0;line-height:1.6;">
-            ${membersListHtml}
-          </div>
-        </div>`);
-
+      <div style="min-width:250px;font-family:'Inter',sans-serif;">
+        <h6 style="color:${
+          isActive ? '#dc2626' : '#4b5563'
+        };margin-bottom:8px;font-weight:bold;border-bottom:1px solid #e5e7eb;padding-bottom:5px;">
+          ${isActive ? '🚨 ĐANG KÍCH HOẠT' : '✅ ĐÃ KẾT THÚC'}
+        </h6>
+        <b style="color:#1f2937;">Sự kiện:</b> ${escMap(
+          inc.event_name || 'Không rõ'
+        )}<br/>
+        <b style="color:#1f2937;">Địa điểm sự kiện:</b> ${escMap(
+          inc.location_text || 'N/A'
+        )}<br/>
+        <b style="color:#1f2937;">Thời gian kích hoạt:</b> ${fmtVN(
+          inc.activation_time
+        )}<br/>
+        ${closureRow}
+        <hr style="margin:10px 0;border-top:1px dashed #cbd5e1;" />
+        <b style="color:#0369a1;"><i class='bx bx-group'></i> Nhân sự tham gia:</b>
+        <div style="max-height:120px;overflow-y:auto;font-size:13px;color:#4b5563;margin-top:4px;padding-left:4px;border-left:2px solid #e2e8f0;line-height:1.6;">
+          ${membersListHtml}
+        </div>
+      </div>`);
       marker.bindTooltip(
         `${isActive ? '🚨' : '✅'} ${escMap(inc.event_name || 'Sự cố')}`,
         { direction: 'top', offset: L.point(0, -10) }
       );
-
       incidentsLayer.addLayer(marker);
     });
   }
@@ -15419,7 +15514,7 @@ window.fillActivationDetailTemplate = function (opts) {
         refreshLegend();
       } else {
         fillMembersLayer();
-        fillIncidentsLayer();
+        await fillIncidentsLayer();
         refreshChoropleth();
         refreshLegend();
         setTimeout(() => map.invalidateSize(), 200);
