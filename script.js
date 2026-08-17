@@ -10139,13 +10139,14 @@ document.addEventListener('DOMContentLoaded', function () {
       }
 
       document.getElementById('incidentLocation').value = '';
-      document.getElementById('incidentDetails').value = '';
-
+      const nameEl = document.getElementById('incidentName');
+      if (nameEl) nameEl.value = '';
       const now = new Date();
-      document.getElementById('activationTime').value = now.toLocaleString(
-        'vi-VN',
-        { hour12: false }
-      );
+      document.getElementById('activationTime').value = now.toLocaleString('vi-VN', {
+        timeZone: 'Asia/Ho_Chi_Minh', hour12: false,
+      });
+      // Điền sẵn template vào ô Chi tiết (giờ tập trung mặc định = giờ hiện tại VN)
+      window.fillActivationDetailTemplate && window.fillActivationDetailTemplate();
 
       window.tempSelectedEmails = selectedEmails;
       $('#emergencyDetailsModal').modal('show');
@@ -10379,13 +10380,18 @@ document.addEventListener('DOMContentLoaded', function () {
         ward = '';
 
       // Xử lý nhánh Tạo Mới vs Bổ Sung
+      let eventName = '';
       if (type === 'new') {
+        eventName = ($('#incidentName').val() || '').trim();
         location = $('#incidentLocation').val();
         details = $('#incidentDetails').val();
         lat = $('#incidentLat').val();
         lng = $('#incidentLng').val();
         ward = $('#incidentWard').val();
-
+        if (!eventName) {
+          showToast('Vui lòng nhập TÊN sự kiện!', 'warning');
+          return;
+        }
         if (!location) {
           showToast('Vui lòng nhập địa điểm!', 'warning');
           return;
@@ -10409,7 +10415,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const inc = incidents.find((i) => String(i.id) === String(incidentId));
 
         if (inc) {
-          const eventName = inc.event_name || inc.event || 'Sự kiện';
+          eventName = inc.event_name || inc.event || 'Sự kiện';
           location =
             inc.location_text || inc.location || 'Chưa xác định địa điểm';
 
@@ -10549,9 +10555,12 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         // E. HIỂN THỊ LÊN GIAO DIỆN REVIEW (bản gọn gàng, không tràn)
+        $('#reviewEventName').text(eventName);   // ← THÊM DÒNG NÀY
         $('#reviewTime').text(time);
         $('#reviewLocation').text(location);
-        $('#reviewDetails').text(details);
+        $('#reviewDetails').html(
+          (window.escapeHtml ? window.escapeHtml(details) : details).replace(/\n/g, '<br>')
+        );
         $('#reviewMemberCount').text(emailsToCheck.length);
 
         const listContainer = $('#reviewMemberList');
@@ -10640,9 +10649,10 @@ document.addEventListener('DOMContentLoaded', function () {
         window.tempActivationData = {
           type: type,
           incidentId: incidentId,
+          eventName: eventName,     // ← MỚI: tên sự kiện ngắn gọn
           time: time,
           location: location,
-          details: details,
+          details: details,         // giờ tập trung + chi tiết (vào thông báo)
           members: emailsToCheck,
           latitude: lat,
           longitude: lng,
@@ -10771,7 +10781,7 @@ document.addEventListener('DOMContentLoaded', function () {
             p_activation_key: activationKey,
             p_member_emails: memberEmails,
             p_incident_id: data.type === 'add' ? data.incidentId : null,
-            p_event_name: data.details || null,
+            p_event_name: data.eventName || data.details || null,
             p_location_text: data.location || null,
             p_ma_xa: data.ma_xa || null,
             p_latitude: toNum(data.latitude),
@@ -10848,9 +10858,9 @@ document.addEventListener('DOMContentLoaded', function () {
           memberEmails.length > 0 &&
           typeof window.createSystemNotification === 'function'
         ) {
-          const notifMsg = `THÔNG BÁO: ${
-            data.type === 'new' ? 'Sự kiện' : 'Bổ sung nhân lực'
-          }: ${data.details}`;
+          const notifMsg = data.details && data.details.trim()
+          ? data.details
+          : `Đã ${data.type === 'new' ? 'kích hoạt sự kiện' : 'bổ sung nhân lực'}: ${data.eventName || ''}`;
 
           await window.createSystemNotification(
             memberEmails,
@@ -10900,7 +10910,41 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
  dùng trong handler này (server tự tra UUID). Nếu nơi khác trong file
  không tham chiếu chúng thì không cần giữ lại.
 ============================================================================ */
+// ============================================================================
+// RENDER SẴN TEXT MẪU vào ô "Chi tiết sự kiện" (#incidentDetails) khi mở modal.
+//   Mẫu: Thời gian tập trung / Địa điểm tập trung / Chi tiết sự kiện
+//   Giờ tập trung mặc định = giờ hiện tại (VN), admin sửa được (đi sau thì đổi).
+// GHÉP: gọi window.fillActivationDetailTemplate() trong handler nút Kích hoạt
+//       (#btn-activate-emergency) — xem EDIT 2 trong incident-name-separation.md.
+// ============================================================================
+window.fillActivationDetailTemplate = function (opts) {
+  opts = opts || {};
+  const ta = document.getElementById('incidentDetails');
+  if (!ta) {
+    console.warn('[activation] Không tìm thấy #incidentDetails');
+    return;
+  }
+  // Chỉ điền nếu đang TRỐNG (không ghi đè nội dung admin đang gõ dở)
+  if (ta.value && ta.value.trim() !== '') return;
 
+  const now = new Date().toLocaleString('vi-VN', {
+    timeZone: 'Asia/Ho_Chi_Minh',
+    hour12: false,
+  });
+  const diaDiemMacDinh =
+    opts.defaultLocation ||
+    'Trung tâm Kiểm soát bệnh tật Thành phố Hồ Chí Minh - 366A Âu Dương Lân, phường Chánh Hưng, Thành phố Hồ Chí Minh';
+
+  ta.value =
+    `Thời gian tập trung: ${now}\n` +
+    `Địa điểm tập trung: ${diaDiemMacDinh}\n` +
+    `Chi tiết sự kiện: `;
+
+  // Con trỏ vào cuối để admin gõ tiếp phần "Chi tiết sự kiện:"
+  const pos = ta.value.length;
+  ta.focus();
+  ta.setSelectionRange(pos, pos);
+};
   /**
    * Xử lý sau khi kích hoạt khẩn cấp thành công
    * Hàm này tự động chạy KHI NGƯỜI DÙNG BẤM ĐÓNG MODAL CHÚC MỪNG.
