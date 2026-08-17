@@ -2015,7 +2015,7 @@
     </div>
   </div>
   <div class="modal fade" id="emergencyDetailsModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog" role="document">
+    <div class="modal-dialog" role="document" style="max-width: 700px; width: 100%;">
       <div class="modal-content">
         <div class="modal-header">
           <h5 class="modal-title" id="emergencyDetailsModalLabel">🚨 Kích hoạt khẩn cấp 🚨</h5>
@@ -2050,7 +2050,7 @@
                 <input type="text" class="form-control" id="activationTime" value="" readonly>
               </div>
               <div class="mb-3">
-                <label for="incidentLocation" class="form-label">📍 Địa điểm (Chọn trên bản đồ)</label>
+                <label for="incidentLocation" class="form-label">📍 Địa điểm sự kiện (Chọn trên bản đồ)</label>
                 <input type="text" class="form-control" id="incidentLocation" placeholder="Nhập địa chỉ hoặc di chuyển ghim trên bản đồ bên dưới...">
               </div>
 
@@ -2063,8 +2063,12 @@
               <input type="hidden" id="incidentLng" value="">
               <input type="hidden" id="incidentWard" value="">
               <div class="form-group mb-2">
+                <label for="incidentName">📛 Tên sự kiện</label>
+                 <textarea class="form-control" id="incidentName" rows="3" placeholder="VD: Chùm ca bệnh hô hấp chưa rõ nguyên nhân"></textarea>
+              </div>
+              <div class="form-group mb-2">
                 <label for="incidentDetails"> 🔎 Chi tiết sự kiện</label>
-                <textarea class="form-control" id="incidentDetails" rows="3" placeholder="Mô tả sự cố, hành động cần thiết, v.v.."></textarea>
+                <textarea class="form-control" id="incidentDetails" rows="5" placeholder="Mô tả sự cố, hành động cần thiết, v.v.."></textarea>
               </div>
             </div>
           </form>
@@ -2083,10 +2087,10 @@
           <h6 class="modal-title" id="finalReviewModalLabel">📝 Vui lòng xem lại thông tin trước khi gửi</h6>
         </div>
         <div class="modal-body">
-          <h6>🔎 Chi tiết sự kiện</h6>
-          <p><b>🕗 Thời gian:</b> <span id="reviewTime"></span></p>
-          <p><b>📍 Địa điểm:</b> <span id="reviewLocation"></span></p>
-          <p><b>🎟️ Chi tiết:</b> <span id="reviewDetails"></span></p>
+          <h6>🔎 Thông tin kích hoạt</h6>
+          <p><b>🕗 Thời gian kích hoạt:</b> <span id="reviewTime"></span></p>
+          <p><b>📍 Địa điểm sự kiện:</b> <span id="reviewLocation"></span></p>
+          <p><b>🎟️ Chi tiết sự kiện:</b> <span id="reviewDetails"></span></p>
           <hr>
           <h6>🧑‍🤝‍🧑 Thành viên được chọn (<span id="reviewMemberCount"></span>)</h6>
           <ul id="reviewMemberList" class="list-unstyled"></ul>
