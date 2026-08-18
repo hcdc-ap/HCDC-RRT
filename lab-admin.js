@@ -35,6 +35,9 @@
   let _editingLabId = null; // id PXN đang sửa (null = thêm mới)
   let _testTypesCache = []; // cache danh mục loại XN
   let _ttSort = { col: 'category', dir: 'asc' }; // cột + chiều sắp xếp bảng loại XN
+  // BỔ SUNG 2 BIẾN CHO TÁC NHÂN
+  let _pathogensCacheAdmin = [];
+  let _pSort = { col: 'category', dir: 'asc' };
 
   const esc = (s) =>
     window.escapeHtml
@@ -61,14 +64,14 @@
     'Trung tâm y tế',
     'Trạm Y tế',
   ];
-  // QSM: mức chất lượng (label → level số để tính capability_tier)
+  // QMS: mức chất lượng (label → level số để tính capability_tier)
   const QSM_OPTIONS = [
-    { level: 0, label: '' , text: 'Chưa có' },
+    { level: 0, label: '', text: 'Chưa có' },
     { level: 1, label: 'QĐ2429 Mức 1', text: 'QĐ2429 Mức 1' },
     { level: 2, label: 'QĐ2429 Mức 2', text: 'QĐ2429 Mức 2' },
     { level: 3, label: 'QĐ2429 Mức 3', text: 'QĐ2429 Mức 3' },
     { level: 4, label: 'QĐ2429 Mức 4', text: 'QĐ2429 Mức 4' },
-    { level: 5, label: 'ISO 15189',   text: 'ISO 15189 (≈ Mức 5)' },
+    { level: 5, label: 'ISO 15189', text: 'ISO 15189 (≈ Mức 5)' },
   ];
 
   // ==========================================================================
@@ -158,7 +161,9 @@
             lab.bsl_level ?? '?'
           }</span>`;
           const qsmBadge = lab.qsm_label
-            ? `<span class="badge bg-info text-dark">${esc(lab.qsm_label)}</span>`
+            ? `<span class="badge bg-info text-dark">${esc(
+                lab.qsm_label
+              )}</span>`
             : '<span class="text-muted">—</span>';
           const tierBadge =
             lab.capability_tier != null
@@ -221,6 +226,9 @@
             <button class="btn btn-outline-secondary" onclick="window.openTestTypeModal()">
               <i class='bx bx-list-ul'></i> Danh mục loại kỹ thuật xét nghiệm
             </button>
+            <button class="btn btn-outline-secondary" onclick="window.openPathogenModal()">
+              <i class='bx bx-bug'></i> Danh mục Tác nhân gây bệnh
+            </button>
             <button class="btn btn-primary" onclick="window.openLabModal()">
               <i class='bx bx-plus'></i> Thêm Phòng Xét nghiệm
             </button>
@@ -233,7 +241,7 @@
                 <th>Tên & Địa chỉ</th>
                 <th>Mô hình cơ quan</th>
                 <th>An toàn sinh học</th>
-                <th>QSM</th>
+                <th>QMS</th>
                 <th class="text-center">Năng lực xét nghiệm</th>
                 <th class="text-center">Kỹ thuật xét nghiệm</th>
                 <th>Trạng thái</th>
@@ -276,7 +284,9 @@
   // Khởi tạo DataTable cho bảng PXN: tìm kiếm, phân trang, sắp xếp, xuất Excel/CSV
   function _initLabDataTable() {
     if (!(window.$ && $.fn && $.fn.DataTable)) {
-      console.warn('[lab-admin] Chưa nạp DataTables — bảng hiển thị dạng thường.');
+      console.warn(
+        '[lab-admin] Chưa nạp DataTables — bảng hiển thị dạng thường.'
+      );
       return;
     }
     // Hủy instance cũ nếu có (tránh lỗi "reinitialise")
@@ -289,7 +299,10 @@
       destroy: true,
       responsive: true,
       pageLength: 10,
-      lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, 'Tất cả']],
+      lengthMenu: [
+        [10, 25, 50, 100, -1],
+        [10, 25, 50, 100, 'Tất cả'],
+      ],
       order: [[0, 'asc']],
       columnDefs: [{ orderable: false, targets: [5, 7] }],
       language: {
@@ -298,7 +311,12 @@
         info: 'Hiển thị _START_–_END_ / _TOTAL_ phòng xét nghiệm',
         infoEmpty: 'Không có dữ liệu',
         infoFiltered: '(lọc từ _MAX_ phòng)',
-        paginate: { first: 'Đầu', last: 'Cuối', next: 'Sau', previous: 'Trước' },
+        paginate: {
+          first: 'Đầu',
+          last: 'Cuối',
+          next: 'Sau',
+          previous: 'Trước',
+        },
         zeroRecords: 'Không tìm thấy phòng xét nghiệm phù hợp',
       },
     };
@@ -334,7 +352,9 @@
         '<"d-flex justify-content-end mb-2"p>' +
         'rt' +
         '<"d-flex justify-content-between align-items-center mt-2 flex-wrap gap-2"ip>';
-      console.info('[lab-admin] Plugin Buttons chưa có → dùng nút xuất dự phòng.');
+      console.info(
+        '[lab-admin] Plugin Buttons chưa có → dùng nút xuất dự phòng.'
+      );
     }
     $('#lab-list-table').DataTable(cfg);
 
@@ -361,7 +381,8 @@
   // PXN chưa khai kỹ thuật vẫn có 1 dòng (cột kỹ thuật để trống).
   window._exportLabsCsv = async function () {
     try {
-      if (window.showToast) window.showToast('Đang chuẩn bị dữ liệu xuất...', 'info');
+      if (window.showToast)
+        window.showToast('Đang chuẩn bị dữ liệu xuất...', 'info');
 
       // Tải PXN + năng lực liên kết (join test_types) trong 1 truy vấn
       const { data: labs, error } = await window.supabaseClient
@@ -377,12 +398,29 @@
       if (error) throw error;
 
       const headers = [
-        'Tên PXN', 'Mô hình cơ quan', 'Địa chỉ', 'Điện thoại', 'ATSH cấp',
-        'QSM', 'Cấp năng lực', 'Đầu mối', 'SĐT đầu mối', 'Email đầu mối',
-        'NS ATSH', 'NS chuyên trách', 'Ngoại kiểm', 'Liên phòng',
-        'Báo cáo ca(+)', 'Báo cáo định kỳ', 'Hoạt động',
-        'Kỹ thuật xét nghiệm', 'Nhóm kỹ thuật', 'BSL yêu cầu KT',
-        'Công suất (mẫu/ngày)', 'Thời gian trả KQ (giờ)', 'Chi tiết máy',
+        'Tên PXN',
+        'Mô hình cơ quan',
+        'Địa chỉ',
+        'Điện thoại',
+        'ATSH cấp',
+        'QMS',
+        'Cấp năng lực',
+        'Đầu mối',
+        'SĐT đầu mối',
+        'Email đầu mối',
+        'NS ATSH',
+        'NS chuyên trách',
+        'Ngoại kiểm',
+        'Liên phòng',
+        'Báo cáo ca(+)',
+        'Báo cáo định kỳ',
+        'Hoạt động',
+        'Kỹ thuật xét nghiệm',
+        'Nhóm kỹ thuật',
+        'BSL yêu cầu KT',
+        'Công suất (mẫu/ngày)',
+        'Thời gian trả KQ (giờ)',
+        'Chi tiết máy',
       ];
       const yn = (v) => (v ? 'Có' : 'Không');
       const cell = (v) => {
@@ -394,10 +432,22 @@
       let capRowCount = 0;
       (labs || []).forEach((l) => {
         const labCols = [
-          l.name, l.level, l.address, l.phone, l.bsl_level,
-          l.qsm_label, l.capability_tier, l.head_name, l.head_phone, l.head_email,
-          l.total_biosafety_staff, l.dedicated_staff,
-          yn(l.external_qa), yn(l.interlab), yn(l.reports_positive), yn(l.periodic_report),
+          l.name,
+          l.level,
+          l.address,
+          l.phone,
+          l.bsl_level,
+          l.qsm_label,
+          l.capability_tier,
+          l.head_name,
+          l.head_phone,
+          l.head_email,
+          l.total_biosafety_staff,
+          l.dedicated_staff,
+          yn(l.external_qa),
+          yn(l.interlab),
+          yn(l.reports_positive),
+          yn(l.periodic_report),
           yn(l.is_active),
         ];
         const caps = l.lab_capabilities || [];
@@ -415,7 +465,9 @@
                 c.max_capacity_per_day,
                 c.turnaround_hours,
                 c.equipment_detail,
-              ].map(cell).join(',')
+              ]
+                .map(cell)
+                .join(',')
             );
           });
         }
@@ -427,7 +479,9 @@
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `PXN_va_nang_luc_${new Date().toISOString().slice(0, 10)}.csv`;
+      a.download = `PXN_va_nang_luc_${new Date()
+        .toISOString()
+        .slice(0, 10)}.csv`;
       a.click();
       URL.revokeObjectURL(url);
       if (window.showToast)
@@ -436,7 +490,8 @@
           'success'
         );
     } catch (e) {
-      if (window.showToast) window.showToast('Lỗi xuất CSV: ' + e.message, 'error');
+      if (window.showToast)
+        window.showToast('Lỗi xuất CSV: ' + e.message, 'error');
     }
   };
 
@@ -468,16 +523,36 @@
         const t = l.capability_tier;
         if (t >= 1 && t <= 5) tierCount[t - 1]++;
       });
-      const tierColors = ['#94a3b8', '#0ea5e9', '#ca8a04', '#ea580c', '#dc2626'];
+      const tierColors = [
+        '#94a3b8',
+        '#0ea5e9',
+        '#ca8a04',
+        '#ea580c',
+        '#dc2626',
+      ];
       Highcharts.chart('chart-tier', {
-        chart: { type: 'column', backgroundColor: 'transparent', style: { fontFamily: "'Ubuntu',sans-serif" } },
-        title: { text: 'Phân bố Cấp năng lực', style: { fontSize: '14px', fontWeight: 'bold' } },
+        chart: {
+          type: 'column',
+          backgroundColor: 'transparent',
+          style: { fontFamily: "'Ubuntu',sans-serif" },
+        },
+        title: {
+          text: 'Phân bố Cấp năng lực',
+          style: { fontSize: '14px', fontWeight: 'bold' },
+        },
         subtitle: { text: 'Số PXN theo cấp (1→5)' },
         xAxis: { categories: ['Cấp 1', 'Cấp 2', 'Cấp 3', 'Cấp 4', 'Cấp 5'] },
         yAxis: { min: 0, title: { text: 'Số PXN' }, allowDecimals: false },
         legend: { enabled: false },
         credits: { enabled: false },
-        plotOptions: { column: { borderRadius: 5, dataLabels: { enabled: true }, colorByPoint: true, colors: tierColors } },
+        plotOptions: {
+          column: {
+            borderRadius: 5,
+            dataLabels: { enabled: true },
+            colorByPoint: true,
+            colors: tierColors,
+          },
+        },
         series: [{ name: 'PXN', data: tierCount }],
       });
 
@@ -491,15 +566,28 @@
         .sort((a, b) => b[1] - a[1])
         .map(([name, y]) => ({ name, y }));
       Highcharts.chart('chart-orgmodel', {
-        chart: { type: 'pie', backgroundColor: 'transparent', style: { fontFamily: "'Ubuntu',sans-serif" } },
-        title: { text: 'Cơ cấu Mô hình cơ quan', style: { fontSize: '14px', fontWeight: 'bold' } },
+        chart: {
+          type: 'pie',
+          backgroundColor: 'transparent',
+          style: { fontFamily: "'Ubuntu',sans-serif" },
+        },
+        title: {
+          text: 'Cơ cấu Mô hình cơ quan',
+          style: { fontSize: '14px', fontWeight: 'bold' },
+        },
         subtitle: { text: `Tổng ${L.length} PXN` },
-        tooltip: { pointFormat: '<b>{point.y}</b> PXN ({point.percentage:.0f}%)' },
+        tooltip: {
+          pointFormat: '<b>{point.y}</b> PXN ({point.percentage:.0f}%)',
+        },
         credits: { enabled: false },
         plotOptions: {
           pie: {
             innerSize: '55%',
-            dataLabels: { enabled: true, format: '{point.name}: {point.y}', style: { fontSize: '10px' } },
+            dataLabels: {
+              enabled: true,
+              format: '{point.name}: {point.y}',
+              style: { fontSize: '10px' },
+            },
           },
         },
         series: [{ name: 'PXN', data: orgData }],
@@ -515,14 +603,30 @@
         .sort((a, b) => b[1] - a[1])
         .slice(0, 8); // top 8
       Highcharts.chart('chart-techniques', {
-        chart: { type: 'bar', backgroundColor: 'transparent', style: { fontFamily: "'Ubuntu',sans-serif" } },
-        title: { text: 'Kỹ thuật phổ biến (Top 8)', style: { fontSize: '14px', fontWeight: 'bold' } },
+        chart: {
+          type: 'bar',
+          backgroundColor: 'transparent',
+          style: { fontFamily: "'Ubuntu',sans-serif" },
+        },
+        title: {
+          text: 'Kỹ thuật phổ biến (Top 8)',
+          style: { fontSize: '14px', fontWeight: 'bold' },
+        },
         subtitle: { text: 'Số PXN làm được mỗi kỹ thuật' },
-        xAxis: { categories: techData.map((d) => d[0]), labels: { style: { fontSize: '10px' } } },
+        xAxis: {
+          categories: techData.map((d) => d[0]),
+          labels: { style: { fontSize: '10px' } },
+        },
         yAxis: { min: 0, title: { text: 'Số PXN' }, allowDecimals: false },
         legend: { enabled: false },
         credits: { enabled: false },
-        plotOptions: { bar: { borderRadius: 4, dataLabels: { enabled: true }, color: '#0f766e' } },
+        plotOptions: {
+          bar: {
+            borderRadius: 4,
+            dataLabels: { enabled: true },
+            color: '#0f766e',
+          },
+        },
         series: [{ name: 'PXN', data: techData.map((d) => d[1]) }],
       });
     } catch (e) {
@@ -544,15 +648,25 @@
       level: 'Bệnh viện công lập',
       bsl_level: 2,
       is_active: true,
-      head_name: '', head_phone: '', head_email: '',
-      qsm_level: 0, qsm_label: '', iso15189_scope: '',
-      total_biosafety_staff: '', dedicated_staff: '',
+      head_name: '',
+      head_phone: '',
+      head_email: '',
+      qsm_level: 0,
+      qsm_label: '',
+      iso15189_scope: '',
+      total_biosafety_staff: '',
+      dedicated_staff: '',
       does_microbiology: true,
-      external_qa: false, external_qa_detail: '',
-      interlab: false, interlab_detail: '',
-      reports_positive: false, report_method: '',
-      periodic_report: false, periodic_report_detail: '',
+      external_qa: false,
+      external_qa_detail: '',
+      interlab: false,
+      interlab_detail: '',
+      reports_positive: false,
+      report_method: '',
+      periodic_report: false,
+      periodic_report_detail: '',
       capacity_needs: '',
+      telegram_chat_id: '',
     };
 
     if (labId) {
@@ -579,22 +693,18 @@
           }>BSL-${n}</option>`
       )
       .join('');
-    const levelOptions = ORG_MODELS
-      .map(
-        (m) =>
-          `<option value="${esc(m)}" ${
-            lab.level === m ? 'selected' : ''
-          }>${esc(m)}</option>`
-      )
-      .join('');
-    const qsmOptions = QSM_OPTIONS
-      .map(
-        (q) =>
-          `<option value="${q.level}" data-label="${esc(q.label)}" ${
-            (lab.qsm_level ?? 0) === q.level ? 'selected' : ''
-          }>${esc(q.text)}</option>`
-      )
-      .join('');
+    const levelOptions = ORG_MODELS.map(
+      (m) =>
+        `<option value="${esc(m)}" ${lab.level === m ? 'selected' : ''}>${esc(
+          m
+        )}</option>`
+    ).join('');
+    const qsmOptions = QSM_OPTIONS.map(
+      (q) =>
+        `<option value="${q.level}" data-label="${esc(q.label)}" ${
+          (lab.qsm_level ?? 0) === q.level ? 'selected' : ''
+        }>${esc(q.text)}</option>`
+    ).join('');
 
     // Dựng modal (tạo mới mỗi lần mở để tránh state cũ)
     document.getElementById('lab-modal-wrapper')?.remove();
@@ -630,7 +740,7 @@
                   <label class="form-label">Địa chỉ</label>
                   <input id="lab-address" class="form-control" value="${esc(
                     lab.address || ''
-                  )}" placeholder="366A Âu Dương Lân, phường Chánh Hưng, TP.HCM">
+                  )}" placeholder="Số nhà, đường, phường, quận...">
                 </div>
                 <div class="col-md-6">
                   <label class="form-label">Mô hình cơ quan</label>
@@ -675,70 +785,124 @@
                   <div id="lab-picker-map" style="height:300px;border-radius:8px;margin-top:8px;background:#eee;"></div>
                 </div>
 
-                <div class="col-12"><hr class="my-1"><h6 class="text-primary mb-0"><i class='bx bx-phone'></i> Đầu mối liên hệ (Trưởng khoa XN)</h6></div>
+                <div class="col-12"><hr class="my-1"><h6 class="text-primary mb-0"><i class='bx bx-phone'></i> Đầu mối liên hệ & Kênh thông báo (Telegram)</h6></div>
+                
+                <!-- TRẠNG THÁI TELEGRAM CHAT ID (HIỂN THỊ TĨNH / READ-ONLY) -->
+                <div class="col-12">
+                  <div class="p-2 rounded bg-light border d-flex justify-content-between align-items-center flex-wrap gap-2">
+                    <div>
+                      <small class="text-muted d-block">Trạng thái kết nối Telegram Bot:</small>
+                      ${
+                        lab.telegram_chat_id
+                          ? `<span class="badge bg-success"><i class='bx bx-check-circle'></i> Đã kết nối (Chat ID: <code>${esc(
+                              lab.telegram_chat_id
+                            )}</code>)</span>`
+                          : `<span class="badge bg-secondary"><i class='bx bx-time'></i> Chưa kết nối Telegram</span>`
+                      }
+                    </div>
+                    <div>
+                      ${
+                        labId
+                          ? `<small class="text-info d-block">Cú pháp gửi đầu mối PXN: <code class="user-select-all bg-white px-2 py-1 border rounded">/start LAB_${labId}</code></small>`
+                          : `<small class="text-muted">Lưu phòng xét nghiệm trước để sinh mã kết nối.</small>`
+                      }
+                    </div>
+                  </div>
+                </div>
+
                 <div class="col-md-4">
                   <label class="form-label">Họ tên đầu mối</label>
-                  <input id="lab-head-name" class="form-control" value="${esc(lab.head_name || '')}" placeholder="Trưởng khoa XN">
+                  <input id="lab-head-name" class="form-control" value="${esc(
+                    lab.head_name || ''
+                  )}" placeholder="Trưởng khoa XN">
                 </div>
                 <div class="col-md-4">
                   <label class="form-label">Điện thoại đầu mối</label>
-                  <input id="lab-head-phone" class="form-control" value="${esc(lab.head_phone || '')}" placeholder="09...">
+                  <input id="lab-head-phone" class="form-control" value="${esc(
+                    lab.head_phone || ''
+                  )}" placeholder="09...">
                 </div>
                 <div class="col-md-4">
                   <label class="form-label">Email đầu mối</label>
-                  <input id="lab-head-email" class="form-control" value="${esc(lab.head_email || '')}" placeholder="email@...">
+                  <input id="lab-head-email" class="form-control" value="${esc(
+                    lab.head_email || ''
+                  )}" placeholder="email@...">
                 </div>
 
-                <div class="col-12"><hr class="my-1"><h6 class="text-primary mb-0"><i class='bx bx-award'></i> Chất lượng (QSM) & Nhân sự</h6></div>
+                <div class="col-12"><hr class="my-1"><h6 class="text-primary mb-0"><i class='bx bx-award'></i> Chất lượng (QMS) & Nhân sự</h6></div>
                 <div class="col-md-5">
-                  <label class="form-label">Mức chất lượng (QSM)</label>
+                  <label class="form-label">Mức chất lượng (QMS)</label>
                   <select id="lab-qsm" class="form-select">${qsmOptions}</select>
                 </div>
                 <div class="col-md-7">
                   <label class="form-label">Lĩnh vực ISO 15189 công nhận</label>
-                  <input id="lab-iso-scope" class="form-control" value="${esc(lab.iso15189_scope || '')}" placeholder="VS, SHPT...">
+                  <input id="lab-iso-scope" class="form-control" value="${esc(
+                    lab.iso15189_scope || ''
+                  )}" placeholder="VS, SHPT...">
                 </div>
                 <div class="col-md-6">
                   <label class="form-label">Tổng nhân sự có chứng chỉ ATSH</label>
-                  <input id="lab-staff-total" type="number" min="0" class="form-control" value="${lab.total_biosafety_staff ?? ''}">
+                  <input id="lab-staff-total" type="number" min="0" class="form-control" value="${
+                    lab.total_biosafety_staff ?? ''
+                  }">
                 </div>
                 <div class="col-md-6">
                   <label class="form-label">Nhân sự chuyên trách vi sinh/SHPT</label>
-                  <input id="lab-staff-dedicated" type="number" min="0" class="form-control" value="${lab.dedicated_staff ?? ''}">
+                  <input id="lab-staff-dedicated" type="number" min="0" class="form-control" value="${
+                    lab.dedicated_staff ?? ''
+                  }">
                 </div>
 
                 <div class="col-12"><hr class="my-1"><h6 class="text-primary mb-0"><i class='bx bx-check-shield'></i> Ngoại kiểm & Báo cáo (TT54)</h6></div>
                 <div class="col-md-6">
                   <div class="form-check form-switch">
-                    <input class="form-check-input" type="checkbox" id="lab-external-qa" ${lab.external_qa ? 'checked' : ''}>
+                    <input class="form-check-input" type="checkbox" id="lab-external-qa" ${
+                      lab.external_qa ? 'checked' : ''
+                    }>
                     <label class="form-check-label" for="lab-external-qa">Tham gia ngoại kiểm</label>
                   </div>
-                  <input id="lab-external-qa-detail" class="form-control form-control-sm mt-1" value="${esc(lab.external_qa_detail || '')}" placeholder="Chi tiết ngoại kiểm...">
+                  <input id="lab-external-qa-detail" class="form-control form-control-sm mt-1" value="${esc(
+                    lab.external_qa_detail || ''
+                  )}" placeholder="Chi tiết ngoại kiểm...">
                 </div>
                 <div class="col-md-6">
                   <div class="form-check form-switch">
-                    <input class="form-check-input" type="checkbox" id="lab-interlab" ${lab.interlab ? 'checked' : ''}>
+                    <input class="form-check-input" type="checkbox" id="lab-interlab" ${
+                      lab.interlab ? 'checked' : ''
+                    }>
                     <label class="form-check-label" for="lab-interlab">So sánh liên phòng</label>
                   </div>
-                  <input id="lab-interlab-detail" class="form-control form-control-sm mt-1" value="${esc(lab.interlab_detail || '')}" placeholder="Chi tiết liên phòng...">
+                  <input id="lab-interlab-detail" class="form-control form-control-sm mt-1" value="${esc(
+                    lab.interlab_detail || ''
+                  )}" placeholder="Chi tiết liên phòng...">
                 </div>
                 <div class="col-md-6">
                   <div class="form-check form-switch">
-                    <input class="form-check-input" type="checkbox" id="lab-reports-positive" ${lab.reports_positive ? 'checked' : ''}>
+                    <input class="form-check-input" type="checkbox" id="lab-reports-positive" ${
+                      lab.reports_positive ? 'checked' : ''
+                    }>
                     <label class="form-check-label" for="lab-reports-positive">Báo cáo ca (+) theo TT54</label>
                   </div>
-                  <input id="lab-report-method" class="form-control form-control-sm mt-1" value="${esc(lab.report_method || '')}" placeholder="Phương thức báo cáo...">
+                  <input id="lab-report-method" class="form-control form-control-sm mt-1" value="${esc(
+                    lab.report_method || ''
+                  )}" placeholder="Phương thức báo cáo...">
                 </div>
                 <div class="col-md-6">
                   <div class="form-check form-switch">
-                    <input class="form-check-input" type="checkbox" id="lab-periodic-report" ${lab.periodic_report ? 'checked' : ''}>
+                    <input class="form-check-input" type="checkbox" id="lab-periodic-report" ${
+                      lab.periodic_report ? 'checked' : ''
+                    }>
                     <label class="form-check-label" for="lab-periodic-report">Báo cáo định kỳ</label>
                   </div>
-                  <input id="lab-periodic-detail" class="form-control form-control-sm mt-1" value="${esc(lab.periodic_report_detail || '')}" placeholder="Chi tiết báo cáo định kỳ...">
+                  <input id="lab-periodic-detail" class="form-control form-control-sm mt-1" value="${esc(
+                    lab.periodic_report_detail || ''
+                  )}" placeholder="Chi tiết báo cáo định kỳ...">
                 </div>
                 <div class="col-12">
                   <label class="form-label">Nhu cầu nâng cao năng lực</label>
-                  <textarea id="lab-capacity-needs" class="form-control" rows="2" placeholder="Nhu cầu đào tạo, thiết bị...">${esc(lab.capacity_needs || '')}</textarea>
+                  <textarea id="lab-capacity-needs" class="form-control" rows="2" placeholder="Nhu cầu đào tạo, thiết bị...">${esc(
+                    lab.capacity_needs || ''
+                  )}</textarea>
                 </div>
 
                 <div class="col-12">
@@ -961,7 +1125,7 @@
       head_name: strOrNull('lab-head-name'),
       head_phone: strOrNull('lab-head-phone'),
       head_email: strOrNull('lab-head-email'),
-      // QSM (level + label → trigger tự tính lại capability_tier)
+      // QMS (level + label → trigger tự tính lại capability_tier)
       qsm_level: qsmLevel,
       qsm_label: qsmLabel,
       iso15189_scope: strOrNull('lab-iso-scope'),
@@ -974,12 +1138,15 @@
       interlab: document.getElementById('lab-interlab')?.checked || false,
       interlab_detail: strOrNull('lab-interlab-detail'),
       // Báo cáo TT54
-      reports_positive: document.getElementById('lab-reports-positive')?.checked || false,
+      reports_positive:
+        document.getElementById('lab-reports-positive')?.checked || false,
       report_method: strOrNull('lab-report-method'),
-      periodic_report: document.getElementById('lab-periodic-report')?.checked || false,
+      periodic_report:
+        document.getElementById('lab-periodic-report')?.checked || false,
       periodic_report_detail: strOrNull('lab-periodic-detail'),
       // Nhu cầu
       capacity_needs: strOrNull('lab-capacity-needs'),
+      telegram_chat_id: strOrNull('lab-tg-chatid'),
     };
 
     try {
@@ -1091,10 +1258,7 @@
       .join('');
 
     const addOptions = available
-      .map(
-        (t) =>
-          `<option value="${t.id}">${esc(t.name)}</option>`
-      )
+      .map((t) => `<option value="${t.id}">${esc(t.name)}</option>`)
       .join('');
 
     document.getElementById('cap-modal-wrapper')?.remove();
@@ -1331,6 +1495,167 @@
   };
 
   // Mở lịch sử điều phối mẫu (không tham số = xem tất cả sự cố).
+  // ==========================================================================
+  // MODAL DANH MỤC TÁC NHÂN GÂY BỆNH (Thêm / Xóa)
+  // ==========================================================================
+  async function loadPathogensAdmin() {
+    try {
+      const { data, error } = await window.supabaseClient
+        .from('pathogens')
+        .select('*')
+        .order('name', { ascending: true });
+      if (error) throw error;
+      _pathogensCacheAdmin = data || [];
+    } catch (e) {
+      console.error('[lab-admin] Lỗi tải danh mục tác nhân:', e);
+      _pathogensCacheAdmin = [];
+    }
+  }
+
+  window.openPathogenModal = async function () {
+    await loadPathogensAdmin();
+
+    // Sắp xếp
+    const _dir = _pSort.dir === 'asc' ? 1 : -1;
+    const _sorted = [..._pathogensCacheAdmin].sort((a, b) => {
+      let va = a[_pSort.col],
+        vb = b[_pSort.col];
+      return String(va ?? '').localeCompare(String(vb ?? ''), 'vi') * _dir;
+    });
+
+    const rows = _sorted
+      .map(
+        (p) => `
+      <tr>
+        <td>${esc(p.name)}</td>
+        <td>
+          <span class="badge ${
+            p.category === 'Nhóm A'
+              ? 'bg-danger'
+              : p.category === 'Nhóm B'
+              ? 'bg-warning text-dark'
+              : 'bg-secondary'
+          }">
+            ${esc(p.category || 'Khác')}
+          </span>
+        </td>
+        <td class="text-center">
+          <button class="btn btn-sm btn-outline-danger" onclick="window.deletePathogen('${
+            p.id
+          }', '${esc(p.name).replace(/'/g, "\\'")}')" title="Xóa">
+            <i class='bx bx-trash'></i>
+          </button>
+        </td>
+      </tr>`
+      )
+      .join('');
+
+    const arrow = (col) =>
+      _pSort.col !== col
+        ? '<i class="bx bx-sort-alt-2" style="opacity:.3;"></i>'
+        : _pSort.dir === 'asc'
+        ? '<i class="bx bx-up-arrow-alt"></i>'
+        : '<i class="bx bx-down-arrow-alt"></i>';
+
+    document.getElementById('pathogen-modal-wrapper')?.remove();
+    const wrap = document.createElement('div');
+    wrap.id = 'pathogen-modal-wrapper';
+    wrap.innerHTML = `
+      <div class="modal fade" id="pathogenModal" tabindex="-1">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+          <div class="modal-content">
+            <div class="modal-header" style="background:#006a75;color:#fff;">
+              <h5 class="modal-title"><i class='bx bx-bug'></i> Danh mục Tác nhân gây bệnh</h5>
+              <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+              <table class="table table-sm align-middle">
+                <thead class="table-light"><tr>
+                  <th style="cursor:pointer;" onclick="window.sortPathogens('name')">Tên Tác nhân gây bệnh ${arrow(
+                    'name'
+                  )}</th>
+                  <th style="cursor:pointer;" onclick="window.sortPathogens('category')">Phân loại Nhóm ${arrow(
+                    'category'
+                  )}</th>
+                  <th class="text-center">Xóa</th>
+                </tr></thead>
+                <tbody>${
+                  rows ||
+                  '<tr><td colspan="3" class="text-center text-muted">Chưa có dữ liệu tác nhân.</td></tr>'
+                }</tbody>
+              </table>
+              <hr>
+              <h6 class="mb-2"><i class='bx bx-plus-circle'></i> Thêm Tác nhân mới</h6>
+              <div class="row g-2 align-items-end">
+                <div class="col-md-5">
+                  <label class="form-label">Tên tác nhân</label>
+                  <input id="p-name" class="form-control" placeholder="VD: Bệnh do vi rút Marburg">
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label">Phân nhóm (A, B, Khác)</label>
+                  <select id="p-category" class="form-select">
+                    <option value="Nhóm A">Bệnh truyền nhiễm Nhóm A</option>
+                    <option value="Nhóm B" selected>Bệnh truyền nhiễm Nhóm B</option>
+                    <option value="Khác">Nhóm Khác</option>
+                  </select>
+                </div>
+                <div class="col-md-3">
+                  <button class="btn btn-primary w-100" onclick="window.addPathogen()"><i class='bx bx-plus'></i> Thêm</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>`;
+    document.body.appendChild(wrap);
+    new bootstrap.Modal(document.getElementById('pathogenModal')).show();
+  };
+
+  window.sortPathogens = function (col) {
+    if (_pSort.col === col) _pSort.dir = _pSort.dir === 'asc' ? 'desc' : 'asc';
+    else {
+      _pSort.col = col;
+      _pSort.dir = 'asc';
+    }
+    window.openPathogenModal();
+  };
+
+  window.addPathogen = async function () {
+    const name = document.getElementById('p-name').value.trim();
+    if (!name) {
+      if (window.showToast)
+        window.showToast('Vui lòng nhập tên tác nhân', 'warning');
+      return;
+    }
+    try {
+      const { error } = await window.supabaseClient.from('pathogens').insert([
+        {
+          name,
+          category: document.getElementById('p-category').value,
+        },
+      ]);
+      if (error) throw error;
+      if (window.showToast) window.showToast('Đã thêm tác nhân', 'success');
+      window.openPathogenModal(); // reload modal
+    } catch (e) {
+      if (window.showToast) window.showToast('Lỗi: ' + e.message, 'error');
+    }
+  };
+
+  window.deletePathogen = async function (id, name) {
+    if (!confirm(`Bạn có chắc muốn xóa "${name}" khỏi danh mục?`)) return;
+    try {
+      const { error } = await window.supabaseClient
+        .from('pathogens')
+        .delete()
+        .eq('id', id);
+      if (error) throw error;
+      if (window.showToast) window.showToast('Đã xóa tác nhân', 'success');
+      window.openPathogenModal(); // reload modal
+    } catch (e) {
+      if (window.showToast) window.showToast('Lỗi xóa: ' + e.message, 'error');
+    }
+  };
   // Guard: hàm showDispatchHistory nằm ở lab-dispatch-actions.js.
   window._openDispatchHistorySafe = function () {
     if (typeof window.showDispatchHistory === 'function') {
