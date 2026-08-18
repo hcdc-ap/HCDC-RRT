@@ -5,11 +5,11 @@
 // Phụ thuộc: lab-dispatch-engine.js (window.LabDispatch), Leaflet, Bootstrap 5.
 //
 // MỚI:
-//   • Ô nhập TIÊU CHÍ CHUYÊN GIA: QSM tối thiểu (ưu tiên) + Thời gian trả KQ
+//   • Ô nhập TIÊU CHÍ CHUYÊN GIA: QMS tối thiểu (ưu tiên) + Thời gian trả KQ
 //     tối đa (ưu tiên) → truyền xuống engine (minQsm, maxTurnaround).
-//   • Preset thứ 4: 🏅 Chất lượng (ưu tiên QSM). Giữ 3 slider gần/trống/nhanh.
-//   • Card kết quả: badge QSM + phân cấp mạng lưới, ĐẦU MỐI LIÊN HỆ (gọi/email),
-//     cảnh báo mềm (QSM thấp / trả KQ chậm hơn yêu cầu).
+//   • Preset thứ 4: 🏅 Chất lượng (ưu tiên QMS). Giữ 3 slider gần/trống/nhanh.
+//   • Card kết quả: badge QMS + phân cấp mạng lưới, ĐẦU MỐI LIÊN HỆ (gọi/email),
+//     cảnh báo mềm (QMS thấp / trả KQ chậm hơn yêu cầu).
 //   • Sửa bug osrmWarn dùng trước khai báo ở nhánh "không tìm thấy".
 //
 // MỞ MODAL:
@@ -54,12 +54,14 @@
     lat: null,
     lng: null,
     testTypeId: null,
+    testTypeIds: [],
     sampleCount: 20,
     preset: 'balanced',
     weights: null,
     minBsl: null, // BSL chuyên gia chọn (lọc cứng)
     minQsm: null, // không nhập — chỉ chấm điểm
     maxTurnaround: null, // không nhập — chỉ chấm điểm
+    pathogens: [], // THÊM DÒNG NÀY ĐỂ LƯU TÁC NHÂN
     excludeLabIds: [],
     lastResult: null,
     map: null,
@@ -67,38 +69,61 @@
   };
 
   let _testTypes = [];
+  let _pathogensCache = []; // THÊM DÒNG NÀY ĐỂ CACHE TÁC NHÂN
 
   const RANK_COLORS = ['#16a34a', '#0ea5e9', '#f59e0b'];
   const FALLBACK_COLOR = '#6b7280';
 
   window.openDispatchModal = async function (opts = {}) {
-    S.incidentId = opts.incidentId || null;
-    S.incidentName = opts.incidentName || null;
-    S.lat = opts.lat ?? null;
-    S.lng = opts.lng ?? null;
-    S.testTypeId = null;
-    S.sampleCount = 20;
-    S.preset = 'balanced';
-    S.weights = null;
-    S.minBsl = null;
-    S.minQsm = null;
-    S.maxTurnaround = null;
-    S.excludeLabIds = [];
-    S.lastResult = null;
-    S.map = null;
-    S.routeLayers = [];
+    // 1. KIỂM TRA XEM CÓ PHẢI ĐANG MỞ LẠI SỰ KIỆN CŨ HAY KHÔNG
+    const isSameIncident = opts.incidentId === S.incidentId;
+
+    // 2. NẾU LÀ SỰ KIỆN MỚI (HOẶC MỞ CHAY KHÔNG GẮN SỰ KIỆN) -> RESET TRẠNG THÁI
+    if (!isSameIncident) {
+      S.incidentId = opts.incidentId || null;
+      S.incidentName = opts.incidentName || null;
+      S.lat = opts.lat ?? null;
+      S.lng = opts.lng ?? null;
+      S.testTypeId = null;
+      S.testTypeIds = [];
+      S.sampleCount = 20;
+      S.preset = 'balanced';
+      S.weights = null;
+      S.minBsl = null;
+      S.minQsm = null;
+      S.maxTurnaround = null;
+      S.pathogens = []; // Reset tác nhân
+      S.excludeLabIds = [];
+      S.lastResult = null;
+      S.map = null;
+      S.routeLayers = [];
+    }
 
     try {
-      const { data, error } = await window.supabaseClient
-        .from('test_types')
-        .select('*')
-        .eq('is_active', true)
-        .order('name', { ascending: true });
-      if (error) throw error;
-      _testTypes = data || [];
+      // 3. TẢI LOẠI XÉT NGHIỆM
+      if (!_testTypes || _testTypes.length === 0) {
+        const { data: ttData, error: ttErr } = await window.supabaseClient
+          .from('test_types')
+          .select('*')
+          .eq('is_active', true)
+          .order('name', { ascending: true });
+        if (ttErr) throw ttErr;
+        _testTypes = ttData || [];
+      }
+
+      // 4. TẢI DANH MỤC TÁC NHÂN (Đã sửa lỗi khai báo biến ở đây)
+      if (!_pathogensCache || _pathogensCache.length === 0) {
+        const { data: pData, error: pErr } = await window.supabaseClient
+          .from('pathogens')
+          .select('*')
+          .eq('is_active', true)
+          .order('name', { ascending: true });
+        if (pErr) throw pErr;
+        _pathogensCache = pData || []; // Bỏ chữ "window." đi
+      }
     } catch (e) {
       if (window.showToast)
-        window.showToast('Lỗi tải loại xét nghiệm: ' + e.message, 'error');
+        window.showToast('Lỗi tải danh mục: ' + e.message, 'error');
       return;
     }
 
@@ -111,7 +136,40 @@
       return;
     }
 
+    // 5. DỰNG LẠI KHUNG MODAL
     buildModal();
+
+    // 6. PHỤC HỒI DỮ LIỆU CŨ LÊN GIAO DIỆN (NẾU MỞ LẠI SỰ KIỆN)
+    if (isSameIncident && S.lastResult) {
+      setTimeout(() => {
+        if (S.testTypeId)
+          document.getElementById('disp-testtype').value = S.testTypeId;
+        if (S.sampleCount)
+          document.getElementById('disp-samples').value = S.sampleCount;
+        if (S.minBsl) document.getElementById('disp-bsl').value = S.minBsl;
+
+        const presetRadio = document.querySelector(
+          `input[name="preset"][value="${S.preset}"]`
+        );
+        if (presetRadio) presetRadio.checked = true;
+
+        if (window.$) {
+          if ($('#disp-testtype').hasClass('select2-hidden-accessible')) {
+            $('#disp-testtype').trigger('change');
+          }
+          // Phục hồi lại danh sách tác nhân đã chọn
+          if (S.pathogens && S.pathogens.length) {
+            $('#disp-pathogens').val(S.pathogens).trigger('change');
+          }
+        }
+
+        if (typeof renderResults === 'function') {
+          renderResults(S.lastResult);
+        }
+        // 👉 THÊM DÒNG NÀY ĐỂ ĐỒNG BỘ LẠI TRẠNG THÁI NÚT BẤM
+        if (window.syncDispatchStatuses) window.syncDispatchStatuses();
+      }, 50);
+    }
   };
 
   function buildModal() {
@@ -124,7 +182,7 @@
     const originBlock = S.incidentId
       ? `<div class="alert alert-secondary py-2 mb-0">
            <small class="text-muted d-block">Sự kiện khẩn cấp</small>
-           <strong>${esc(S.incidentName || 'Sự cố')}</strong>
+           <strong>${esc(S.incidentName || 'Sự kiện')}</strong>
            <span class="text-muted"> · ${S.lat?.toFixed?.(
              5
            )}, ${S.lng?.toFixed?.(5)}</span>
@@ -153,6 +211,38 @@
 
     const wrap = document.createElement('div');
     wrap.id = 'dispatch-modal-wrapper';
+    // -- XỬ LÝ HTML ĐỘNG CHO TÁC NHÂN --
+    const groupA = _pathogensCache.filter((p) => p.category === 'Nhóm A');
+    const groupB = _pathogensCache.filter((p) => p.category === 'Nhóm B');
+    const groupOther = _pathogensCache.filter(
+      (p) => p.category !== 'Nhóm A' && p.category !== 'Nhóm B'
+    );
+
+    let pathogenHtml = '';
+    if (groupA.length) {
+      pathogenHtml +=
+        `<optgroup label="Bệnh truyền nhiễm Nhóm A (Đặc biệt nguy hiểm)">` +
+        groupA
+          .map((p) => `<option value="${p.name}">${p.name}</option>`)
+          .join('') +
+        `</optgroup>`;
+    }
+    if (groupB.length) {
+      pathogenHtml +=
+        `<optgroup label="Bệnh truyền nhiễm Nhóm B (Nguy hiểm)">` +
+        groupB
+          .map((p) => `<option value="${p.name}">${p.name}</option>`)
+          .join('') +
+        `</optgroup>`;
+    }
+    if (groupOther.length) {
+      pathogenHtml +=
+        `<optgroup label="Khác">` +
+        groupOther
+          .map((p) => `<option value="${p.name}">${p.name}</option>`)
+          .join('') +
+        `</optgroup>`;
+    }
     wrap.innerHTML = `
       <div class="modal fade" id="dispatchModal" tabindex="-1">
         <div class="modal-dialog modal-lg modal-dialog-scrollable">
@@ -164,22 +254,30 @@
             <div class="modal-body">
               <!-- HÀNG INPUT: kỹ thuật + BSL (lọc cứng) + số mẫu -->
               <div class="row g-3 align-items-end mb-2">
-                <div class="col-md-6">
+                <div class="col-md-7">
                   <label class="form-label mb-1">Loại xét nghiệm (kỹ thuật) <span class="text-danger">*</span></label>
-                  <select id="disp-testtype" class="form-select">${ttOptions}</select>
+                  <select id="disp-testtype" class="form-select" multiple="multiple">${ttOptions}</select>
                 </div>
                 <div class="col-md-3">
                   <label class="form-label mb-1">An toàn sinh học <span class="text-danger">*</span></label>
-                  <select id="disp-bsl" class="form-select" title="Cấp ATSH tối thiểu — PXN thấp hơn sẽ bị loại (lọc cứng)">
+                  <select id="disp-bsl" class="form-select" title="Cấp ATSH tối thiểu — PXN thấp hơn sẽ bị loại">
                     <option value="1">ATSH cấp 1</option>
                     <option value="2" selected>ATSH cấp 2</option>
                     <option value="3">ATSH cấp 3</option>
                     <option value="4">ATSH cấp 4</option>
                   </select>
                 </div>
-                <div class="col-md-3">
+                <div class="col-md-2">
                   <label class="form-label mb-1">Số mẫu</label>
                   <input id="disp-samples" type="number" min="1" class="form-control" value="20">
+                </div>
+                <!-- BỔ SUNG TRƯỜNG CHỌN TÁC NHÂN (YÊU CẦU 3) -->
+                <!-- TRƯỜNG CHỌN TÁC NHÂN (DỮ LIỆU ĐỘNG TỪ BẢNG) -->
+                <div class="col-md-12">
+                  <label class="form-label mb-1">Tác nhân gây bệnh</label>
+                  <select id="disp-pathogens" class="form-select" multiple="multiple">
+                    ${pathogenHtml}
+                  </select>
                 </div>
                 <div class="col-md-12">${originBlock}</div>
               </div>
@@ -225,7 +323,7 @@
                       <input type="range" class="form-range" id="slider-fast" min="0" max="100" value="20">
                     </div>
                     <div class="col-md-4">
-                      <label class="form-label mb-0"><small>🏅 Chất lượng (QSM) <span id="w-qual">20</span>%</small></label>
+                      <label class="form-label mb-0"><small>🏅 Chất lượng (QMS) <span id="w-qual">20</span>%</small></label>
                       <input type="range" class="form-range" id="slider-qual" min="0" max="100" value="20">
                     </div>
                     <div class="col-md-4">
@@ -244,7 +342,7 @@
                         🟢 <b>Gần nhất</b>: thời gian di chuyển từ sự kiện khẩn cấp đến phòng xét nghiệm ngắn nhất.<br>
                         🔵 <b>Còn nhận mẫu</b>: phòng xét nghiệm còn công suất tiếp nhận mẫu trong ngày.<br>
                         🟠 <b>Trả Kết quả nhanh</b>: phòng xét nghiệm trả kết quả xét nghiệm nhanh nhất.<br>
-                        🏅 <b>Chất lượng (QSM)</b>: phòng xét nghiệm đạt ISO 15189 / QĐ2429 mức cao.<br>
+                        🏅 <b>Chất lượng (QMS)</b>: phòng xét nghiệm đạt ISO 15189 / QĐ2429 mức cao.<br>
                         🌐 <b>Năng lực xét nghiệm</b>: phân cấp năng lực xét nghiệm cao trong mạng lưới.
                       </div>
                       <div class="mb-1 mt-2"><b><i class='bx bx-equalizer'></i> Chế độ:</b></div>
@@ -252,7 +350,7 @@
                         ⚡ <b>Khẩn</b>: ưu tiên khoảng cách gần nhất & trả kết quả nhanh.<br>
                         ⚖️ <b>Cân bằng</b>: cân bằng tương đối 5 tiêu chí.<br>
                         📦 <b>Nhiều mẫu</b>: ưu tiên công suất tiếp nhận mẫu nhiều trong ngày.<br>
-                        🏅 <b>Chất lượng</b>: ưu tiên QSM & năng lực xét nghiệm cao trong mạng lưới.
+                        🏅 <b>Chất lượng</b>: ưu tiên QMS & năng lực xét nghiệm cao trong mạng lưới.
                       </div>
                       <div class="mt-2 pt-1 border-top text-muted">
                         <i class='bx bx-shield'></i> An toàn: Phòng xét nghiệm không đủ cấp ATSH cho loại tác nhân này
@@ -292,8 +390,15 @@
     if (window.$ && $.fn.select2) {
       $('#disp-testtype').select2({
         dropdownParent: $('#dispatchModal'),
-        placeholder: 'Gõ để tìm loại xét nghiệm...',
+        placeholder: 'Loại kỹ thuật xét nghiệm....',
         width: '100%',
+        allowClear: true,
+      });
+      $('#disp-pathogens').select2({
+        dropdownParent: $('#dispatchModal'),
+        placeholder: 'Tác nhân gây bệnh...',
+        width: '100%',
+        allowClear: true,
       });
     }
 
@@ -455,14 +560,26 @@
   // CHẠY TÌM KIẾM
   // --------------------------------------------------------------------------
   window._runDispatch = async function () {
-    S.testTypeId = document.getElementById('disp-testtype').value;
+    // Đa chọn kỹ thuật (mảng). Giữ S.testTypeId = phần tử đầu cho các hàm cũ.
+    S.testTypeIds = $('#disp-testtype').val() || [];
+    S.testTypeId = S.testTypeIds[0] || null;
+    if (!S.testTypeIds.length) {
+      if (window.showToast)
+        window.showToast(
+          'Vui lòng chọn ít nhất 1 kỹ thuật xét nghiệm!',
+          'warning'
+        );
+      return;
+    }
     S.sampleCount =
       parseInt(document.getElementById('disp-samples').value) || 1;
+    // BẮT TÁC NHÂN NGƯỜI DÙNG CHỌN
+    S.pathogens = $('#disp-pathogens').val() || [];
     S.preset =
       document.querySelector('input[name="preset"]:checked')?.value ||
       'balanced';
 
-    // BSL chuyên gia chọn (lọc CỨNG). QSM/turnaround KHÔNG nhập — chỉ vào chấm điểm.
+    // BSL chuyên gia chọn (lọc CỨNG). QMS/turnaround KHÔNG nhập — chỉ vào chấm điểm.
     const bslRaw = document.getElementById('disp-bsl')?.value;
     S.minBsl = bslRaw ? parseInt(bslRaw) : null;
     S.minQsm = null;
@@ -488,7 +605,7 @@
 
     try {
       const result = await window.LabDispatch.findBestLabs({
-        testTypeId: S.testTypeId,
+        testTypeIds: S.testTypeIds,
         sampleCount: S.sampleCount,
         originLat: S.lat,
         originLng: S.lng,
@@ -514,18 +631,32 @@
   // --------------------------------------------------------------------------
   function renderResults(result) {
     const el = document.getElementById('disp-results');
-    const { ranked, top, meta } = result;
+    let { ranked, top, meta } = result; // ĐỔI const → let (để gán lại)
 
-    // Định nghĩa osrmWarn TRƯỚC mọi nhánh (sửa bug dùng trước khai báo)
-    const osrmWarn =
-      meta.osrmFailures > 0
-        ? `<div class="alert alert-warning py-1 px-2 mb-2"><small><i class='bx bx-wifi-off'></i>
-         ${meta.osrmFailures}/${meta.afterExclude} tuyến dùng khoảng cách ước lượng (dịch vụ chỉ đường tạm gián đoạn).
-         Thời gian/quãng đường có thể chưa chính xác.</small></div>`
-        : '';
+    // ƯU TIÊN CÔNG LẬP: tách nhóm, công lập trên / tư nhân dưới
+    if (
+      typeof window.regroupPublicFirst === 'function' &&
+      ranked &&
+      ranked.length
+    ) {
+      ranked = window.regroupPublicFirst(ranked);
+      top = ranked.slice(0, top ? top.length : 3); // cắt lại top theo thứ tự mới
+      result.ranked = ranked; // đồng bộ để map/nơi khác dùng
+      result.top = top;
+    }
+
+    window._currentDispatchResult = result;
+
+    // Ghi chú giao thông (thay cảnh báo OSRM cũ — nay tính offline)
+    const trafficNote = `<div class="alert alert-info py-1 px-2 mb-2"><small><i class='bx bx-info-circle'></i>
+    Thời gian, quãng đường được tính bằng thuật toán phân tích dữ liệu giao thông thời gian thực & bản đồ API OSM</small></div>`;
 
     if (!ranked.length) {
-      const tt = _testTypes.find((t) => t.id === S.testTypeId);
+      const ttNames = (S.testTypeIds || [])
+        .map((id) => _testTypes.find((t) => t.id === id)?.name)
+        .filter(Boolean)
+        .join(', ');
+      const tt = { name: ttNames };
       const dayWarn = getDayWarning();
       const dayWarnHtml = dayWarn
         ? `<div class="alert alert-warning py-2 mb-2">
@@ -536,7 +667,7 @@
       el.innerHTML = `
        <div id="disp-pending"></div>
        ${dayWarnHtml}
-       ${osrmWarn}
+       ${trafficNote}
         <div class="alert alert-warning">
           <i class='bx bx-error'></i> <strong>Không tìm thấy Phòng xét nghiệm phù hợp</strong> cho "${esc(
             tt?.name || ''
@@ -554,31 +685,56 @@
     }
 
     const cards = ranked
-      .map((lab) => {
+      .map((lab, idx) => {
         const isTop3 = lab.rank <= 3;
         const color = isTop3 ? RANK_COLORS[lab.rank - 1] : FALLBACK_COLOR;
         const rankLabel = lab.rank === 1 ? 'TỐI ƯU' : `Dự phòng ${lab.rank}`;
+
+        // Công lập / Tư nhân (Cách B). Ưu tiên lab.sector do regroupPublicFirst gán;
+        // fallback: tự nhận diện theo level chứa "tư nhân".
+        const isPriv =
+          lab.sector === 'tu_nhan' ||
+          String(lab.level || '')
+            .toLowerCase()
+            .includes('tư nhân');
+        const sectorBadge = isPriv
+          ? `<span class="badge bg-warning text-dark">Tư nhân</span>`
+          : `<span class="badge bg-success">Công lập</span>`;
+
+        // Vạch ngăn khi chuyển từ nhóm công lập sang nhóm tư nhân
+        const prev = ranked[idx - 1];
+        const prevPriv =
+          prev &&
+          (prev.sector === 'tu_nhan' ||
+            String(prev.level || '')
+              .toLowerCase()
+              .includes('tư nhân'));
+        const groupDivider =
+          prev && !prevPriv && isPriv
+            ? `<div class="text-center my-2"><small class="text-muted">
+                 <i class='bx bx-buildings'></i> — Các Phòng xét nghiệm tư nhân —</small></div>`
+            : '';
+
         const enoughBadge = lab.is_enough
           ? `<span class="badge bg-success">Đủ chỗ (còn ${lab.remaining_today})</span>`
           : `<span class="badge bg-danger">Không đủ chỗ (còn ${lab.remaining_today}/${S.sampleCount})</span>`;
-        const srcNote =
-          lab.route.source === 'haversine'
-            ? ' <small class="text-muted">(ước lượng)</small>'
-            : '';
 
-        // QSM + cấp năng lực (capability_tier — tính từ QSM + kỹ thuật)
+        const srcNote = lab.route.trafficLabel
+          ? ` <small class="text-muted">(${esc(
+              lab.route.trafficLabel
+            )})</small>`
+          : '';
+
         const qsmBadge = lab.qsm_label
           ? `<span class="badge bg-info text-dark">${esc(lab.qsm_label)}</span>`
-          : `<span class="badge bg-light text-muted">Chưa có QSM</span>`;
+          : `<span class="badge bg-light text-muted">Chưa có QMS</span>`;
         const netBadge =
           lab.capability_tier != null
             ? `<span class="badge bg-secondary">Cấp năng lực ${lab.capability_tier}</span>`
             : '';
 
-        // Cảnh báo mềm (chỉ còn công suất — QSM/turnaround không còn là ngưỡng nhập)
         const warnHtml = '';
 
-        // Đầu mối liên hệ — KEY cho RRT
         const contactHtml =
           lab.head_name || lab.head_phone
             ? `<div class="mt-1 p-2 rounded" style="background:#f0fdf4;border:1px solid #bbf7d0;">
@@ -609,82 +765,114 @@
                </div>`
             : '';
 
-        return `
-        <div class="card mb-2 dispatch-lab-card" style="border-left:5px solid ${color};">
-          <div class="card-body py-2">
-            <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
-              <div style="min-width:0;">
-                <div class="d-flex align-items-center gap-2 flex-wrap">
-                  <span class="badge" style="background:${color};">#${
-          lab.rank
-        } ${rankLabel}</span>
-                  <strong>${esc(lab.lab_name)}</strong>
-                  <span class="badge bg-dark">ATSH ${lab.bsl_level}</span>
+        return (
+          groupDivider +
+          `
+            <div class="card mb-2 dispatch-lab-card disp-lab-card" id="lab-card-${
+              lab.lab_id
+            }"
+                 style="border-left:5px solid ${color};">
+              <div class="card-body py-2">
+                <!-- HÀNG TRÊN: tên (co giãn) | điểm + nút (cố định phải) -->
+                <div class="d-flex justify-content-between align-items-start disp-head">
+                  <div style="min-width:0;flex:1;">
+                    <div class="d-flex align-items-center gap-2 flex-wrap">
+                      <span class="badge" style="background:${color};">#${
+            lab.rank
+          } ${rankLabel}</span>
+                      <span class="disp-name">${esc(lab.lab_name)}</span>
+                      <span class="badge bg-dark">ATSH ${lab.bsl_level}</span>
+                      ${sectorBadge}
+                      ${
+                        lab.is_equivalent
+                          ? `<span class="badge bg-light text-muted border" title="PXN có kỹ thuật tương đương (không phải kỹ thuật chọn trực tiếp)">≈ Tương đương</span>`
+                          : ''
+                      }
+                    </div>
+                    <small class="text-muted d-block">${esc(
+                      lab.level || ''
+                    )} · ${esc(lab.address || '')}</small>
+                    <div class="mt-1 d-flex flex-wrap gap-1">${qsmBadge} ${netBadge}</div>
+                  </div>
+                  <div class="text-end flex-shrink-0 ms-2">
+                    <div class="mb-1"><span class="badge bg-light text-dark" style="font-size:.95em;">
+                      Điểm: <b>${lab.scores.total}</b></span></div>
+                    <div class="btn-group btn-group-sm">
+                      <button class="btn btn-outline-warning" onclick="window.sendSingleInquiry('${
+                        lab.lab_id
+                      }')" title="Gửi khảo sát riêng cho đơn vị này">
+                        <i class='bx bx-mail-send'></i> Gửi
+                      </button>
+                      <button class="btn btn-outline-secondary" onclick="window._showLabRoute('${
+                        lab.lab_id
+                      }')" title="Xem đường đi">
+                        <i class='bx bx-map'></i>
+                      </button>
+                      <button class="btn btn-outline-danger" onclick="window._excludeLab('${
+                        lab.lab_id
+                      }')" title="Loại trừ Phòng xét nghiệm này">
+                        <i class='bx bx-x-circle'></i>
+                      </button>
+                    </div>
+                    <div class="mt-1" id="disp-action-${lab.lab_id}"></div>
+                  </div>
                 </div>
-                <small class="text-muted d-block">${esc(
-                  lab.level || ''
-                )} · ${esc(lab.address || '')}</small>
-                <div class="mt-1 d-flex flex-wrap gap-1">${qsmBadge} ${netBadge}</div>
-                <div class="mt-1 d-flex flex-wrap gap-3">
-                  <small><i class='bx bx-map-pin'></i> <b>${
-                    lab.route.km
-                  } km</b>${srcNote}</small>
-                  <small><i class='bx bx-time'></i> <b>${
-                    lab.route.minutes
-                  } phút</b></small>
-                  <small><i class='bx bx-timer'></i> Trả KQ: <b>${
-                    lab.turnaround_hours != null
-                      ? lab.turnaround_hours + 'h'
-                      : '—'
-                  }</b></small>
-                  ${enoughBadge}
+    
+                <!-- HÀNG CHỈ SỐ: grid cột cố định → thẳng hàng giữa các card -->
+                <div class="disp-metrics">
+                  <div class="disp-metric">
+                    <div class="m-label"><i class='bx bx-map-pin'></i> Khoảng cách</div>
+                    <div class="m-value">${lab.route.km} km</div>
+                  </div>
+                  <div class="disp-metric">
+                    <div class="m-label"><i class='bx bx-time'></i> Thời gian</div>
+                    <div class="m-value">~${
+                      lab.route.minutes
+                    } phút ${srcNote}</div>
+                  </div>
+                  <div class="disp-metric">
+                    <div class="m-label"><i class='bx bx-timer'></i> Trả KQ</div>
+                    <div class="m-value">${
+                      lab.turnaround_hours != null
+                        ? lab.turnaround_hours + 'h'
+                        : '—'
+                    }</div>
+                  </div>
+                  <div class="disp-metric">
+                    <div class="m-label"><i class='bx bx-box'></i> Chỗ trống</div>
+                    <div class="m-value">${enoughBadge}</div>
+                  </div>
                 </div>
-                ${warnHtml}
+    
                 ${contactHtml}
-              </div>
-              <div class="text-end flex-shrink-0">
-                <div class="mb-1"><span class="badge bg-light text-dark" style="font-size:.95em;">
-                  Điểm: <b>${lab.scores.total}</b></span></div>
-                <div class="btn-group btn-group-sm">
-                  <button class="btn btn-outline-secondary" onclick="window._showLabRoute('${
-                    lab.lab_id
-                  }')" title="Xem đường đi">
-                    <i class='bx bx-map'></i>
-                  </button>
-                  <button class="btn btn-outline-danger" onclick="window._excludeLab('${
-                    lab.lab_id
-                  }')" title="Loại trừ Phòng xét nghiệm này">
-                    <i class='bx bx-x-circle'></i>
-                  </button>
+    
+                <!-- THANH 5 TIÊU CHÍ -->
+                <div class="mt-2 d-flex gap-1" style="height:5px;" title="Gần nhất ${
+                  lab.scores.gan
+                } · Còn nhận mẫu ${lab.scores.trong} · Trả Kết quả nhanh ${
+            lab.scores.nhanh
+          } · Chất lượng (QMS) ${lab.scores.chatLuong} · Năng lực Xét nghiệm ${
+            lab.scores.mangLuoi
+          }">
+                  <div style="flex:${
+                    lab.scores.gan
+                  };background:#16a34a;border-radius:3px;"></div>
+                  <div style="flex:${
+                    lab.scores.trong
+                  };background:#0ea5e9;border-radius:3px;"></div>
+                  <div style="flex:${
+                    lab.scores.nhanh
+                  };background:#f59e0b;border-radius:3px;"></div>
+                  <div style="flex:${
+                    lab.scores.chatLuong
+                  };background:#8b5cf6;border-radius:3px;"></div>
+                  <div style="flex:${
+                    lab.scores.mangLuoi
+                  };background:#64748b;border-radius:3px;"></div>
                 </div>
-                <div class="mt-1" id="disp-action-${lab.lab_id}"></div>
               </div>
-            </div>
-            <div class="mt-1 d-flex gap-1" style="height:5px;" title="Gần nhất ${
-              lab.scores.gan
-            } · Còn nhận mẫu ${lab.scores.trong} · Trả Kết quả nhanh ${
-          lab.scores.nhanh
-        } · Chất lượng (QSM) ${lab.scores.chatLuong} · Năng lực Xét nghiệm ${
-          lab.scores.mangLuoi
-        }">
-              <div style="flex:${
-                lab.scores.gan
-              };background:#16a34a;border-radius:3px;"></div>
-              <div style="flex:${
-                lab.scores.trong
-              };background:#0ea5e9;border-radius:3px;"></div>
-              <div style="flex:${
-                lab.scores.nhanh
-              };background:#f59e0b;border-radius:3px;"></div>
-              <div style="flex:${
-                lab.scores.chatLuong
-              };background:#8b5cf6;border-radius:3px;"></div>
-              <div style="flex:${
-                lab.scores.mangLuoi
-              };background:#64748b;border-radius:3px;"></div>
-            </div>
-          </div>
-        </div>`;
+            </div>`
+        );
       })
       .join('');
 
@@ -695,14 +883,17 @@
 
     el.innerHTML = `
       <div id="disp-pending"></div>
-      ${osrmWarn}
+      ${trafficNote}
       <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-1">
         <small class="text-muted">Tìm thấy ${
           ranked.length
         } Phòng xét nghiệm phù hợp · Xếp theo <b>${labelPreset(
       meta
     )}</b></small>
-        <small class="text-muted"><i class='bx bx-bulb'></i> 🟢Gần nhất   🔵Còn nhận mẫu   🟠Trả Kết quả nhanh   🟣Chất lượng (QSM)   ⚫Năng lực Xét nghiệm</small>
+        <small class="text-muted"><i class='bx bx-bulb'></i> 🟢Gần nhất   🔵Còn nhận mẫu   🟠Trả Kết quả nhanh   🟣Chất lượng (QMS)   ⚫Năng lực Xét nghiệm</small>
+        <button id="btn-mass-inquiry" class="btn btn-warning btn-sm shadow-sm fw-bold" onclick="window.sendMassInquiry()">
+          <i class='bx bx-mail-send'></i> Gửi yêu cầu điều phối mẫu (Top PXN)
+        </button>
       </div>
       ${excludeInfo}
       ${cards}
@@ -762,7 +953,15 @@
     if (!result) return;
     const lab = result.ranked.find((l) => l.lab_id === labId);
     if (!lab) return;
-
+    window.LabRouteSteps.show(
+      S.lat,
+      S.lng,
+      lab.lat,
+      lab.lng,
+      lab.lab_name,
+      lab.route.km,
+      lab.route.minutes // ← số tổng offline để khớp card
+    );
     document.getElementById('disp-map-wrap').classList.remove('d-none');
     document.getElementById(
       'disp-map-label'
@@ -944,6 +1143,7 @@
       sampleCount: S.sampleCount,
       lat: S.lat,
       lng: S.lng,
+      pathogens: S.pathogens, // TRUYỀN TÁC NHÂN ĐI
     };
   };
 
