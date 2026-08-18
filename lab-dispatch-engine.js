@@ -8,7 +8,7 @@
 //   • Gọi tuần tự có giãn cách né rate-limit
 // THÊM MỚI (theo quy trình chuyên gia nhập tiêu chí):
 //   • Truyền p_min_bsl / p_min_qsm / p_max_turnaround xuống RPC
-//   • Chấm điểm 5 CHIỀU: Gần + Trống + Nhanh + Chất lượng(QSM) + Mạng lưới(tier)
+//   • Chấm điểm 5 CHIỀU: Gần + Trống + Nhanh + Chất lượng(QMS) + Mạng lưới(tier)
 //   • Giữ cờ cảnh báo từ RPC (warn_qsm/warn_capacity/warn_turnaround) cho UI
 //   • Thêm preset 'quality' (ưu tiên chất lượng)
 //
@@ -32,7 +32,7 @@
 
   // Preset trọng số (tổng = 1.0). 5 chiều:
   //   near = gần (phút đi thật) · free = còn công suất · fast = trả KQ nhanh
-  //   qual = chất lượng (QSM) · net = phân cấp mạng lưới
+  //   qual = chất lượng (QMS) · net = phân cấp mạng lưới
   const PRESETS = {
     urgent: {
       near: 0.4,
@@ -64,7 +64,7 @@
       fast: 0.15,
       qual: 0.4,
       net: 0.2,
-      label: '🏅 Ưu tiên chất lượng (QSM & năng lực xét nghiệm)',
+      label: '🏅 Ưu tiên chất lượng (QMS & năng lực xét nghiệm)',
     },
   };
 
@@ -78,67 +78,79 @@
       Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
     return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   }
+  const ROUTING_FACTOR = 1.35; // hệ số dích dắc đường bộ
 
-  async function routeOne(originLat, originLng, destLat, destLng) {
-    const url =
-      `${OSRM_BASE}/${originLng},${originLat};${destLng},${destLat}` +
-      `?overview=full&geometries=geojson`;
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), OSRM_TIMEOUT_MS);
-    try {
-      const res = await fetch(url, { signal: controller.signal });
-      clearTimeout(timer);
-      if (!res.ok) throw new Error('OSRM HTTP ' + res.status);
-      const data = await res.json();
-      if (data.code !== 'Ok' || !data.routes?.length)
-        throw new Error('OSRM no route');
-      const route = data.routes[0];
-      return {
-        km: +(route.distance / 1000).toFixed(2),
-        minutes: Math.round(route.duration / 60),
-        geometry: route.geometry,
-        source: 'osrm',
-      };
-    } catch (err) {
-      clearTimeout(timer);
-      const km = +haversineKm(originLat, originLng, destLat, destLng).toFixed(
-        2
-      );
-      return {
-        km,
-        minutes: Math.round((km / 30) * 60),
-        geometry: {
-          type: 'LineString',
-          coordinates: [
-            [originLng, originLat],
-            [destLng, destLat],
-          ],
-        },
-        source: 'haversine',
-        _reason: err.message,
-      };
+  // Vận tốc (km/h) theo giờ VN hiện tại. Cho phép truyền Date để test.
+  function getSpeedByHour(date) {
+    // Lấy giờ + phút theo múi giờ Việt Nam (bất kể server ở đâu)
+    const vn = new Date(
+      (date || new Date()).toLocaleString('en-US', {
+        timeZone: 'Asia/Ho_Chi_Minh',
+      })
+    );
+    const h = vn.getHours();
+    const m = vn.getMinutes();
+    const t = h * 60 + m; // phút kể từ 00:00
+
+    const between = (a, b) => t >= a && t < b;
+
+    // Cao điểm: 07:00–08:30 (420–510) và 16:30–18:30 (990–1110)
+    if (between(420, 510) || between(990, 1110)) {
+      return { speed: 15, label: ' Giờ cao điểm', level: 'peak' };
     }
+    // Ban đêm: 22:00–24:00 (1320–1440) và 00:00–07:00 (0–420)
+    if (t >= 1320 || t < 420) {
+      return { speed: 35, label: 'Giờ thấp điểm', level: 'night' };
+    }
+    // Còn lại là bình thường: 08:30–16:30 và 18:30–22:00
+    return { speed: 25, label: 'Giờ bình thường', level: 'normal' };
   }
 
+  // Ước tính quãng đường + thời gian OFFLINE (thay routeOne cũ)
+  function estimateTravel(originLat, originLng, destLat, destLng, atDate) {
+    const straightKm = haversineKm(originLat, originLng, destLat, destLng);
+    const roadKm = +(straightKm * ROUTING_FACTOR).toFixed(2);
+    const { speed, label, level } = getSpeedByHour(atDate);
+    const minutes = Math.round((roadKm / speed) * 60);
+    return {
+      km: roadKm,
+      minutes,
+      speed,
+      trafficLabel: label,
+      trafficLevel: level,
+      source: 'offline',
+      // đường thẳng để vẽ (không có tuyến thật vì không gọi API)
+      geometry: {
+        type: 'LineString',
+        coordinates: [
+          [originLng, originLat],
+          [destLng, destLat],
+        ],
+      },
+    };
+  }
+
+  // THAY routeAll: tính offline cho tất cả ứng viên (không fetch, không chờ)
   async function routeAll(originLat, originLng, candidates) {
-    const results = [];
-    for (let i = 0; i < candidates.length; i++) {
-      const c = candidates[i];
-      const r = await routeOne(originLat, originLng, c.lat, c.lng);
-      results.push({ ...c, route: r });
-      if (i < candidates.length - 1) {
-        await new Promise((res) => setTimeout(res, OSRM_GAP_MS));
-      }
-    }
-    return results;
+    const now = new Date();
+    return (candidates || []).map((c) => ({
+      ...c,
+      route: estimateTravel(originLat, originLng, c.lat, c.lng, now),
+    }));
   }
 
+  // (giữ để nơi khác gọi routeOne vẫn chạy — giờ trả offline)
+  function routeOne(originLat, originLng, destLat, destLng) {
+    return Promise.resolve(
+      estimateTravel(originLat, originLng, destLat, destLng)
+    );
+  }
   // --------------------------------------------------------------------------
   // CHẤM ĐIỂM 5 CHIỀU
   //   diemGan  = 100*(1 - phút/phútXaNhất)            gần/nhanh tới nơi
   //   diemTrong= 100*(còn lại / công suất tối đa)      còn nhiều chỗ
   //   diemNhanh= 100*(1 - trảKQ/trảKQchậmNhất)         trả KQ nhanh
-  //   diemChatLuong = 100*(qsm_level/5)                QSM cao (0..5)
+  //   diemChatLuong = 100*(qsm_level/5)                QMS cao (0..5)
   //   diemMangLuoi  = 100*(network_tier/5)             phân cấp mạng lưới (0..5)
   //   tổng = Σ diem_i * weight_i
   // --------------------------------------------------------------------------
@@ -192,7 +204,7 @@
       const diemTrong = 100 * Math.max(0, Math.min(1, remaining / maxCap));
       // NHANH: turnaround ít = tốt (chuẩn hóa theo khoảng; đồng nhất/null → 50)
       const diemNhanh = scoreLowerBetter(turnaround, minTa, maxTa);
-      // CHẤT LƯỢNG: QSM 0..5
+      // CHẤT LƯỢNG: QMS 0..5
       const diemChatLuong = 100 * Math.max(0, Math.min(1, qsm / 5));
       // MẠNG LƯỚI: tier 0..5
       const diemMangLuoi = 100 * Math.max(0, Math.min(1, netTier / 5));
@@ -227,6 +239,37 @@
 
     return scored.map((s, i) => ({ ...s, rank: i + 1 }));
   }
+  // ============================================================================
+  // ƯU TIÊN PXN CÔNG LẬP (Cách B — group riêng)
+  //   Công lập LUÔN xếp trên, tư nhân LUÔN xếp dưới; trong mỗi nhóm xếp theo điểm.
+  //   Nhận diện tư nhân: field `level` chứa chữ "tư nhân".
+  // ----------------------------------------------------------------------------
+  // GHÉP vào lab-dispatch-engine.js: đặt hàm này trong IIFE (cạnh scoreAndRank).
+  // Gọi NGAY SAU khi đã tính điểm + sort theo total, TRƯỚC khi cắt `top` & gán rank.
+  // ============================================================================
+
+  window.isPrivateLab = function (lab) {
+    return String(lab.level || '')
+      .toLowerCase()
+      .includes('tư nhân');
+  };
+  window.regroupPublicFirst = function (scoredLabs) {
+    const cong = [],
+      tu = [];
+    (scoredLabs || []).forEach((lab) => {
+      (window.isPrivateLab(lab) ? tu : cong).push(lab);
+    });
+    const byScoreDesc = (a, b) =>
+      (b.scores?.total ?? 0) - (a.scores?.total ?? 0);
+    cong.sort(byScoreDesc);
+    tu.sort(byScoreDesc);
+    const merged = [...cong, ...tu];
+    merged.forEach((lab, i) => {
+      lab.rank = i + 1;
+      lab.sector = window.isPrivateLab(lab) ? 'tu_nhan' : 'cong_lap';
+    });
+    return merged;
+  };
 
   // --------------------------------------------------------------------------
   // HÀM CHÍNH — tìm PXN tốt nhất
@@ -241,6 +284,7 @@
   async function findBestLabs(opts) {
     const {
       testTypeId,
+      testTypeIds,
       sampleCount = 1,
       originLat,
       originLng,
@@ -255,17 +299,27 @@
       includeFull = true,
     } = opts || {};
 
-    if (!testTypeId) throw new Error('Thiếu testTypeId');
+    // Chuẩn hóa về MẢNG uuid (ưu tiên testTypeIds; nếu chỉ có testTypeId → bọc mảng)
+    const ttIds =
+      Array.isArray(testTypeIds) && testTypeIds.length
+        ? testTypeIds
+        : testTypeId
+        ? [testTypeId]
+        : [];
+    if (!ttIds.length)
+      throw new Error('Thiếu kỹ thuật xét nghiệm (testTypeIds)');
     if (originLat == null || originLng == null)
-      throw new Error('Thiếu tọa độ điểm sự cố (originLat/originLng)');
+      throw new Error(
+        'Thiếu tọa độ điểm sự kiện khẩn cấp (originLat/originLng)'
+      );
 
     const weights = customWeights || PRESETS[preset] || PRESETS.balanced;
 
-    // [1] DB lọc BSL CỨNG + năng lực + công suất, trả ~N PXN kèm QSM/tier/đầu mối
+    // [1] DB lọc BSL CỨNG + năng lực + công suất, trả ~N PXN kèm QMS/tier/đầu mối
     const { data: candidates, error } = await window.supabaseClient.rpc(
       'find_candidate_labs',
       {
-        p_test_type_id: testTypeId,
+        p_test_type_ids: ttIds,
         p_sample_count: sampleCount,
         p_lat: originLat,
         p_lng: originLng,
@@ -295,9 +349,8 @@
 
     // [2] OSRM đường thật cho từng ứng viên
     const routed = await routeAll(originLat, originLng, list);
-    meta.osrmFailures = routed.filter(
-      (r) => r.route.source === 'haversine'
-    ).length;
+    meta.routingMode = 'offline';
+    meta.trafficInfo = routed[0]?.route?.trafficLabel || '';
 
     // [3] Chấm điểm 5 chiều & xếp hạng
     const ranked = scoreAndRank(routed, weights);
