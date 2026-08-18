@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Khảo sát năng lực tiếp nhận mẫu - HCDC</title>
+  <style>
+    body { font-family: system-ui, sans-serif; background: #006a75; color: #1f2937; display: flex; justify-content: center; padding: 20px; }
+    .card { background: #fff; border-radius: 12px; max-width: 500px; width: 100%; padding: 24px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); }
+    h2 { margin-top: 0; color: #006a75; font-size: 18px; border-bottom: 2px solid #e5e7eb; padding-bottom: 10px; }
+    .form-group { margin-bottom: 16px; }
+    label { font-weight: bold; font-size: 14px; display: block; margin-bottom: 8px; }
+    .checkbox-group { background: #f3f4f6; padding: 12px; border-radius: 6px; }
+    .checkbox-item { margin-bottom: 8px; font-size: 14px; display: flex; align-items: center; }
+    .checkbox-item input { margin-right: 8px; width: 16px; height: 16px; }
+    input[type="number"] { width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 16px; }
+    .btn { display: block; width: 100%; padding: 12px; background: #fd7e14; color: #fff; border: none; border-radius: 6px; font-weight: bold; font-size: 16px; cursor: pointer; }
+    .btn:hover { background: #ea580c; }
+    #loading, #success-msg { text-align: center; display: none; padding: 20px; }
+  </style>
+</head>
+<body>
+  <div class="card" id="form-container">
+    <h2>XÁC NHẬN NĂNG LỰC NHẬN MẪU</h2>
+    <p style="font-size: 13px; color: #6b7280; margin-bottom: 20px;">Vui lòng điều chỉnh thông tin bên dưới phù hợp với năng lực thực tế của đơn vị hiện tại.</p>
+    
+    <div class="form-group">
+      <label>Kỹ thuật yêu cầu:</label>
+      <div class="checkbox-group" id="tech-container">
+        <div class="checkbox-item"><input type="checkbox" id="chk-tech" checked> <span id="tech-name">Đang tải...</span></div>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label>Tác nhân có thể thực hiện (Còn sinh phẩm):</label>
+      <div class="checkbox-group" id="pathogen-container">
+        <!-- JS sẽ gen checkbox ở đây -->
+        <span style="font-size: 13px; color: #9ca3af;">Đang tải dữ liệu...</span>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label>Số lượng mẫu có thể nhận tối đa:</label>
+      <input type="number" id="qty-input" min="0" value="0">
+      <div style="font-size: 12px; color: #6b7280; margin-top: 4px;">Số mẫu HCDC đang yêu cầu: <b id="max-qty">0</b> mẫu.</div>
+    </div>
+
+    <button class="btn" onclick="submitForm()">🚀 XÁC NHẬN GỬI</button>
+  </div>
+
+  <div class="card" id="loading"><h3>⏳ Đang xử lý...</h3></div>
+  <div class="card" id="success-msg">
+    <h2 style="color: #16a34a;">✅ ĐÃ GHI NHẬN</h2>
+    <p>Cảm ơn đơn vị. HCDC sẽ kiểm tra và phê duyệt điều phối trên hệ thống.</p>
+  </div>
+
+  <script>
+    const EDGE_FUNC_URL = "https://<PROJECT_ID>.supabase.co/functions/v1/handle-lab-callback"; // ĐỔI PROJECT ID CỦA BẠN VÀO ĐÂY
+    const urlParams = new URLSearchParams(window.location.search);
+    const token = urlParams.get('token');
+
+    // Load dữ liệu ban đầu
+    fetch(`${EDGE_FUNC_URL}?token=${token}&action=get_info`)
+      .then(res => res.json())
+      .then(data => {
+        if (!data.success) return alert("Liên kết hết hạn hoặc lỗi.");
+        if (data.status !== 'inquiry_sent') return alert("Yêu cầu này đã được xử lý trước đó.");
+        
+        document.getElementById('tech-name').innerText = data.test_type;
+        document.getElementById('tech-name').setAttribute('data-val', data.test_type);
+        document.getElementById('qty-input').value = data.requested_qty;
+        document.getElementById('max-qty').innerText = data.requested_qty;
+
+        const pContainer = document.getElementById('pathogen-container');
+        pContainer.innerHTML = '';
+        if (data.pathogens.length === 0) pContainer.innerHTML = '<div style="font-size:13px;">Không chỉ định cụ thể</div>';
+        data.pathogens.forEach(p => {
+          pContainer.innerHTML += `<div class="checkbox-item"><input type="checkbox" class="chk-pathogen" value="${p}" checked> ${p}</div>`;
+        });
+      });
+
+    // Submit form
+    function submitForm() {
+      document.getElementById('form-container').style.display = 'none';
+      document.getElementById('loading').style.display = 'block';
+
+      const qty = parseInt(document.getElementById('qty-input').value);
+      const isTechChecked = document.getElementById('chk-tech').checked;
+      const techVal = document.getElementById('tech-name').getAttribute('data-val');
+      
+      const selectedPathogens = Array.from(document.querySelectorAll('.chk-pathogen:checked')).map(cb => cb.value);
+
+      fetch(EDGE_FUNC_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          token: token,
+          accepted_qty: qty,
+          accepted_test_types: isTechChecked ? [techVal] : [],
+          accepted_pathogens: selectedPathogens
+        })
+      }).then(res => res.json()).then(data => {
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('success-msg').style.display = 'block';
+      });
+    }
+  </script>
+</body>
+</html>
