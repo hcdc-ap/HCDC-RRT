@@ -4,8 +4,8 @@
 // ----------------------------------------------------------------------------
 // THAY ĐỔI:
 //   • Marker 5 MÀU theo CẤP NĂNG LỰC (capability_tier 1-5, tính theo Bảng 1)
-//   • Popup: CẤP NĂNG LỰC + ATSH (BSL). KHÔNG hiện QSM.
-//   • Panel chi tiết đầy đủ (QSM, đầu mối, kỹ thuật).
+//   • Popup: CẤP NĂNG LỰC + ATSH (BSL). KHÔNG hiện QMS.
+//   • Panel chi tiết đầy đủ (QMS, đầu mối, kỹ thuật).
 //   • MỚI: hover legend → highlight marker cùng cấp (mờ cấp khác).
 //
 // PHỤ THUỘC: leaflet + (tùy chọn) leaflet.markercluster.
@@ -15,8 +15,16 @@
   const esc = (s) =>
     window.escapeHtml
       ? window.escapeHtml(String(s ?? ''))
-      : String(s ?? '').replace(/[&<>"']/g, (c) =>
-          ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[c])
+      : String(s ?? '').replace(
+          /[&<>"']/g,
+          (c) =>
+            ({
+              '&': '&amp;',
+              '<': '&lt;',
+              '>': '&gt;',
+              '"': '&quot;',
+              "'": '&#039;',
+            }[c])
         );
   let _labsCache = null;
   let _labLayer = null;
@@ -42,7 +50,9 @@
     const num = isActive && tier >= 1 && tier <= 5 ? tier : '';
     const svg = `<svg width="28" height="28" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
         <circle cx="12" cy="12" r="9" fill="${color}" stroke="#ffffff" stroke-width="2"/>
-        <text x="12" y="15.5" text-anchor="middle" font-size="10" fill="#fff" font-weight="bold">${num || 'XN'}</text>
+        <text x="12" y="15.5" text-anchor="middle" font-size="10" fill="#fff" font-weight="bold">${
+          num || 'XN'
+        }</text>
       </svg>`;
     // Bọc SVG trong lớp con .lab-icon-inner. KHI HIGHLIGHT chỉ scale lớp con này,
     // KHÔNG đụng transform của marker container (Leaflet dùng transform để định vị!).
@@ -70,13 +80,17 @@
             'total_biosafety_staff, dedicated_staff, capacity_needs'
         );
       if (e1) throw e1;
-      const validLabs = (labs || []).filter((l) => l.lat != null && l.lng != null);
+      const validLabs = (labs || []).filter(
+        (l) => l.lat != null && l.lng != null
+      );
       const ids = validLabs.map((l) => l.id);
       let caps = [];
       if (ids.length) {
         const { data: capData, error: e2 } = await window.supabaseClient
           .from('lab_capabilities')
-          .select('lab_id, max_capacity_per_day, turnaround_hours, equipment_detail, test_types(name, category)')
+          .select(
+            'lab_id, max_capacity_per_day, turnaround_hours, equipment_detail, test_types(name, category)'
+          )
           .in('lab_id', ids);
         if (e2) throw e2;
         caps = capData || [];
@@ -102,7 +116,7 @@
     }
   }
   // ------------------------------------------------------------------
-  // POPUP GỌN — CẤP NĂNG LỰC + ATSH (không QSM)
+  // POPUP GỌN — CẤP NĂNG LỰC + ATSH (không QMS)
   // ------------------------------------------------------------------
   function buildLabPopupContent(lab) {
     const isActive = lab.is_active;
@@ -114,19 +128,27 @@
       ? '<span style="color:#16a34a;font-weight:bold;">● Đang hoạt động</span>'
       : '<span style="color:#9ca3af;font-weight:bold;">● Tạm ngừng</span>';
     const phone = lab.phone
-      ? `<a href="tel:${esc(lab.phone)}" style="color:#0369a1;">${esc(lab.phone)}</a>`
+      ? `<a href="tel:${esc(lab.phone)}" style="color:#0369a1;">${esc(
+          lab.phone
+        )}</a>`
       : '<span style="color:#9ca3af;">—</span>';
     const container = document.createElement('div');
     container.style.minWidth = '250px';
     container.style.fontFamily = "'Inter',sans-serif";
     container.innerHTML = `
       <div style="border-bottom:1px solid #e5e7eb;padding-bottom:6px;margin-bottom:6px;">
-        <div style="font-weight:bold;color:#0f766e;font-size:14px;">${esc(lab.name)}</div>
-        <div style="font-size:12px;color:#6b7280;">${esc(lab.level || '—')}</div>
+        <div style="font-weight:bold;color:#0f766e;font-size:14px;">${esc(
+          lab.name
+        )}</div>
+        <div style="font-size:12px;color:#6b7280;">${esc(
+          lab.level || '—'
+        )}</div>
       </div>
       <div style="font-size:12px;line-height:1.9;">
         <div style="display:flex;align-items:center;gap:6px;">
-          <span style="display:inline-block;width:14px;height:14px;border-radius:50%;background:${info.color};border:1px solid #fff;box-shadow:0 0 0 1px #cbd5e1;text-align:center;"></span>
+          <span style="display:inline-block;width:14px;height:14px;border-radius:50%;background:${
+            info.color
+          };border:1px solid #fff;box-shadow:0 0 0 1px #cbd5e1;text-align:center;"></span>
           <span style="font-weight:700;">${esc(info.label)}</span>
         </div>
         <div style="margin-top:2px;">${bslBadge}</div>
@@ -143,17 +165,20 @@
     return container;
   }
   // ------------------------------------------------------------------
-  // PANEL CHI TIẾT ĐẦY ĐỦ (gồm QSM, đầu mối, kỹ thuật)
+  // PANEL CHI TIẾT ĐẦY ĐỦ (gồm QMS, đầu mối, kỹ thuật)
   // ------------------------------------------------------------------
   function openLabDetailPanel(lab) {
     document.getElementById('lab-detail-panel')?.remove();
     document.getElementById('lab-detail-backdrop')?.remove();
     const backdrop = document.createElement('div');
     backdrop.id = 'lab-detail-backdrop';
-    backdrop.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:20000;';
+    backdrop.style.cssText =
+      'position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:20000;';
     backdrop.addEventListener('click', closeLabDetailPanel);
     const yn = (v) =>
-      v ? '<span style="color:#16a34a;font-weight:600;">Có</span>' : '<span style="color:#9ca3af;">Không</span>';
+      v
+        ? '<span style="color:#16a34a;font-weight:600;">Có</span>'
+        : '<span style="color:#9ca3af;">Không</span>';
     const row = (label, val) =>
       `<div style="display:flex;padding:5px 0;border-bottom:1px solid #f1f5f9;font-size:13px;">
          <div style="width:42%;color:#6b7280;">${esc(label)}</div>
@@ -162,9 +187,26 @@
     const contact =
       lab.head_name || lab.head_phone || lab.head_email
         ? `${row('Đầu mối (Trưởng khoa)', esc(lab.head_name || '—'))}
-           ${row('Điện thoại đầu mối', lab.head_phone ? `<a href="tel:${esc(lab.head_phone)}">${esc(lab.head_phone)}</a>` : '—')}
-           ${row('Email đầu mối', lab.head_email ? `<a href="mailto:${esc(lab.head_email)}">${esc(lab.head_email)}</a>` : '—')}`
-        : row('Đầu mối liên hệ', '<span style="color:#9ca3af;">Chưa khai báo</span>');
+           ${row(
+             'Điện thoại đầu mối',
+             lab.head_phone
+               ? `<a href="tel:${esc(lab.head_phone)}">${esc(
+                   lab.head_phone
+                 )}</a>`
+               : '—'
+           )}
+           ${row(
+             'Email đầu mối',
+             lab.head_email
+               ? `<a href="mailto:${esc(lab.head_email)}">${esc(
+                   lab.head_email
+                 )}</a>`
+               : '—'
+           )}`
+        : row(
+            'Đầu mối liên hệ',
+            '<span style="color:#9ca3af;">Chưa khai báo</span>'
+          );
     const caps = lab._caps || [];
     const capsHtml = caps.length
       ? `<table style="width:100%;border-collapse:collapse;font-size:12px;margin-top:4px;">
@@ -177,11 +219,23 @@
              ${caps
                .map(
                  (c) => `<tr style="border-top:1px solid #f1f5f9;">
-                   <td style="padding:3px 4px;">${esc(c.test_types?.name || '—')}
-                     ${c.equipment_detail ? `<br><span style="color:#9ca3af;font-size:11px;">${esc(c.equipment_detail)}</span>` : ''}
+                   <td style="padding:3px 4px;">${esc(
+                     c.test_types?.name || '—'
+                   )}
+                     ${
+                       c.equipment_detail
+                         ? `<br><span style="color:#9ca3af;font-size:11px;">${esc(
+                             c.equipment_detail
+                           )}</span>`
+                         : ''
+                     }
                    </td>
-                   <td style="padding:3px 4px;text-align:center;">${c.max_capacity_per_day ?? '—'}</td>
-                   <td style="padding:3px 4px;text-align:center;">${c.turnaround_hours != null ? c.turnaround_hours + 'h' : '—'}</td>
+                   <td style="padding:3px 4px;text-align:center;">${
+                     c.max_capacity_per_day ?? '—'
+                   }</td>
+                   <td style="padding:3px 4px;text-align:center;">${
+                     c.turnaround_hours != null ? c.turnaround_hours + 'h' : '—'
+                   }</td>
                  </tr>`
                )
                .join('')}
@@ -193,26 +247,40 @@
     panel.id = 'lab-detail-panel';
     panel.style.cssText =
       'position:fixed;top:0;right:0;width:min(420px,92vw);height:100%;background:#fff;z-index:20001;' +
-      'box-shadow:-4px 0 24px rgba(0,0,0,.18);overflow-y:auto;font-family:\'Inter\',sans-serif;';
+      "box-shadow:-4px 0 24px rgba(0,0,0,.18);overflow-y:auto;font-family:'Inter',sans-serif;";
     panel.innerHTML = `
       <div style="position:sticky;top:0;background:linear-gradient(135deg,#0f766e,#0369a1);color:#fff;padding:14px 16px;">
         <button id="lab-detail-close" style="float:right;background:transparent;border:none;color:#fff;font-size:22px;line-height:1;cursor:pointer;">&times;</button>
-        <div style="font-weight:bold;font-size:16px;padding-right:24px;">${esc(lab.name)}</div>
-        <div style="font-size:12px;opacity:.9;margin-top:2px;">${esc(lab.level || '')}</div>
+        <div style="font-weight:bold;font-size:16px;padding-right:24px;">${esc(
+          lab.name
+        )}</div>
+        <div style="font-size:12px;opacity:.9;margin-top:2px;">${esc(
+          lab.level || ''
+        )}</div>
       </div>
       <div style="padding:14px 16px;">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
-          <span style="display:inline-block;width:16px;height:16px;border-radius:50%;background:${info.color};"></span>
+          <span style="display:inline-block;width:16px;height:16px;border-radius:50%;background:${
+            info.color
+          };"></span>
           <b style="font-size:14px;">${esc(info.label)}</b>
         </div>
         <div style="font-weight:bold;color:#0369a1;font-size:13px;margin:10px 0 4px;">📞 Đầu mối liên hệ</div>
         ${contact}
         <div style="font-weight:bold;color:#0369a1;font-size:13px;margin:14px 0 4px;">🏥 Thông tin chung</div>
         ${row('Địa chỉ', esc(lab.address || '—'))}
-        ${row('Hotline', lab.phone ? `<a href="tel:${esc(lab.phone)}">${esc(lab.phone)}</a>` : '—')}
+        ${row(
+          'Hotline',
+          lab.phone
+            ? `<a href="tel:${esc(lab.phone)}">${esc(lab.phone)}</a>`
+            : '—'
+        )}
         ${row('An toàn sinh học', 'ATSH cấp ' + (lab.bsl_level ?? '?'))}
-        ${row('Cấp năng lực xét nghiệm', lab._tier >= 1 ? 'Cấp ' + lab._tier : 'Chưa phân hạng')}
-        ${row('Mức chất lượng (QSM)', esc(lab.qsm_label || 'Chưa có'))}
+        ${row(
+          'Cấp năng lực xét nghiệm',
+          lab._tier >= 1 ? 'Cấp ' + lab._tier : 'Chưa phân hạng'
+        )}
+        ${row('Mức chất lượng (QMS)', esc(lab.qsm_label || 'Chưa có'))}
         ${row('Lĩnh vực ISO công nhận', esc(lab.iso15189_scope || '—'))}
         ${row('NS an toàn sinh học', lab.total_biosafety_staff ?? '—')}
         ${row('NS chuyên trách', lab.dedicated_staff ?? '—')}
@@ -226,14 +294,18 @@
         ${
           lab.capacity_needs
             ? `<div style="font-weight:bold;color:#0369a1;font-size:13px;margin:14px 0 4px;">📌 Nhu cầu nâng cao</div>
-               <div style="font-size:12.5px;color:#374151;">${esc(lab.capacity_needs)}</div>`
+               <div style="font-size:12.5px;color:#374151;">${esc(
+                 lab.capacity_needs
+               )}</div>`
             : ''
         }
       </div>
     `;
     document.body.appendChild(backdrop);
     document.body.appendChild(panel);
-    panel.querySelector('#lab-detail-close').addEventListener('click', closeLabDetailPanel);
+    panel
+      .querySelector('#lab-detail-close')
+      .addEventListener('click', closeLabDetailPanel);
   }
   function closeLabDetailPanel() {
     document.getElementById('lab-detail-panel')?.remove();
@@ -242,23 +314,41 @@
   function createLabLayer(labs) {
     const useCluster = typeof L.markerClusterGroup === 'function';
     const group = useCluster
-      ? L.markerClusterGroup({ maxClusterRadius: 50, spiderfyOnMaxZoom: true, chunkedLoading: true })
+      ? L.markerClusterGroup({
+          maxClusterRadius: 50,
+          spiderfyOnMaxZoom: true,
+          chunkedLoading: true,
+        })
       : L.layerGroup();
-    if (!useCluster) console.warn('[lab-map] Chưa nhúng Leaflet.markercluster — dùng marker thường.');
+    if (!useCluster)
+      console.warn(
+        '[lab-map] Chưa nhúng Leaflet.markercluster — dùng marker thường.'
+      );
 
     _markersByTier = {}; // reset mỗi lần dựng lại
 
     labs.forEach((lab) => {
-      const marker = L.marker([lab.lat, lab.lng], { icon: labIcon(lab._tier, lab.is_active) });
-      marker.bindTooltip(esc(lab.name), { direction: 'top', offset: L.point(0, -14) });
+      const marker = L.marker([lab.lat, lab.lng], {
+        icon: labIcon(lab._tier, lab.is_active),
+      });
+      marker.bindTooltip(esc(lab.name), {
+        direction: 'top',
+        offset: L.point(0, -14),
+      });
       marker.on('click', function () {
-        marker.bindPopup(buildLabPopupContent(lab), { maxWidth: 320 }).openPopup();
+        marker
+          .bindPopup(buildLabPopupContent(lab), { maxWidth: 320 })
+          .openPopup();
       });
       group.addLayer(marker);
 
       // Gom marker theo cấp để highlight khi hover legend
-      const tierKey = lab.is_active && lab._tier >= 1 && lab._tier <= 5 ? lab._tier : 0;
-      (_markersByTier[tierKey] = _markersByTier[tierKey] || []).push({ marker, lab });
+      const tierKey =
+        lab.is_active && lab._tier >= 1 && lab._tier <= 5 ? lab._tier : 0;
+      (_markersByTier[tierKey] = _markersByTier[tierKey] || []).push({
+        marker,
+        lab,
+      });
     });
     return group;
   }
@@ -284,7 +374,8 @@
       const el = marker.getElement && marker.getElement();
       if (!el) return; // đang bị gom trong cluster → bỏ qua
       const isTarget =
-        (lab.is_active && lab._tier >= 1 && lab._tier <= 5 ? lab._tier : 0) === tier;
+        (lab.is_active && lab._tier >= 1 && lab._tier <= 5 ? lab._tier : 0) ===
+        tier;
       // CHỈ đổi opacity trên container (an toàn — không dời vị trí).
       // Scale áp vào LỚP CON .lab-icon-inner (không có transform định vị).
       el.style.transition = 'opacity .2s';
@@ -318,7 +409,9 @@
     root.querySelectorAll('[data-lab-tier]').forEach((item) => {
       const tier = parseInt(item.getAttribute('data-lab-tier'));
       item.style.cursor = 'pointer';
-      item.addEventListener('mouseenter', () => window.__labHighlightTier(tier));
+      item.addEventListener('mouseenter', () =>
+        window.__labHighlightTier(tier)
+      );
       item.addEventListener('mouseleave', () => window.__labResetHighlight());
     });
   };
@@ -341,7 +434,9 @@
         });
       }
       if (!_layersControl) {
-        _layersControl = L.control.layers(null, overlays, { collapsed: true, position: 'topright' }).addTo(map);
+        _layersControl = L.control
+          .layers(null, overlays, { collapsed: true, position: 'topright' })
+          .addTo(map);
       } else {
         _layersControl.addOverlay(_labLayer, '🧪 Phòng xét nghiệm');
       }
@@ -351,11 +446,21 @@
       await loadLabs(true);
       return window.LabMapLayer.attach(map, opts);
     },
-    getCache: function () { return _labsCache; },
-    openDetail: function (lab) { openLabDetailPanel(lab); },
-    highlightTier: function (t) { return window.__labHighlightTier(t); },
-    resetHighlight: function () { return window.__labResetHighlight(); },
-    bindLegendHover: function (root) { return window.__labBindLegendHover(root); },
+    getCache: function () {
+      return _labsCache;
+    },
+    openDetail: function (lab) {
+      openLabDetailPanel(lab);
+    },
+    highlightTier: function (t) {
+      return window.__labHighlightTier(t);
+    },
+    resetHighlight: function () {
+      return window.__labResetHighlight();
+    },
+    bindLegendHover: function (root) {
+      return window.__labBindLegendHover(root);
+    },
     // Legend theo 5 CẤP NĂNG LỰC — mỗi dòng có data-lab-tier để hover highlight
     legendHtml: function () {
       const item = (tier, color, text) =>
@@ -376,7 +481,9 @@
         ${item(0, TIER_INFO[0].color, 'Chưa phân hạng/tạm ngừng')}`;
     },
   };
-  console.log('[lab-map-layer.js] ✅ Lớp PXN (5 cấp + hover highlight) sẵn sàng.');
+  console.log(
+    '[lab-map-layer.js] ✅ Lớp PXN (5 cấp + hover highlight) sẵn sàng.'
+  );
 })();
 /* ============================================================================
    GHÉP VÀO renderMapPage():
