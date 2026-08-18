@@ -87,86 +87,110 @@
     return min < 1 ? '<1 phút' : min + ' phút';
   }
 
-  window.LabRouteSteps = {
-    show: async function (originLat, originLng, destLat, destLng, labName) {
-      // Mở modal trạng thái "đang tải"
-      _renderModal(
-        labName,
-        '<div class="text-center p-4"><span class="spinner-border"></span> Đang tải chỉ đường...</div>'
-      );
+  // ============================================================================
+// LabRouteSteps.show — GIỮ OSRM cho TỪNG BƯỚC rẽ, nhưng SỐ TỔNG (km/phút)
+// lấy theo OFFLINE để KHỚP với card kết quả.
+//   • Thêm 2 tham số: offlineKm, offlineMin (số tổng đã tính offline)
+//   • Badge tổng dùng offline; danh sách bước vẫn từ OSRM (tham khảo hướng đi)
+//   • Nếu OSRM lỗi → vẫn hiện tổng offline + lời khuyên dùng app bản đồ
+// ----------------------------------------------------------------------------
+// ⚠️ Nơi gọi (window._showLabRoute) THÊM truyền lab.route.km & lab.route.minutes:
+//   window.LabRouteSteps.show(oLat, oLng, dLat, dLng, lab.lab_name,
+//                             lab.route.km, lab.route.minutes);
+// ============================================================================
+window.LabRouteSteps = {
+  show: async function (originLat, originLng, destLat, destLng, labName, offlineKm, offlineMin) {
+    _renderModal(
+      labName,
+      '<div class="text-center p-4"><span class="spinner-border"></span> Đang tải chỉ đường...</div>'
+    );
 
-      const url =
-        `${OSRM_BASE}/${originLng},${originLat};${destLng},${destLat}` +
-        `?overview=false&steps=true&geometries=geojson`;
+    // Số tổng ưu tiên OFFLINE (khớp card). Nếu không truyền, để trống.
+    const totalKmVal = (offlineKm != null) ? offlineKm : null;
+    const totalMinVal = (offlineMin != null) ? offlineMin : null;
+    const totalBadges = `
+      <div class="d-flex justify-content-between align-items-center mb-2 px-1">
+        <span class="badge bg-info text-dark"><i class='bx bx-map-pin'></i> ${
+          totalKmVal != null ? totalKmVal + ' km' : '— km'
+        }</span>
+        <span class="badge bg-secondary"><i class='bx bx-time'></i> ~${
+          totalMinVal != null ? totalMinVal + ' phút' : '—'
+        }</span>
+        <span class="badge bg-light text-dark" id="lrs-stepcount">… bước</span>
+      </div>`;
 
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+    const url =
+      `${OSRM_BASE}/${originLng},${originLat};${destLng},${destLat}` +
+      `?overview=false&steps=true&geometries=geojson`;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
 
-      try {
-        const res = await fetch(url, { signal: controller.signal });
-        clearTimeout(timer);
-        if (!res.ok) throw new Error('OSRM HTTP ' + res.status);
-        const data = await res.json();
-        if (data.code !== 'Ok' || !data.routes?.length)
-          throw new Error('OSRM no route');
+    try {
+      const res = await fetch(url, { signal: controller.signal });
+      clearTimeout(timer);
+      if (!res.ok) throw new Error('OSRM HTTP ' + res.status);
+      const data = await res.json();
+      if (data.code !== 'Ok' || !data.routes?.length)
+        throw new Error('OSRM no route');
 
-        const route = data.routes[0];
-        const legs = route.legs || [];
-        const steps = legs.length ? legs[0].steps || [] : [];
+      const route = data.routes[0];
+      const legs = route.legs || [];
+      const steps = legs.length ? legs[0].steps || [] : [];
 
-        if (!steps.length) {
-          _updateBody(
-            '<div class="alert alert-warning m-2">Không có dữ liệu chỉ đường chi tiết cho tuyến này.</div>'
-          );
-          return;
-        }
-
-        const totalKm = (route.distance / 1000).toFixed(1);
-        const totalMin = Math.round(route.duration / 60);
-
-        const rows = steps
-          .map((s, i) => {
-            const icon = maneuverIcon(s);
-            const desc = describeStep(s);
-            const dist = fmtDist(s.distance);
-            return `
-            <div class="d-flex align-items-start gap-2 py-2 ${
-              i < steps.length - 1 ? 'border-bottom' : ''
-            }">
-              <div style="flex-shrink:0;width:28px;height:28px;border-radius:50%;background:#e0f2f1;
-                   display:flex;align-items:center;justify-content:center;color:#00695c;">
-                <i class='bx ${icon}'></i>
-              </div>
-              <div style="flex:1;min-width:0;">
-                <div style="font-size:13px;">${esc(desc)}</div>
-                ${dist ? `<small class="text-muted">${dist}</small>` : ''}
-              </div>
-              <div style="flex-shrink:0;color:#9ca3af;font-size:11px;">${
-                i + 1
-              }</div>
-            </div>`;
-          })
-          .join('');
-
-        const body = `
-          <div class="d-flex justify-content-between align-items-center mb-2 px-1">
-            <span class="badge bg-info text-dark"><i class='bx bx-map-pin'></i> ${totalKm} km</span>
-            <span class="badge bg-secondary"><i class='bx bx-time'></i> ~${totalMin} phút</span>
-            <span class="badge bg-light text-dark">${steps.length} bước</span>
-          </div>
-          <div style="max-height:50vh;overflow-y:auto;" class="px-1">${rows}</div>
-          <div class="mt-2 px-1"><small class="text-muted"><i class='bx bx-info-circle'></i>
-            Tài xế nên dùng kèm ứng dụng bản đồ khi di chuyển thực tế.</small></div>`;
-        _updateBody(body);
-      } catch (err) {
-        clearTimeout(timer);
-        _updateBody(`<div class="alert alert-warning m-2">
-          Không lấy được chỉ đường chi tiết (${esc(err.message)}).<br>
-          <small>Dịch vụ chỉ đường có thể tạm gián đoạn. Vẫn có thể xem tuyến tổng quát trên bản đồ.</small>
-        </div>`);
+      if (!steps.length) {
+        _updateBody(
+          totalBadges +
+          '<div class="alert alert-warning m-2">Không có dữ liệu chỉ đường chi tiết cho tuyến này. Vui lòng dùng app bản đồ khi di chuyển.</div>'
+        );
+        return;
       }
-    },
-  };
+
+      const rows = steps
+        .map((s, i) => {
+          const icon = maneuverIcon(s);
+          const desc = describeStep(s);
+          const dist = fmtDist(s.distance);
+          return `
+          <div class="d-flex align-items-start gap-2 py-2 ${
+            i < steps.length - 1 ? 'border-bottom' : ''
+          }">
+            <div style="flex-shrink:0;width:28px;height:28px;border-radius:50%;background:#e0f2f1;
+                 display:flex;align-items:center;justify-content:center;color:#00695c;">
+              <i class='bx ${icon}'></i>
+            </div>
+            <div style="flex:1;min-width:0;">
+              <div style="font-size:13px;">${esc(desc)}</div>
+              ${dist ? `<small class="text-muted">${dist}</small>` : ''}
+            </div>
+            <div style="flex-shrink:0;color:#9ca3af;font-size:11px;">${i + 1}</div>
+          </div>`;
+        })
+        .join('');
+
+      const body = `
+        ${totalBadges}
+        <div class="px-1 mb-1"><small class="text-muted"><i class='bx bx-info-circle'></i>
+          Tổng quãng đường/thời gian theo ước tính giao thông nội đô; các bước rẽ dưới đây chỉ để tham khảo hướng đi.</small></div>
+        <div style="max-height:50vh;overflow-y:auto;" class="px-1">${rows}</div>
+        <div class="mt-2 px-1"><small class="text-muted"><i class='bx bx-info-circle'></i>
+          Tài xế nên dùng kèm ứng dụng bản đồ khi di chuyển thực tế.</small></div>`;
+      _updateBody(body);
+
+      // Cập nhật số bước vào badge
+      const sc = document.getElementById('lrs-stepcount');
+      if (sc) sc.textContent = `${steps.length} bước`;
+    } catch (err) {
+      clearTimeout(timer);
+      _updateBody(
+        totalBadges +
+        `<div class="alert alert-warning m-2">
+          Không lấy được chỉ đường chi tiết từng bước (${esc(err.message)}).<br>
+          <small>Tổng quãng đường/thời gian bên trên vẫn là ước tính hợp lệ. Vui lòng dùng app bản đồ để xem tuyến chi tiết.</small>
+        </div>`
+      );
+    }
+  },
+};
 
   function _renderModal(labName, bodyHtml) {
     document.getElementById('route-steps-wrapper')?.remove();
