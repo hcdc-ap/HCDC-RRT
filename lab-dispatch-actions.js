@@ -424,17 +424,11 @@
   };
 
   // --------------------------------------------------------------------------
-  // LỊCH SỬ điều phối mẫu — modal riêng.
-  //   • Xem theo SỰ CỐ hiện tại hoặc TẤT CẢ (nút chuyển)
-  //   • Chọn NGÀY (mặc định hôm nay) — xem lại lệnh cũ
-  //   • Cột "Sự cố" hiện khi xem tất cả
-  //   • Admin hủy được lệnh 'dispatched'
-  // scopeIncidentId: id sự cố để lọc (null/undefined = xem tất cả)
+  // MINI DASHBOARD & LỊCH SỬ ĐIỀU PHỐI (Theo dõi toàn bộ vòng đời Yêu cầu 3)
   // --------------------------------------------------------------------------
   window._histState = { scopeIncidentId: null, date: null };
 
   window.showDispatchHistory = function (incidentId) {
-    // Lần mở đầu: mặc định lọc theo sự cố truyền vào (nếu có) + ngày hôm nay
     window._histState.scopeIncidentId = incidentId || null;
     window._histState.date = new Date().toISOString().slice(0, 10);
     _renderDispatchHistory();
@@ -443,109 +437,266 @@
   async function _renderDispatchHistory() {
     const st = window._histState;
     try {
+      // 1. Tải TOÀN BỘ trạng thái trong ngày (không filter riêng dispatched nữa)
       let q = window.supabaseClient
         .from('lab_dispatch_log')
         .select(
           '*, laboratories(name), test_types(name), incidents(event_name)'
         )
         .eq('dispatch_date', st.date)
-        .in('status', ['dispatched', 'completed'])
         .order('created_at', { ascending: false });
+
       if (st.scopeIncidentId) q = q.eq('incident_id', st.scopeIncidentId);
+
       const { data, error } = await q;
       if (error) throw error;
 
       const role = await resolveRole();
-      const showIncidentCol = !st.scopeIncidentId; // xem tất cả → hiện cột Sự cố
+      const showIncidentCol = !st.scopeIncidentId;
 
+      // 2. TÍNH TOÁN THỐNG KÊ (Cho Mini Dashboard)
+      let stats = {
+        totalReq: 0,
+        waiting: 0,
+        accepted: 0,
+        rejected: 0,
+        dispatched: 0,
+      };
+
+      (data || []).forEach((d) => {
+        if (d.status === 'inquiry_sent') {
+          stats.totalReq += d.requested_sample_count || 0;
+          stats.waiting++;
+        }
+        if (d.status === 'accepted' || d.status === 'partially_accepted') {
+          stats.totalReq += d.requested_sample_count || 0;
+          stats.accepted += d.accepted_sample_count || 0;
+        }
+        if (d.status === 'rejected') stats.rejected++;
+        if (d.status === 'dispatched' || d.status === 'completed') {
+          stats.dispatched += d.sample_count || 0;
+        }
+      });
+
+      // 3. RENDER CÁC DÒNG (Table Rows)
       const rows = (data || [])
-        .map(
-          (d) => `
-        <tr>
+        .map((d) => {
+          // --- BẮT ĐẦU ĐOẠN SỬA LỖI LOGIC ---
+          // "Nâng cấp" trạng thái nếu PXN bấm nhầm nút "Nhận 1 phần" nhưng lại nhập đủ số lượng
+          let displayStatus = d.status;
+          if (
+            displayStatus === 'partially_accepted' &&
+            d.accepted_sample_count >= d.requested_sample_count
+          ) {
+            displayStatus = 'accepted';
+          }
+          // --- KẾT THÚC ĐOẠN SỬA LỖI ---
+
+          // Render Badge Trạng thái (Dùng displayStatus thay vì d.status)
+          let statusBadge = '';
+          if (displayStatus === 'suggested')
+            statusBadge = `<span class="badge bg-warning text-dark"><i class='bx bx-time'></i> Đề xuất chờ duyệt</span>`;
+          else if (displayStatus === 'inquiry_sent')
+            statusBadge = `<span class="badge bg-info text-dark"><i class='bx bx-mail-send'></i> Chờ PXN phản hồi</span>`;
+          else if (displayStatus === 'accepted')
+            statusBadge = `<span class="badge bg-success"><i class='bx bx-check-double'></i> PXN nhận đủ</span>`;
+          else if (displayStatus === 'partially_accepted')
+            statusBadge = `<span class="badge bg-warning text-dark"><i class='bx bx-adjust'></i> PXN nhận 1 phần</span>`;
+          else if (displayStatus === 'rejected')
+            statusBadge = `<span class="badge bg-danger"><i class='bx bx-block'></i> PXN từ chối</span>`;
+          else if (displayStatus === 'dispatched')
+            statusBadge = `<span class="badge bg-primary"><i class='bx bx-rocket'></i> Đã chốt điều mẫu</span>`;
+          else if (displayStatus === 'completed')
+            statusBadge = `<span class="badge bg-success"><i class='bx bx-check'></i> Hoàn thành</span>`;
+          else if (displayStatus === 'cancelled')
+            statusBadge = `<span class="badge bg-secondary"><i class='bx bx-x'></i> Đã hủy</span>`;
+
+          // Render số lượng mẫu
+          let sampleInfo = '';
+          if (
+            ['inquiry_sent', 'suggested', 'rejected'].includes(displayStatus)
+          ) {
+            sampleInfo = `Yêu cầu: <b>${d.requested_sample_count}</b>`;
+          } else if (
+            ['accepted', 'partially_accepted'].includes(displayStatus)
+          ) {
+            sampleInfo = `Nhận: <b class="text-success">${d.accepted_sample_count}</b> / ${d.requested_sample_count}`;
+          } else {
+            sampleInfo = `Đã chốt: <b class="text-primary">${d.sample_count}</b>`;
+          }
+
+          // Tác nhân
+          let pathogens =
+            d.pathogens && d.pathogens.length > 0
+              ? d.pathogens.join(', ')
+              : 'Không chỉ định';
+
+          // Action Buttons cho Admin
+          let actionBtns = '';
+          if (role.isAdmin) {
+            if (['accepted', 'partially_accepted'].includes(displayStatus)) {
+              // Nút chốt ngay trên dashboard nếu PXN đã đồng ý
+              const payload = _labPayloadAttr(
+                {
+                  lab_id: d.lab_id,
+                  lab_name: d.laboratories?.name,
+                  route: { km: '?', minutes: '?' },
+                  headName: d.laboratories?.head_name,
+                  headPhone: d.laboratories?.head_phone,
+                  headEmail: d.laboratories?.head_email,
+                },
+                {
+                  testTypeId: d.test_type_id,
+                  sampleCount: d.accepted_sample_count,
+                  incidentId: d.incident_id,
+                }
+              );
+
+              actionBtns = `<button class="btn btn-sm btn-success w-100 mb-1" onclick='window.confirmDispatch(${payload})'>
+                            <i class='bx bx-check'></i> Chốt điều phối
+                          </button>`;
+            }
+            if (
+              [
+                'dispatched',
+                'inquiry_sent',
+                'accepted',
+                'partially_accepted',
+                'suggested',
+              ].includes(displayStatus)
+            ) {
+              actionBtns += `<button class="btn btn-sm btn-outline-danger w-100" onclick="window.cancelDispatch('${d.id}')">
+                            <i class='bx bx-undo'></i> Hủy/Thu hồi lệnh
+                          </button>`;
+            }
+          }
+
+          return `
+        <tr class="${
+          displayStatus === 'rejected' ? 'table-secondary opacity-75' : ''
+        }">
           ${
             showIncidentCol
-              ? `<td><small>${esc(
-                  d.incidents?.event_name || '— (không gắn sự kiện)'
+              ? `<td><small class="fw-bold">${esc(
+                  d.incidents?.event_name || '—'
                 )}</small></td>`
               : ''
           }
-          <td>${esc(d.laboratories?.name || '?')}</td>
-          <td><small>${esc(d.test_types?.name || '')}</small></td>
-          <td class="text-center">${d.sample_count}</td>
-          <td class="text-center">
-            <span class="badge ${
-              d.status === 'completed' ? 'bg-success' : 'bg-primary'
-            }">
-              ${d.status === 'completed' ? 'Hoàn thành' : 'Đã điều'}
-            </span>
+          <td><b>${esc(d.laboratories?.name || '?')}</b></td>
+          <td>
+            <small class="d-block text-primary">${esc(
+              d.test_types?.name || ''
+            )}</small>
+            <small class="d-block text-muted" style="font-size: 11px;">Tác nhân: ${esc(
+              pathogens
+            )}</small>
           </td>
-          <td class="text-center">
-            ${
-              role.isAdmin && d.status === 'dispatched'
-                ? `<button class="btn btn-sm btn-outline-danger" onclick="window.cancelDispatch('${d.id}')">
-                   <i class='bx bx-undo'></i> Hủy
-                 </button>`
-                : ''
-            }
-          </td>
-        </tr>`
-        )
+          <td class="text-center" style="font-size: 13px;">${sampleInfo}</td>
+          <td class="text-center">${statusBadge}</td>
+          <td class="text-center" style="width: 120px;">${actionBtns}</td>
+        </tr>`;
+        })
         .join('');
 
       const colspan = showIncidentCol ? 6 : 5;
       const headIncident = showIncidentCol ? '<th>Sự kiện</th>' : '';
 
-      // Nút chuyển phạm vi: chỉ hiện "Xem sự cố này" khi đang có scope,
-      // và "Xem tất cả" khi đang lọc theo sự cố.
       const scopeToggle = st.scopeIncidentId
         ? `<button class="btn btn-sm btn-outline-primary" onclick="window._histSetScope(null)">
-             <i class='bx bx-list-ul'></i> Xem tất cả điều phối mẫu
+             <i class='bx bx-list-ul'></i> Xem tất cả sự kiện
            </button>`
         : `<span class="badge bg-secondary">Đang xem: tất cả sự kiện</span>`;
 
-      const total = (data || []).reduce((s, d) => s + (d.sample_count || 0), 0);
-
+      // 4. RENDER GIAO DIỆN CHÍNH
       document.getElementById('dispatch-history-wrapper')?.remove();
       const wrap = document.createElement('div');
       wrap.id = 'dispatch-history-wrapper';
       wrap.innerHTML = `
         <div class="modal fade" id="dispatchHistModal" tabindex="-1">
-          <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+          <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
             <div class="modal-content">
               <div class="modal-header" style="background:#006a75;color:#fff;">
-                <h5 class="modal-title"><i class='bx bx-history'></i> Lịch sử điều phối mẫu</h5>
+                <h5 class="modal-title"><i class='bx bx-radar'></i> Theo dõi điều phối mẫu</h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
               </div>
-              <div class="modal-body">
-                <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+              <div class="modal-body" style="background: #f8f9fa;">
+                
+                <!-- HEADER CHỌN NGÀY -->
+                <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
                   <div class="d-flex align-items-center gap-2">
-                    <label class="mb-0"><small>Ngày:</small></label>
-                    <input type="date" id="hist-date" class="form-control form-control-sm" style="width:auto;"
+                    <label class="mb-0 fw-bold"><i class='bx bx-calendar'></i> Theo dõi ngày:</label>
+                    <input type="date" id="hist-date" class="form-control" style="width:auto; font-weight: bold;"
                            value="${
                              st.date
                            }" onchange="window._histSetDate(this.value)">
                   </div>
                   ${scopeToggle}
                 </div>
-                <table class="table table-sm align-middle">
-                  <thead class="table-light"><tr>
-                    ${headIncident}<th>Phòng Xét nghiệm</th><th>Loại kỹ thuật xét nghiệm</th>
-                    <th class="text-center">Số mẫu</th><th class="text-center">Trạng thái</th><th></th>
-                  </tr></thead>
-                  <tbody>${
-                    rows ||
-                    `<tr><td colspan="${colspan}" class="text-center text-muted py-3">Không có lệnh điều phối mẫu nào ${
-                      st.scopeIncidentId ? 'cho sự kiện này ' : ''
-                    }trong ngày ${st.date}.</td></tr>`
-                  }</tbody>
-                </table>
-                ${
-                  data && data.length
-                    ? `<div class="text-end"><small class="text-muted">Tổng: <b>${total}</b> mẫu / ${data.length} lệnh</small></div>`
-                    : ''
-                }
-                <small class="text-muted d-block mt-1"><i class='bx bx-info-circle'></i>
-                  Hủy lệnh sẽ trả lại công suất cho Phòng Xét nghiệm. Chỉ hủy được lệnh chưa hoàn thành.</small>
+
+                <!-- MINI DASHBOARD STATS -->
+                <div class="row g-2 mb-3">
+                  <div class="col-md-3">
+                    <div class="card bg-info text-white h-100 border-0 shadow-sm">
+                      <div class="card-body p-2 text-center">
+                        <h6 class="mb-1"><i class='bx bx-mail-send'></i> PXN đang chờ</h6>
+                        <h3 class="mb-0 fw-bold">${stats.waiting}</h3>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="col-md-3">
+                    <div class="card bg-success text-white h-100 border-0 shadow-sm">
+                      <div class="card-body p-2 text-center">
+                        <h6 class="mb-1"><i class='bx bx-check-double'></i> Mẫu đã đồng ý nhận</h6>
+                        <h3 class="mb-0 fw-bold">${
+                          stats.accepted
+                        } <span style="font-size: 12px; font-weight: normal;">/ ${
+        stats.totalReq
+      } yc</span></h3>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="col-md-3">
+                    <div class="card bg-danger text-white h-100 border-0 shadow-sm">
+                      <div class="card-body p-2 text-center">
+                        <h6 class="mb-1"><i class='bx bx-block'></i> PXN từ chối / Quá tải</h6>
+                        <h3 class="mb-0 fw-bold">${stats.rejected}</h3>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="col-md-3">
+                    <div class="card bg-primary text-white h-100 border-0 shadow-sm">
+                      <div class="card-body p-2 text-center">
+                        <h6 class="mb-1"><i class='bx bx-rocket'></i> ĐÃ CHỐT ĐIỀU PHỐI</h6>
+                        <h3 class="mb-0 fw-bold">${
+                          stats.dispatched
+                        } <span style="font-size: 12px; font-weight: normal;">mẫu</span></h3>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- BẢNG CHI TIẾT -->
+                <div class="card border-0 shadow-sm">
+                  <div class="card-body p-0 table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                      <thead class="table-light"><tr>
+                        ${headIncident}
+                        <th>Phòng Xét nghiệm</th>
+                        <th>Chỉ định chuyên môn</th>
+                        <th class="text-center">Số lượng</th>
+                        <th class="text-center">Trạng thái (Realtime)</th>
+                        <th class="text-center">Thao tác</th>
+                      </tr></thead>
+                      <tbody>${
+                        rows ||
+                        `<tr><td colspan="${colspan}" class="text-center text-muted py-4">Không có hoạt động điều phối / khảo sát nào ${
+                          st.scopeIncidentId ? 'cho sự kiện này ' : ''
+                        }trong ngày ${st.date}.</td></tr>`
+                      }</tbody>
+                    </table>
+                  </div>
+                </div>
+
               </div>
             </div>
           </div>
@@ -559,12 +710,11 @@
     }
   }
 
-  // Đổi phạm vi (sự cố này ↔ tất cả) → render lại
   window._histSetScope = function (incidentId) {
     window._histState.scopeIncidentId = incidentId;
     _renderDispatchHistory();
   };
-  // Đổi ngày → render lại
+
   window._histSetDate = function (dateStr) {
     window._histState.date = dateStr;
     _renderDispatchHistory();
@@ -680,19 +830,31 @@
               <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
-              <p class="mb-2">Đã điều <b>${p.sampleCount}</b> mẫu tới <b>${esc(p.labName)}</b>.
+              <p class="mb-2">Đã điều <b>${p.sampleCount}</b> mẫu tới <b>${esc(
+      p.labName
+    )}</b>.
               Vui lòng liên hệ đầu mối để thống nhất phối hợp:</p>
               <div class="p-3 rounded" style="background:#f0fdf4;border:1px solid #bbf7d0;">
-                <div class="mb-1"><i class='bx bx-user'></i> <b>${esc(p.headName || 'Trưởng khoa XN')}</b></div>
+                <div class="mb-1"><i class='bx bx-user'></i> <b>${esc(
+                  p.headName || 'Trưởng khoa XN'
+                )}</b></div>
                 ${
                   p.headPhone
-                    ? `<div class="mb-2"><a href="tel:${esc(p.headPhone)}" class="btn btn-success btn-sm">
-                         <i class='bx bx-phone'></i> Gọi ${esc(p.headPhone)}</a></div>`
+                    ? `<div class="mb-2"><a href="tel:${esc(
+                        p.headPhone
+                      )}" class="btn btn-success btn-sm">
+                         <i class='bx bx-phone'></i> Gọi ${esc(
+                           p.headPhone
+                         )}</a></div>`
                     : '<div class="text-muted mb-2"><small>Chưa có số điện thoại đầu mối</small></div>'
                 }
                 ${
                   p.headEmail
-                    ? `<div><a href="mailto:${esc(p.headEmail)}"><i class='bx bx-envelope'></i> ${esc(p.headEmail)}</a></div>`
+                    ? `<div><a href="mailto:${esc(
+                        p.headEmail
+                      )}"><i class='bx bx-envelope'></i> ${esc(
+                        p.headEmail
+                      )}</a></div>`
                     : ''
                 }
               </div>
@@ -712,7 +874,9 @@
         wrap.remove();
         setTimeout(() => {
           if (!document.querySelector('.modal.show')) {
-            document.querySelectorAll('.modal-backdrop').forEach((b) => b.remove());
+            document
+              .querySelectorAll('.modal-backdrop')
+              .forEach((b) => b.remove());
             document.body.classList.remove('modal-open');
             document.body.style.overflow = '';
           }
@@ -721,6 +885,280 @@
       { once: true }
     );
   }
+  // ==========================================================================
+  // [YÊU CẦU 3] - GỬI KHẢO SÁT HÀNG LOẠT VÀ LẮNG NGHE REALTIME
+  // ==========================================================================
+
+  // 1. Hàm Gửi Khảo Sát Hàng Loạt
+  window.sendMassInquiry = async function () {
+    const result = window._currentDispatchResult;
+    const S = window._getDispatchState?.();
+    if (!result || !result.top || result.top.length === 0) return;
+
+    const btn = document.getElementById('btn-mass-inquiry');
+    btn.innerHTML = `<span class="spinner-border spinner-border-sm"></span> Đang gửi...`;
+    btn.disabled = true;
+
+    try {
+      const role = await resolveRole();
+      for (const lab of result.top) {
+        const actionToken = crypto.randomUUID();
+        const { data: insertedLog, error } = await window.supabaseClient
+          .from('lab_dispatch_log')
+          .insert([
+            {
+              lab_id: lab.lab_id,
+              incident_id: S.incidentId || null,
+              test_type_id: S.testTypeId,
+              requested_sample_count: S.sampleCount,
+              sample_count: 0,
+              status: 'inquiry_sent',
+              dispatched_by: role.userId,
+              action_token: actionToken,
+              pathogens: S.pathogens,
+            },
+          ])
+          .select('id')
+          .single();
+        if (error) throw error;
+
+        await new Promise((r) => setTimeout(r, 400));
+        window.supabaseClient.functions
+          .invoke('send-lab-inquiry', {
+            body: { record: { id: insertedLog.id } },
+          })
+          .catch((err) => console.warn('Lỗi gọi Edge Function:', err));
+
+        // Cập nhật giao diện thành "Đang chờ"
+        const slot = document.getElementById('disp-action-' + lab.lab_id);
+        if (slot) {
+          slot.innerHTML = `<button class="btn btn-info btn-sm w-100 disabled text-white">
+                              <i class='bx bx-time'></i> Đang chờ PXN phản hồi...
+                            </button>`;
+        }
+      }
+      if (window.showToast)
+        window.showToast(
+          'Đã gửi yêu cầu điều phối mẫu đến Top PXN.',
+          'success'
+        );
+      btn.innerHTML = `<i class='bx bx-check'></i> Đã gửi yêu cầu hàng loạt`;
+      window._subscribeToLabResponses();
+    } catch (e) {
+      if (window.showToast)
+        window.showToast('Lỗi gửi yêu cầu: ' + e.message, 'error');
+      btn.innerHTML = `<i class='bx bx-mail-send'></i> Gửi lại yêu cầu`;
+      btn.disabled = false;
+    }
+  };
+
+  // 2. Hàm Gửi Khảo Sát Riêng Lẻ Cho 1 PXN
+  window.sendSingleInquiry = async function (labId) {
+    const result = window._currentDispatchResult;
+    const S = window._getDispatchState?.();
+    if (!result || !result.ranked) return;
+
+    const lab = result.ranked.find((l) => l.lab_id === labId);
+    if (!lab) return;
+
+    const slot = document.getElementById('disp-action-' + labId);
+    if (slot) {
+      slot.innerHTML = `<button class="btn btn-outline-secondary btn-sm w-100 disabled">
+                          <i class='bx bx-loader-circle bx-spin'></i> Đang gửi...
+                        </button>`;
+    }
+
+    try {
+      const role = await resolveRole();
+      const actionToken = crypto.randomUUID();
+      const { data: insertedLog, error } = await window.supabaseClient
+        .from('lab_dispatch_log')
+        .insert([
+          {
+            lab_id: lab.lab_id,
+            incident_id: S.incidentId || null,
+            test_type_id: S.testTypeId,
+            requested_sample_count: S.sampleCount,
+            sample_count: 0,
+            status: 'inquiry_sent',
+            dispatched_by: role.userId,
+            action_token: actionToken,
+            pathogens: S.pathogens,
+          },
+        ])
+        .select('id')
+        .single();
+      if (error) throw error;
+
+      await new Promise((r) => setTimeout(r, 600));
+      await window.supabaseClient.functions.invoke('send-lab-inquiry', {
+        body: { record: { id: insertedLog.id } },
+      });
+
+      if (window.showToast)
+        window.showToast(`✅ Đã gửi yêu cầu tới ${lab.lab_name}`, 'success');
+
+      if (slot) {
+        slot.innerHTML = `<button class="btn btn-info btn-sm w-100 disabled text-white">
+                            <i class='bx bx-time'></i> Đang chờ PXN phản hồi...
+                          </button>`;
+      }
+      window._subscribeToLabResponses();
+    } catch (e) {
+      if (window.showToast)
+        window.showToast('Lỗi gửi yêu cầu: ' + e.message, 'error');
+      if (slot) {
+        slot.innerHTML = `<button class="btn btn-outline-warning btn-sm w-100 shadow-sm" onclick="window.sendSingleInquiry('${labId}')">
+                            <i class='bx bx-mail-send'></i> Gửi lại yêu cầu
+                          </button>`;
+      }
+    }
+  };
+
+  // 3. LẮNG NGHE REALTIME PHẢN HỒI
+  window._subscribeToLabResponses = function () {
+    // Nếu đã bật kênh lắng nghe rồi thì giữ nguyên, không tạo lại để tránh giật lag
+    if (window._labDispatchSub) return;
+
+    window._labDispatchSub = window.supabaseClient
+      .channel('realtime:lab_responses')
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'lab_dispatch_log' },
+        async (payload) => {
+          const record = payload.new;
+          const actionSlot = document.getElementById(
+            'disp-action-' + record.lab_id
+          );
+
+          if (actionSlot) {
+            const role = await resolveRole();
+            const S = window._getDispatchState?.();
+
+            // Tìm labData trong cả mảng ranked hoặc top (để không bị sót thông tin)
+            const allLabs =
+              window._currentDispatchResult?.ranked ||
+              window._currentDispatchResult?.top ||
+              [];
+            const labData = allLabs.find((l) => l.lab_id === record.lab_id);
+            const payloadStr = labData ? _labPayloadAttr(labData, S) : null;
+
+            let displayStatus = record.status;
+            if (
+              displayStatus === 'partially_accepted' &&
+              record.accepted_sample_count >= record.requested_sample_count
+            ) {
+              displayStatus = 'accepted';
+            }
+
+            let btnHtml = '';
+            if (displayStatus === 'accepted') {
+              if (role.isAdmin && payloadStr) {
+                btnHtml = `<button class="btn btn-success btn-sm w-100 shadow-sm" onclick='window.confirmDispatch(${payloadStr})'><i class='bx bx-rocket'></i> Chốt điều phối (Đủ mẫu)</button>`;
+              } else {
+                btnHtml = `<button class="btn btn-success btn-sm w-100 disabled"><i class='bx bx-check-double'></i> Đã đồng ý nhận</button>`;
+              }
+            } else if (displayStatus === 'partially_accepted') {
+              if (role.isAdmin && payloadStr) {
+                btnHtml = `<button class="btn btn-warning btn-sm w-100 shadow-sm" onclick='window.confirmDispatch(${payloadStr})'><i class='bx bx-rocket'></i> Chốt (${record.accepted_sample_count} mẫu)</button>`;
+              } else {
+                btnHtml = `<button class="btn btn-warning btn-sm w-100 text-dark disabled"><i class='bx bx-adjust'></i> Nhận ${record.accepted_sample_count} mẫu</button>`;
+              }
+            } else if (displayStatus === 'rejected') {
+              btnHtml = `<button class="btn btn-danger btn-sm w-100 disabled"><i class='bx bx-block'></i> Đã từ chối</button>`;
+            } else if (displayStatus === 'dispatched') {
+              btnHtml = `<button class="btn btn-primary btn-sm w-100 disabled"><i class='bx bx-check'></i> Đã chốt lệnh</button>`;
+            } else if (displayStatus === 'inquiry_sent') {
+              btnHtml = `<button class="btn btn-info btn-sm w-100 disabled text-white"><i class='bx bx-time'></i> Đang chờ PXN phản hồi...</button>`;
+            }
+
+            if (btnHtml) actionSlot.innerHTML = btnHtml;
+          }
+
+          // Cập nhật cả Dashboard nếu đang mở
+          const histModal = document.getElementById('dispatchHistModal');
+          if (histModal && histModal.classList.contains('show')) {
+            if (typeof _renderDispatchHistory === 'function') {
+              setTimeout(() => _renderDispatchHistory(), 300);
+            }
+          }
+        }
+      )
+      .subscribe();
+  };
+
+  // 4. ĐỒNG BỘ TRẠNG THÁI NÚT BẤM (CẬP NHẬT GIAO DIỆN KHI MỞ MODAL)
+  window.syncDispatchStatuses = async function () {
+    if (typeof window._getDispatchState !== 'function') return;
+    const S = window._getDispatchState();
+    if (!S || !S.incidentId) return;
+
+    try {
+      const { data, error } = await window.supabaseClient
+        .from('lab_dispatch_log')
+        .select('*')
+        .eq('incident_id', S.incidentId)
+        .order('created_at', { ascending: false });
+      if (error || !data) return;
+
+      const latestStatus = {};
+      data.forEach((d) => {
+        if (!latestStatus[d.lab_id]) latestStatus[d.lab_id] = d;
+      });
+
+      const role = await resolveRole();
+
+      Object.values(latestStatus).forEach((record) => {
+        const slot = document.getElementById('disp-action-' + record.lab_id);
+        if (slot) {
+          const allLabs =
+            window._currentDispatchResult?.ranked ||
+            window._currentDispatchResult?.top ||
+            [];
+          const labData = allLabs.find((l) => l.lab_id === record.lab_id);
+          const payloadStr = labData ? _labPayloadAttr(labData, S) : null;
+
+          let displayStatus = record.status;
+          if (
+            displayStatus === 'partially_accepted' &&
+            record.accepted_sample_count >= record.requested_sample_count
+          ) {
+            displayStatus = 'accepted';
+          }
+
+          let btnHtml = '';
+          if (displayStatus === 'inquiry_sent') {
+            btnHtml = `<button class="btn btn-info btn-sm w-100 disabled text-white"><i class='bx bx-time'></i> Đang chờ PXN...</button>`;
+          } else if (displayStatus === 'accepted') {
+            if (role.isAdmin && payloadStr) {
+              btnHtml = `<button class="btn btn-success btn-sm w-100 shadow-sm" onclick='window.confirmDispatch(${payloadStr})'><i class='bx bx-rocket'></i> Chốt điều phối (Đủ mẫu)</button>`;
+            } else {
+              btnHtml = `<button class="btn btn-success btn-sm w-100 disabled"><i class='bx bx-check-double'></i> Đã đồng ý nhận</button>`;
+            }
+          } else if (displayStatus === 'partially_accepted') {
+            if (role.isAdmin && payloadStr) {
+              btnHtml = `<button class="btn btn-warning btn-sm w-100 shadow-sm" onclick='window.confirmDispatch(${payloadStr})'><i class='bx bx-rocket'></i> Chốt (${record.accepted_sample_count} mẫu)</button>`;
+            } else {
+              btnHtml = `<button class="btn btn-warning btn-sm w-100 text-dark disabled"><i class='bx bx-adjust'></i> Nhận ${record.accepted_sample_count}/${record.requested_sample_count}</button>`;
+            }
+          } else if (displayStatus === 'rejected') {
+            btnHtml = `<button class="btn btn-danger btn-sm w-100 disabled"><i class='bx bx-block'></i> Đã từ chối</button>`;
+          } else if (displayStatus === 'dispatched') {
+            btnHtml = `<button class="btn btn-primary btn-sm w-100 disabled"><i class='bx bx-check'></i> Đã chốt lệnh</button>`;
+          }
+
+          if (btnHtml) slot.innerHTML = btnHtml;
+        }
+      });
+
+      // 👉 BÍ QUYẾT NẰM Ở ĐÂY: KÍCH HOẠT REALTIME MỖI KHI ĐỒNG BỘ
+      if (typeof window._subscribeToLabResponses === 'function') {
+        window._subscribeToLabResponses();
+      }
+    } catch (e) {
+      console.warn('Lỗi đồng bộ trạng thái nút:', e);
+    }
+  };
 
   console.log(
     '[lab-dispatch-actions.js] ✅ Hành động điều phối (đề xuất/duyệt/chốt/hủy + đầu mối liên hệ) sẵn sàng.'
