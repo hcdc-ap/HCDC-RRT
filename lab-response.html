@@ -3,92 +3,168 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Khảo sát năng lực tiếp nhận mẫu - HCDC</title>
+  <title>Xác nhận tiếp nhận mẫu - RRT HCDC</title>
+  <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
-    body { font-family: system-ui, sans-serif; background: #006a75; color: #1f2937; display: flex; justify-content: center; padding: 20px; }
-    .card { background: #fff; border-radius: 12px; max-width: 500px; width: 100%; padding: 24px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); }
-    h2 { margin-top: 0; color: #006a75; font-size: 18px; border-bottom: 2px solid #e5e7eb; padding-bottom: 10px; }
-    .form-group { margin-bottom: 16px; }
-    label { font-weight: bold; font-size: 14px; display: block; margin-bottom: 8px; }
-    .checkbox-group { background: #f3f4f6; padding: 12px; border-radius: 6px; }
-    .checkbox-item { margin-bottom: 8px; font-size: 14px; display: flex; align-items: center; }
-    .checkbox-item input { margin-right: 8px; width: 16px; height: 16px; }
-    input[type="number"] { width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 16px; }
-    .btn { display: block; width: 100%; padding: 12px; background: #fd7e14; color: #fff; border: none; border-radius: 6px; font-weight: bold; font-size: 16px; cursor: pointer; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Lexend', system-ui, sans-serif; background: #006a75; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; color: #1f2937; }
+    
+    .card { background: #fff; border-radius: 16px; box-shadow: 0 20px 60px rgba(0,0,0,.15); max-width: 520px; width: 100%; overflow: hidden; animation: slideUp .4s ease; text-align: center; }
+    @keyframes slideUp { from { opacity: 0; transform: translateY(30px) } to { opacity: 1; transform: translateY(0) } }
+    
+    .header { background: #fd7e14; padding: 24px; color: #fff; }
+    .header h1 { font-size: 18px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase; margin: 0; }
+    
+    .body { padding: 32px; }
+    
+    .footer { background: #f9fafb; padding: 16px 24px; border-top: 1px solid #e5e7eb; font-size: 12px; color: #6b7280; line-height: 1.5; }
+    .btn { display: inline-block; padding: 12px 24px; background: #fd7e14; color: #fff; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 15px; transition: background .2s; border: none; cursor: pointer; width: 100%; text-align: center; }
     .btn:hover { background: #ea580c; }
-    #loading, #success-msg { text-align: center; display: none; padding: 20px; }
+    
+    /* Form Styles */
+    .form-group { margin-bottom: 20px; text-align: left; }
+    .form-label { font-weight: 600; font-size: 14px; margin-bottom: 8px; display: block; color: #374151; }
+    .form-box { background: #f3f4f6; padding: 14px; border-radius: 8px; display: flex; align-items: center; }
+    .form-box-multi { background: #f3f4f6; padding: 14px; border-radius: 8px; max-height: 180px; overflow-y: auto; }
+    .chk-item { display: flex; align-items: center; margin-bottom: 10px; font-size: 14px; font-weight: 500; }
+    .chk-item:last-child { margin-bottom: 0; }
+    .chk-item input { width: 18px; height: 18px; margin-right: 12px; accent-color: #fd7e14; cursor: pointer; }
+    .num-input { width: 100%; padding: 12px 14px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 16px; outline: none; transition: border .2s; font-family: inherit; font-weight: 600; color: #1f2937; }
+    .num-input:focus { border-color: #fd7e14; }
   </style>
 </head>
 <body>
-  <div class="card" id="form-container">
-    <h2>XÁC NHẬN NĂNG LỰC NHẬN MẪU</h2>
-    <p style="font-size: 13px; color: #6b7280; margin-bottom: 20px;">Vui lòng điều chỉnh thông tin bên dưới phù hợp với năng lực thực tế của đơn vị hiện tại.</p>
+  <div class="card">
+    <div class="header"><h1>HỆ THỐNG RRT - HCDC</h1></div>
     
-    <div class="form-group">
-      <label>Kỹ thuật yêu cầu:</label>
-      <div class="checkbox-group" id="tech-container">
-        <div class="checkbox-item"><input type="checkbox" id="chk-tech" checked> <span id="tech-name">Đang tải...</span></div>
+    <div class="body" id="dynamic-content">
+      <!-- Mặc định hiển thị state Loading -->
+      <div style="text-align: center;">
+        <div style="font-size:64px; margin-bottom:16px;">⏳</div>
+        <div style="display:inline-block; padding:6px 16px; border-radius:20px; font-size:14px; font-weight:600; margin-bottom:16px; background:#e5e7eb; color:#374151;">ĐANG XỬ LÝ...</div>
+        <div style="background:#f3f4f6; padding:16px; border-radius:8px; font-size:15px; color:#374151; line-height:1.6; margin-bottom:24px; text-align: left; border-left: 4px solid #9ca3af;">Đang đồng bộ dữ liệu với máy chủ, vui lòng đợi trong giây lát...</div>
       </div>
     </div>
 
-    <div class="form-group">
-      <label>Tác nhân có thể thực hiện (Còn sinh phẩm):</label>
-      <div class="checkbox-group" id="pathogen-container">
-        <!-- JS sẽ gen checkbox ở đây -->
-        <span style="font-size: 13px; color: #9ca3af;">Đang tải dữ liệu...</span>
-      </div>
+    <div class="footer">
+      <p><strong>Trung tâm Kiểm soát Bệnh tật Thành phố Hồ Chí Minh</strong></p>
+      <p>Địa chỉ: 366A Âu Dương Lân, Phường Chánh Hưng, TP. Hồ Chí Minh, Việt Nam</p>
+      <p>Điện thoại: 0909 408 895</p>
     </div>
-
-    <div class="form-group">
-      <label>Số lượng mẫu có thể nhận tối đa:</label>
-      <input type="number" id="qty-input" min="0" value="0">
-      <div style="font-size: 12px; color: #6b7280; margin-top: 4px;">Số mẫu HCDC đang yêu cầu: <b id="max-qty">0</b> mẫu.</div>
-    </div>
-
-    <button class="btn" onclick="submitForm()">🚀 XÁC NHẬN GỬI</button>
-  </div>
-
-  <div class="card" id="loading"><h3>⏳ Đang xử lý...</h3></div>
-  <div class="card" id="success-msg">
-    <h2 style="color: #16a34a;">✅ ĐÃ GHI NHẬN</h2>
-    <p>Cảm ơn đơn vị. HCDC sẽ kiểm tra và phê duyệt điều phối trên hệ thống.</p>
   </div>
 
   <script>
-    const EDGE_FUNC_URL = "https://sxzjbygiowpscyhiffqc.supabase.co/functions/v1/handle-lab-callback"; // ĐỔI PROJECT ID CỦA BẠN VÀO ĐÂY
+    const EDGE_FUNC_URL = "https://sxzjbygiowpscyhiffqc.supabase.co/functions/v1/handle-lab-callback"; 
     const urlParams = new URLSearchParams(window.location.search);
     const token = urlParams.get('token');
+    
+    const dynamicContent = document.getElementById('dynamic-content');
 
-    // Load dữ liệu ban đầu
-    fetch(`${EDGE_FUNC_URL}?token=${token}&action=get_info`)
-      .then(res => res.json())
-      .then(data => {
-        if (!data.success) return alert("Liên kết hết hạn hoặc lỗi.");
-        if (data.status !== 'inquiry_sent') return alert("Yêu cầu này đã được xử lý trước đó.");
-        
-        document.getElementById('tech-name').innerText = data.test_type;
-        document.getElementById('tech-name').setAttribute('data-val', data.test_type);
-        document.getElementById('qty-input').value = data.requested_qty;
-        document.getElementById('max-qty').innerText = data.requested_qty;
+    // HÀM RENDER TRẠNG THÁI THÔNG BÁO (THAY THẾ ALERT)
+    function renderState(type, msgText, extraHtml = '') {
+      let icon, badge, badgeBg, badgeColor, msgBorder;
+      if (type === 'loading') {
+        icon = "⏳"; badge = "ĐANG TẢI..."; badgeBg = "#e5e7eb"; badgeColor = "#374151"; msgBorder = "#9ca3af";
+      } else if (type === 'error') {
+        icon = "❌"; badge = "LỖI HỆ THỐNG"; badgeBg = "#fee2e2"; badgeColor = "#dc2626"; msgBorder = "#ef4444";
+      } else if (type === 'warning') {
+        icon = "⚠️"; badge = "ĐÃ XỬ LÝ"; badgeBg = "#fef3c7"; badgeColor = "#d97706"; msgBorder = "#f59e0b";
+      } else if (type === 'success') {
+        icon = "✅"; badge = "THÀNH CÔNG"; badgeBg = "#dcfce7"; badgeColor = "#16a34a"; msgBorder = "#10b981";
+      }
 
-        const pContainer = document.getElementById('pathogen-container');
-        pContainer.innerHTML = '';
-        if (data.pathogens.length === 0) pContainer.innerHTML = '<div style="font-size:13px;">Không chỉ định cụ thể</div>';
-        data.pathogens.forEach(p => {
-          pContainer.innerHTML += `<div class="checkbox-item"><input type="checkbox" class="chk-pathogen" value="${p}" checked> ${p}</div>`;
+      dynamicContent.innerHTML = `
+        <div style="text-align: center; animation: slideUp .3s ease;">
+          <div style="font-size:64px; margin-bottom:16px;">${icon}</div>
+          <div style="display:inline-block; padding:6px 16px; border-radius:20px; font-size:14px; font-weight:600; margin-bottom:16px; background:${badgeBg}; color:${badgeColor};">${badge}</div>
+          <div style="background:#f3f4f6; padding:16px; border-radius:8px; font-size:15px; color:#374151; line-height:1.6; margin-bottom:24px; text-align: left; border-left: 4px solid ${msgBorder};">${msgText}</div>
+          ${extraHtml}
+        </div>
+      `;
+    }
+
+    // HÀM RENDER FORM NHẬN 1 PHẦN
+    function renderForm(data) {
+      let pathogensHtml = '';
+      if (data.pathogens.length === 0) {
+        pathogensHtml = '<div style="font-size:14px; color:#6b7280; font-style: italic;">Không chỉ định cụ thể tác nhân.</div>';
+      } else {
+        pathogensHtml = data.pathogens.map(p => `
+          <div class="chk-item">
+            <input type="checkbox" class="chk-pathogen" value="${p}" checked>
+            <span>${p}</span>
+          </div>
+        `).join('');
+      }
+
+      dynamicContent.innerHTML = `
+        <div style="text-align: left; animation: slideUp .4s ease;">
+          <h2 style="color: #006a75; font-size: 18px; margin-bottom: 8px; border-bottom: 2px solid #e5e7eb; padding-bottom: 12px;">XÁC NHẬN NHẬN MỘT PHẦN MẪU</h2>
+          <p style="font-size: 13px; color: #6b7280; margin-bottom: 20px; line-height: 1.5;">Vui lòng điều chỉnh thông tin bên dưới phù hợp với năng lực thực tế của đơn vị hiện tại.</p>
+          
+          <div class="form-group">
+            <label class="form-label">Kỹ thuật yêu cầu:</label>
+            <div class="form-box">
+              <input type="checkbox" id="chk-tech" checked style="width:18px; height:18px; margin-right:12px; accent-color:#fd7e14; cursor:pointer;"> 
+              <span id="tech-name" data-val="${data.test_type}" style="font-size:14px; font-weight:600;">${data.test_type}</span>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Tác nhân có thể thực hiện (Còn sinh phẩm):</label>
+            <div class="form-box-multi">
+              ${pathogensHtml}
+            </div>
+          </div>
+
+          <div class="form-group" style="margin-bottom: 28px;">
+            <label class="form-label">Số lượng mẫu có thể nhận tối đa:</label>
+            <input type="number" id="qty-input" class="num-input" min="0" max="${data.requested_qty}" value="${data.requested_qty}">
+            <div style="font-size: 13px; color: #6b7280; margin-top: 8px;">
+              <i class='bx bx-info-circle'></i> Số mẫu HCDC đang yêu cầu: <b style="color:#fd7e14;">${data.requested_qty}</b> mẫu.
+            </div>
+          </div>
+
+          <button class="btn" onclick="submitForm()">🚀 XÁC NHẬN GỬI KẾT QUẢ</button>
+        </div>
+      `;
+    }
+
+    // CHẠY KHỞI TẠO
+    if (!token) {
+      renderState('error', "Không tìm thấy mã bảo mật (token) trong đường dẫn truy cập.");
+    } else {
+      fetch(`${EDGE_FUNC_URL}?token=${token}&action=get_info`)
+        .then(res => res.json())
+        .then(data => {
+          if (!data.success) {
+            renderState('error', "Liên kết xác nhận đã hết hạn hoặc mã không tồn tại trên hệ thống.");
+            return;
+          }
+          if (data.status !== 'inquiry_sent') {
+            renderState('warning', "Yêu cầu này đã được đơn vị xử lý trước đó. Bạn không cần thao tác lại, xin cảm ơn!", '<a href="https://hcdc-ap.github.io/RRT/" class="btn">🏠 Về Trang chủ</a>');
+            return;
+          }
+          
+          // Render form nếu dữ liệu hợp lệ
+          renderForm(data);
+        })
+        .catch(err => {
+          renderState('error', "Không thể kết nối đến máy chủ: " + err.message);
         });
-      });
+    }
 
-    // Submit form
-    function submitForm() {
-      document.getElementById('form-container').style.display = 'none';
-      document.getElementById('loading').style.display = 'block';
-
-      const qty = parseInt(document.getElementById('qty-input').value);
+    // GỬI KẾT QUẢ LÊN MÁY CHỦ
+    window.submitForm = function() {
+      const qtyInput = document.getElementById('qty-input');
+      if(!qtyInput) return;
+      
+      const qty = parseInt(qtyInput.value) || 0;
       const isTechChecked = document.getElementById('chk-tech').checked;
       const techVal = document.getElementById('tech-name').getAttribute('data-val');
-      
       const selectedPathogens = Array.from(document.querySelectorAll('.chk-pathogen:checked')).map(cb => cb.value);
+
+      renderState('loading', "Đang gửi xác nhận của bạn tới hệ thống trung tâm HCDC...");
 
       fetch(EDGE_FUNC_URL, {
         method: 'POST',
@@ -99,9 +175,17 @@
           accepted_test_types: isTechChecked ? [techVal] : [],
           accepted_pathogens: selectedPathogens
         })
-      }).then(res => res.json()).then(data => {
-        document.getElementById('loading').style.display = 'none';
-        document.getElementById('success-msg').style.display = 'block';
+      })
+      .then(res => res.json())
+      .then(data => {
+        if(data.success || data.message) {
+          renderState('success', "Cảm ơn đơn vị. HCDC đã ghi nhận thông tin phản hồi và sẽ tiến hành phê duyệt điều phối trên hệ thống.", '<a href="https://hcdc-ap.github.io/RRT/" class="btn">🏠 Đóng cửa sổ</a>');
+        } else {
+          renderState('error', "Có lỗi xảy ra trong quá trình ghi nhận. Vui lòng thử lại sau.");
+        }
+      })
+      .catch(err => {
+        renderState('error', "Lỗi kết nối khi gửi dữ liệu: " + err.message);
       });
     }
   </script>
