@@ -14684,33 +14684,108 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
   // ============================================================
   // 3. NỘI DUNG LAYER THÀNH VIÊN & SỰ CỐ (điền vào layer ổn định)
   // ============================================================
+  // ============================================================================
+  // HIGHLIGHT MARKER NHÂN SỰ THEO KHOA/PHÒNG (circleMarker — to lên + pulse)
+  //   Bấm tên khoa trong chú giải → marker khoa đó to + nhấp nháy.
+  //   Bấm lại / bấm khoa khác → bỏ highlight cũ.
+  // ============================================================================
+
+  // ── (1) THAY hàm fillMembersLayer: gắn khoa + style gốc vào từng marker ──
   function fillMembersLayer() {
     membersLayer.clearLayers();
     membersMarkerMap.clear();
+    window._membersMarkers = []; // danh sách phẳng để lọc theo khoa
+
     (filteredData || []).forEach((c) => {
       const lat = parseFloat(c.lat ?? c.latitude);
       const lon = parseFloat(c.lon ?? c.longitude);
       if (isNaN(lat) || isNaN(lon)) return;
-      const marker = L.circleMarker([lat, lon], {
+
+      const dept = c.department || 'N/A';
+      const baseColor = industryColors[dept] || '#FF5722';
+      const baseStyle = {
         radius: 4,
-        fillColor: industryColors[c.department] || '#FF5722',
+        fillColor: baseColor,
         color: '#000',
         weight: 1,
         opacity: 1,
         fillOpacity: 0.8,
-      });
+      };
+
+      const marker = L.circleMarker([lat, lon], baseStyle);
+      marker._dept = dept; // ← nhớ khoa
+      marker._baseStyle = baseStyle; // ← nhớ style gốc để khôi phục
+
       marker.bindPopup(`
-        <b>${escMap(c.fullName || c.full_name || 'N/A')}</b><br/>
-        Khoa/phòng: ${escMap(c.department || 'N/A')}<br/>
-        Đội: ${escMap(c.team || 'N/A')}<br/>
-        Phường: ${escMap(c.ward || c.ma_xa || 'N/A')}
-      `);
+      <b>${escMap(c.fullName || c.full_name || 'N/A')}</b><br/>
+      Khoa/phòng: ${escMap(dept)}<br/>
+      Đội: ${escMap(c.team || 'N/A')}<br/>
+      Phường: ${escMap(c.ward || c.ma_xa || 'N/A')}
+    `);
       marker.bindTooltip(escMap(c.fullName || c.full_name || 'RRT Member'), {
         direction: 'top',
         offset: L.point(0, -10),
       });
+
       membersLayer.addLayer(marker);
       membersMarkerMap.set(`${lat},${lon}`, marker);
+      window._membersMarkers.push(marker);
+    });
+  }
+
+  // ── (2) Hàm highlight theo khoa (toggle) ──
+  window._highlightedDept = null;
+
+  window.highlightDeptMarkers = function (deptName) {
+    const markers = window._membersMarkers || [];
+
+    // Nếu đang highlight chính khoa này → tắt (toggle)
+    if (window._highlightedDept === deptName) {
+      clearDeptHighlight();
+      return;
+    }
+
+    window._highlightedDept = deptName;
+
+    markers.forEach((m) => {
+      const el = m.getElement && m.getElement(); // SVG path của circleMarker
+      if (m._dept === deptName) {
+        // Marker khoa được chọn: to lên + đậm + pulse
+        m.setStyle({ radius: 9, weight: 2, fillOpacity: 1, color: '#111' });
+        m.setRadius(9);
+        m.bringToFront && m.bringToFront();
+        if (el) el.classList.add('member-marker-pulse');
+      } else {
+        // Marker khác: mờ đi cho tương phản
+        m.setStyle({ fillOpacity: 0.15, opacity: 0.25 });
+        if (el) el.classList.remove('member-marker-pulse');
+      }
+    });
+
+    // Cập nhật nhãn nút trong chú giải (nếu có)
+    _syncLegendDeptActive(deptName);
+  };
+
+  window.clearDeptHighlight = function () {
+    const markers = window._membersMarkers || [];
+    markers.forEach((m) => {
+      if (m._baseStyle) {
+        m.setStyle(m._baseStyle);
+        m.setRadius(m._baseStyle.radius);
+      }
+      const el = m.getElement && m.getElement();
+      if (el) el.classList.remove('member-marker-pulse');
+    });
+    window._highlightedDept = null;
+    _syncLegendDeptActive(null);
+  };
+
+  // Đánh dấu dòng khoa đang active trong chú giải (đổi nền nhẹ)
+  function _syncLegendDeptActive(deptName) {
+    document.querySelectorAll('.legend-dept-row').forEach((row) => {
+      const active = row.getAttribute('data-dept') === deptName;
+      row.style.background = active ? '#e0f2fe' : '';
+      row.style.fontWeight = active ? '600' : '';
     });
   }
 
@@ -14894,7 +14969,93 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
     // ==========================================
     // KHỐI 2: CHÚ GIẢI BẢN ĐỒ (Ẩn/Hiện theo Layer)
     // ==========================================
+    // ============================================================================
+    // KHỐI CHÚ GIẢI "NHÂN SỰ RRT" — Cách C + CLICK highlight, CHỈ khoa CÓ nhân sự
+    // Thay khối cũ trong renderLegendContent bằng đoạn này.
+    //   • Chỉ liệt kê khoa/phòng THỰC SỰ có nhân sự đang hiển thị (bỏ khoa trống).
+    //   • Kèm số lượng người mỗi khoa. Bấm khoa → highlight marker khoa đó.
+    // ============================================================================
 
+    // 0. Lớp Nhân sự RRT — chỉ hiện khoa đang có người + bấm để nổi bật
+    if (
+      typeof membersLayer !== 'undefined' &&
+      membersLayer &&
+      map.hasLayer(membersLayer)
+    ) {
+      // Đếm số nhân sự theo khoa TỪ dữ liệu đang hiển thị (filteredData)
+      const _deptCount = {};
+      (filteredData || []).forEach((c) => {
+        const lat = parseFloat(c.lat ?? c.latitude);
+        const lon = parseFloat(c.lon ?? c.longitude);
+        if (isNaN(lat) || isNaN(lon)) return; // chỉ tính người có tọa độ (có marker)
+        const dept = c.department || 'Chưa rõ khoa/phòng';
+        _deptCount[dept] = (_deptCount[dept] || 0) + 1;
+      });
+
+      // Chỉ giữ khoa CÓ người, sắp xếp theo tên
+      const _activeDepts = Object.keys(_deptCount).sort((a, b) =>
+        a.localeCompare(b, 'vi')
+      );
+
+      // Chỉ thêm khối nếu thực sự có nhân sự trên bản đồ
+      if (_activeDepts.length > 0) {
+        const _escAttr = (s) =>
+          String(s).replace(/'/g, "\\'").replace(/"/g, '&quot;');
+
+        const _rows = _activeDepts
+          .map((name) => {
+            const color = industryColors[name] || '#FF5722';
+            const count = _deptCount[name];
+            return `<div class="legend-dept-row" data-dept="${name.replace(
+              /"/g,
+              '&quot;'
+            )}"
+                  onclick="window.highlightDeptMarkers('${_escAttr(name)}')"
+                  style="display:flex;align-items:center;gap:6px;margin:1px 0;padding:2px 4px;
+                         border-radius:4px;cursor:pointer;transition:background .15s;"
+                  onmouseover="if(this.getAttribute('data-dept')!==window._highlightedDept)this.style.background='#f1f5f9'"
+                  onmouseout="if(this.getAttribute('data-dept')!==window._highlightedDept)this.style.background=''">
+               <span style="flex:0 0 12px;width:12px;height:12px;border-radius:50%;
+                     background:${color};border:1.5px solid #fff;
+                     box-shadow:0 0 2px rgba(0,0,0,.4);"></span>
+               <span style="font-size:12px;flex:1;">${name}</span>
+               <span style="font-size:11px;color:#64748b;">${count}</span>
+             </div>`;
+          })
+          .join('');
+
+        sections.push(`
+          <div class="legend-section">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+              <span>
+                <b style="font-size:14px;">RRT-ers</b>
+                
+              </span>
+              <a href="javascript:void(0)"
+                 style="font-size:11px;text-decoration:none;color:#0369a1;white-space:nowrap;"
+                 onclick="(function(a){
+                   var box=document.getElementById('legend-members-colors');
+                   if(!box)return;
+                   var show=box.style.display==='none';
+                   box.style.display=show?'block':'none';
+                   a.innerHTML=show?'▴':'▾';
+                 })(this)">▾ Chi tiết</a>
+            </div>
+            <div id="legend-members-colors"
+                 style="display:none;margin-top:6px;max-height:200px;overflow-y:auto;
+                        padding-right:4px;border-left:2px solid #e2e8f0;padding-left:6px;">
+              ${_rows}
+              <div style="margin-top:6px;text-align:center;">
+                <a href="javascript:void(0)" onclick="window.clearDeptHighlight()"
+                   style="font-size:11px;color:#dc2626;text-decoration:none;">
+                  <i class='bx bx-x-circle'></i> Clear
+                </a>
+              </div>
+            </div>
+          </div>
+        `);
+      }
+    }
     // 1. Lớp Sự kiện (Incidents)
     if (incidentsLayer && map.hasLayer(incidentsLayer)) {
       sections.push(`
@@ -15008,7 +15169,7 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
 
     if (layerVisible.choropleth) choroplethLayer.addTo(map);
     if (layerVisible.population) populationLayer.addTo(map); // BỔ SUNG
-    if (layerVisible.members) membersLayer.addTo(map);
+    // if (layerVisible.members) membersLayer.addTo(map);
     if (layerVisible.incidents) incidentsLayer.addTo(map);
   }
 
