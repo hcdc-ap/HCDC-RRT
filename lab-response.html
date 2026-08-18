@@ -8,19 +8,20 @@
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: 'Lexend', system-ui, sans-serif; background: #006a75; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; color: #1f2937; }
-    
+
     .card { background: #fff; border-radius: 16px; box-shadow: 0 20px 60px rgba(0,0,0,.15); max-width: 520px; width: 100%; overflow: hidden; animation: slideUp .4s ease; text-align: center; }
     @keyframes slideUp { from { opacity: 0; transform: translateY(30px) } to { opacity: 1; transform: translateY(0) } }
-    
+
     .header { background: #fd7e14; padding: 24px; color: #fff; }
     .header h1 { font-size: 18px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase; margin: 0; }
-    
+
     .body { padding: 32px; }
-    
+
     .footer { background: #f9fafb; padding: 16px 24px; border-top: 1px solid #e5e7eb; font-size: 12px; color: #6b7280; line-height: 1.5; }
     .btn { display: inline-block; padding: 12px 24px; background: #fd7e14; color: #fff; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 15px; transition: background .2s; border: none; cursor: pointer; width: 100%; text-align: center; }
     .btn:hover { background: #ea580c; }
-    
+    .btn:disabled { background: #d1d5db; cursor: not-allowed; }
+
     /* Form Styles */
     .form-group { margin-bottom: 20px; text-align: left; }
     .form-label { font-weight: 600; font-size: 14px; margin-bottom: 8px; display: block; color: #374151; }
@@ -31,36 +32,35 @@
     .chk-item input { width: 18px; height: 18px; margin-right: 12px; accent-color: #fd7e14; cursor: pointer; }
     .num-input { width: 100%; padding: 12px 14px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 16px; outline: none; transition: border .2s; font-family: inherit; font-weight: 600; color: #1f2937; }
     .num-input:focus { border-color: #fd7e14; }
+    .num-input.invalid { border-color: #ef4444; }
+    .err-hint { font-size: 13px; color: #dc2626; margin-top: 6px; display: none; }
   </style>
 </head>
 <body>
   <div class="card">
     <div class="header"><h1>HỆ THỐNG RRT - HCDC</h1></div>
-    
+
     <div class="body" id="dynamic-content">
-      <!-- Mặc định hiển thị state Loading -->
       <div style="text-align: center;">
         <div style="font-size:64px; margin-bottom:16px;">⏳</div>
         <div style="display:inline-block; padding:6px 16px; border-radius:20px; font-size:14px; font-weight:600; margin-bottom:16px; background:#e5e7eb; color:#374151;">ĐANG XỬ LÝ...</div>
         <div style="background:#f3f4f6; padding:16px; border-radius:8px; font-size:15px; color:#374151; line-height:1.6; margin-bottom:24px; text-align: left; border-left: 4px solid #9ca3af;">Đang đồng bộ dữ liệu với máy chủ, vui lòng đợi trong giây lát...</div>
       </div>
     </div>
-
     <div class="footer">
       <p><strong>Trung tâm Kiểm soát Bệnh tật Thành phố Hồ Chí Minh</strong></p>
       <p>Địa chỉ: 366A Âu Dương Lân, Phường Chánh Hưng, TP. Hồ Chí Minh, Việt Nam</p>
       <p>Điện thoại: 0909 408 895</p>
     </div>
   </div>
-
   <script>
-    const EDGE_FUNC_URL = "https://sxzjbygiowpscyhiffqc.supabase.co/functions/v1/handle-lab-callback"; 
+    const EDGE_FUNC_URL = "https://sxzjbygiowpscyhiffqc.supabase.co/functions/v1/handle-lab-callback";
     const urlParams = new URLSearchParams(window.location.search);
     const token = urlParams.get('token');
-    
-    const dynamicContent = document.getElementById('dynamic-content');
 
-    // HÀM RENDER TRẠNG THÁI THÔNG BÁO (THAY THẾ ALERT)
+    const dynamicContent = document.getElementById('dynamic-content');
+    let _reqQty = 0; // FIX 2: lưu số yêu cầu để kiểm client
+
     function renderState(type, msgText, extraHtml = '') {
       let icon, badge, badgeBg, badgeColor, msgBorder;
       if (type === 'loading') {
@@ -72,7 +72,6 @@
       } else if (type === 'success') {
         icon = "✅"; badge = "THÀNH CÔNG"; badgeBg = "#dcfce7"; badgeColor = "#16a34a"; msgBorder = "#10b981";
       }
-
       dynamicContent.innerHTML = `
         <div style="text-align: center; animation: slideUp .3s ease;">
           <div style="font-size:64px; margin-bottom:16px;">${icon}</div>
@@ -83,54 +82,53 @@
       `;
     }
 
-    // HÀM RENDER FORM NHẬN 1 PHẦN
     function renderForm(data) {
+      // FIX 1: kiểm null cho pathogens
+      const pathogens = Array.isArray(data.pathogens) ? data.pathogens : [];
+      _reqQty = parseInt(data.requested_qty, 10) || 0; // FIX 2
+
       let pathogensHtml = '';
-      if (data.pathogens.length === 0) {
+      if (pathogens.length === 0) {
         pathogensHtml = '<div style="font-size:14px; color:#6b7280; font-style: italic;">Không chỉ định cụ thể tác nhân.</div>';
       } else {
-        pathogensHtml = data.pathogens.map(p => `
+        pathogensHtml = pathogens.map(p => `
           <div class="chk-item">
             <input type="checkbox" class="chk-pathogen" value="${p}" checked>
             <span>${p}</span>
           </div>
         `).join('');
       }
-
       dynamicContent.innerHTML = `
         <div style="text-align: left; animation: slideUp .4s ease;">
           <h2 style="color: #006a75; font-size: 18px; margin-bottom: 8px; border-bottom: 2px solid #e5e7eb; padding-bottom: 12px;">XÁC NHẬN NHẬN MỘT PHẦN MẪU</h2>
           <p style="font-size: 13px; color: #6b7280; margin-bottom: 20px; line-height: 1.5;">Vui lòng điều chỉnh thông tin bên dưới phù hợp với năng lực thực tế của đơn vị hiện tại.</p>
-          
+
           <div class="form-group">
             <label class="form-label">Kỹ thuật yêu cầu:</label>
             <div class="form-box">
-              <input type="checkbox" id="chk-tech" checked style="width:18px; height:18px; margin-right:12px; accent-color:#fd7e14; cursor:pointer;"> 
-              <span id="tech-name" data-val="${data.test_type}" style="font-size:14px; font-weight:600;">${data.test_type}</span>
+              <input type="checkbox" id="chk-tech" checked style="width:18px; height:18px; margin-right:12px; accent-color:#fd7e14; cursor:pointer;">
+              <span id="tech-name" data-val="${data.test_type || ''}" style="font-size:14px; font-weight:600;">${data.test_type || 'Không rõ kỹ thuật'}</span>
             </div>
           </div>
-
           <div class="form-group">
             <label class="form-label">Tác nhân có thể thực hiện (Còn sinh phẩm):</label>
             <div class="form-box-multi">
               ${pathogensHtml}
             </div>
           </div>
-
           <div class="form-group" style="margin-bottom: 28px;">
             <label class="form-label">Số lượng mẫu có thể nhận tối đa:</label>
-            <input type="number" id="qty-input" class="num-input" min="0" max="${data.requested_qty}" value="${data.requested_qty}">
+            <input type="number" id="qty-input" class="num-input" min="1" max="${_reqQty}" value="${_reqQty}">
+            <div class="err-hint" id="qty-err"></div>
             <div style="font-size: 13px; color: #6b7280; margin-top: 8px;">
-              <i class='bx bx-info-circle'></i> Số mẫu HCDC đang yêu cầu: <b style="color:#fd7e14;">${data.requested_qty}</b> mẫu.
+              Số mẫu HCDC đang yêu cầu: <b style="color:#fd7e14;">${_reqQty}</b> mẫu.
             </div>
           </div>
-
-          <button class="btn" onclick="submitForm()">🚀 XÁC NHẬN GỬI KẾT QUẢ</button>
+          <button class="btn" id="submit-btn" onclick="submitForm()">🚀 XÁC NHẬN GỬI KẾT QUẢ</button>
         </div>
       `;
     }
 
-    // CHẠY KHỞI TẠO
     if (!token) {
       renderState('error', "Không tìm thấy mã bảo mật (token) trong đường dẫn truy cập.");
     } else {
@@ -145,8 +143,6 @@
             renderState('warning', "Yêu cầu này đã được đơn vị xử lý trước đó. Bạn không cần thao tác lại, xin cảm ơn!", '<a href="https://hcdc-ap.github.io/RRT/" class="btn">🏠 Về Trang chủ</a>');
             return;
           }
-          
-          // Render form nếu dữ liệu hợp lệ
           renderForm(data);
         })
         .catch(err => {
@@ -154,16 +150,31 @@
         });
     }
 
-    // GỬI KẾT QUẢ LÊN MÁY CHỦ
     window.submitForm = function() {
       const qtyInput = document.getElementById('qty-input');
-      if(!qtyInput) return;
-      
-      const qty = parseInt(qtyInput.value) || 0;
+      const errEl = document.getElementById('qty-err');
+      const btn = document.getElementById('submit-btn');
+      if (!qtyInput) return;
+
+      const qty = parseInt(qtyInput.value, 10);
+
+      // FIX 2: kiểm số lượng phía client (thân thiện), server vẫn kiểm lại
+      if (!Number.isFinite(qty) || qty <= 0 || qty > _reqQty) {
+        qtyInput.classList.add('invalid');
+        if (errEl) {
+          errEl.textContent = `Vui lòng nhập số từ 1 đến ${_reqQty} mẫu.`;
+          errEl.style.display = 'block';
+        }
+        return;
+      }
+      qtyInput.classList.remove('invalid');
+      if (errEl) errEl.style.display = 'none';
+
       const isTechChecked = document.getElementById('chk-tech').checked;
       const techVal = document.getElementById('tech-name').getAttribute('data-val');
       const selectedPathogens = Array.from(document.querySelectorAll('.chk-pathogen:checked')).map(cb => cb.value);
 
+      if (btn) btn.disabled = true;
       renderState('loading', "Đang gửi xác nhận của bạn tới hệ thống trung tâm HCDC...");
 
       fetch(EDGE_FUNC_URL, {
@@ -178,10 +189,11 @@
       })
       .then(res => res.json())
       .then(data => {
-        if(data.success || data.message) {
+        // FIX 3: chỉ kiểm data.success (không dựa vào data.message)
+        if (data.success === true) {
           renderState('success', "Cảm ơn đơn vị. HCDC đã ghi nhận thông tin phản hồi và sẽ tiến hành phê duyệt điều phối trên hệ thống.", '<a href="https://hcdc-ap.github.io/RRT/" class="btn">🏠 Đóng cửa sổ</a>');
         } else {
-          renderState('error', "Có lỗi xảy ra trong quá trình ghi nhận. Vui lòng thử lại sau.");
+          renderState('error', (data.message || "Có lỗi xảy ra trong quá trình ghi nhận.") + " Vui lòng thử lại sau.");
         }
       })
       .catch(err => {
