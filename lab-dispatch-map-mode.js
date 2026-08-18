@@ -153,7 +153,8 @@
     project: function (result, origin) {
       const map = getMap();
       if (!map || typeof L === 'undefined') {
-        console.warn('[dispatch-map] Không có map để chiếu.');
+        // Bình thường khi tìm PXN trong modal (bản đồ chưa mở) — không cảnh báo ồn
+        console.debug('[dispatch-map] Bỏ qua chiếu: bản đồ chưa sẵn sàng.');
         return;
       }
       if (!result || !result.ranked || !origin) return;
@@ -278,18 +279,28 @@
             </div>
             ${
               lab.capability_tier != null && lab.capability_tier >= 1
-                ? `<div style="margin-top:4px;"><span style="background:#0f766e;color:#fff;padding:1px 7px;border-radius:4px;font-size:11px;">Cấp năng lực xét nghiệm ${lab.capability_tier}</span>
-                   <span style="background:#1f2937;color:#fff;padding:1px 7px;border-radius:4px;font-size:11px;">ATSH cấp ${lab.bsl_level ?? '?'}</span></div>`
+                ? `<div style="margin-top:4px;"><span style="background:#0f766e;color:#fff;padding:1px 7px;border-radius:4px;font-size:11px;">Cấp năng lực xét nghiệm ${
+                    lab.capability_tier
+                  }</span>
+                   <span style="background:#1f2937;color:#fff;padding:1px 7px;border-radius:4px;font-size:11px;">ATSH cấp ${
+                     lab.bsl_level ?? '?'
+                   }</span></div>`
                 : ''
             }
             ${
               lab.head_name || lab.head_phone
                 ? `<div style="margin-top:6px;padding:6px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;font-size:12px;">
                      <div style="color:#6b7280;font-size:11px;">Đầu mối PXN</div>
-                     <div style="font-weight:bold;">${esc(lab.head_name || '—')}</div>
+                     <div style="font-weight:bold;">${esc(
+                       lab.head_name || '—'
+                     )}</div>
                      ${
                        lab.head_phone
-                         ? `<a href="tel:${esc(lab.head_phone)}" style="display:inline-block;margin-top:2px;background:#16a34a;color:#fff;padding:2px 8px;border-radius:4px;text-decoration:none;font-size:12px;"><i class='bx bx-phone'></i> Gọi ${esc(lab.head_phone)}</a>`
+                         ? `<a href="tel:${esc(
+                             lab.head_phone
+                           )}" style="display:inline-block;margin-top:2px;background:#16a34a;color:#fff;padding:2px 8px;border-radius:4px;text-decoration:none;font-size:12px;"><i class='bx bx-phone'></i> Gọi ${esc(
+                             lab.head_phone
+                           )}</a>`
                          : ''
                      }
                    </div>`
