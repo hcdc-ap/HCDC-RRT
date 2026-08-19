@@ -785,26 +785,36 @@
                   <div id="lab-picker-map" style="height:300px;border-radius:8px;margin-top:8px;background:#eee;"></div>
                 </div>
 
-                <div class="col-12"><hr class="my-1"><h6 class="text-primary mb-0"><i class='bx bx-phone'></i> Đầu mối liên hệ & Kênh thông báo (Telegram)</h6></div>
+                <div class="col-12"><hr class="my-1"><h6 class="text-primary mb-0"><i class='bx bx-phone'></i> Đầu mối liên hệ & Kênh thông báo (Telegram & Email)</h6></div>
                 
                 <!-- TRẠNG THÁI TELEGRAM CHAT ID (HIỂN THỊ TĨNH / READ-ONLY) -->
                 <div class="col-12">
                   <div class="p-2 rounded bg-light border d-flex justify-content-between align-items-center flex-wrap gap-2">
                     <div>
-                      <small class="text-muted d-block">Trạng thái kết nối Telegram Bot:</small>
+                      <small class="text-muted d-block">Trạng thái kết nối HCDC-RRT:</small>
                       ${
                         lab.telegram_chat_id
-                          ? `<span class="badge bg-success"><i class='bx bx-check-circle'></i> Đã kết nối (Chat ID: <code>${esc(
-                              lab.telegram_chat_id
-                            )}</code>)</span>`
-                          : `<span class="badge bg-secondary"><i class='bx bx-time'></i> Chưa kết nối Telegram</span>`
+                          ? `<span class="badge bg-success">
+                              <i class='bx bx-check-circle'></i> Đã kết nối (Chat ID: <code>${esc(
+                                lab.telegram_chat_id
+                              )}</code>)
+                             </span>`
+                          : `<span class="badge bg-secondary">
+                              <i class='bx bx-time'></i> Chưa kết nối Telegram
+                             </span>`
                       }
                     </div>
                     <div>
                       ${
-                        labId
-                          ? `<small class="text-info d-block">Cú pháp gửi đầu mối PXN: <code class="user-select-all bg-white px-2 py-1 border rounded">/start LAB_${labId}</code></small>`
-                          : `<small class="text-muted">Lưu phòng xét nghiệm trước để sinh mã kết nối.</small>`
+                        lab.head_phone
+                          ? `<small class="text-danger d-block">
+                              <i class='bx bx-telegram'></i>
+                              Tìm kiếm <strong>@rrt_alert_bot</strong> nhập: <code class="user-select-all bg-white px-2 py-1 border rounded">/start LAB_${lab.head_phone}</code>
+                            </small>`
+                          : `<small class="text-muted fst-italic">
+                              <i class='bx bx-info-circle'></i>
+                              Lưu phòng xét nghiệm để kết nối HCDC-RRT.
+                            </small>`
                       }
                     </div>
                   </div>
@@ -853,7 +863,7 @@
                   }">
                 </div>
 
-                <div class="col-12"><hr class="my-1"><h6 class="text-primary mb-0"><i class='bx bx-check-shield'></i> Ngoại kiểm & Báo cáo (TT54)</h6></div>
+                <div class="col-12"><hr class="my-1"><h6 class="text-primary mb-0"><i class='bx bx-check-shield'></i> Ngoại kiểm & Báo cáo theo quy định</h6></div>
                 <div class="col-md-6">
                   <div class="form-check form-switch">
                     <input class="form-check-input" type="checkbox" id="lab-external-qa" ${
@@ -881,7 +891,7 @@
                     <input class="form-check-input" type="checkbox" id="lab-reports-positive" ${
                       lab.reports_positive ? 'checked' : ''
                     }>
-                    <label class="form-check-label" for="lab-reports-positive">Báo cáo ca (+) theo TT54</label>
+                    <label class="form-check-label" for="lab-reports-positive">Báo cáo ca (+) theo quy định</label>
                   </div>
                   <input id="lab-report-method" class="form-control form-control-sm mt-1" value="${esc(
                     lab.report_method || ''
