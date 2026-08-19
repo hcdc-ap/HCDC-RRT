@@ -599,7 +599,7 @@
           style: { fontFamily: "'Inter', 'Lexend', sans-serif" },
         },
         title: {
-          text: 'Phân bố cấp năng lực xét nghiệm',
+          text: 'Phân bố cấp Năng lực xét nghiệm',
           style: { fontSize: '15px', fontWeight: '700', color: GRAY_DARK },
         },
         xAxis: {
@@ -867,7 +867,7 @@
           style: { fontFamily: "'Inter', 'Lexend', sans-serif" },
         },
         title: {
-          text: 'Sẵn sàng Kết nối (Họ tên; Số Điện thoại; Email)',
+          text: 'Sẵn sàng Kết nối mạng lưới PXN',
           style: { fontSize: '15px', fontWeight: '700', color: GRAY_DARK },
         },
         tooltip: {
