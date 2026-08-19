@@ -252,8 +252,10 @@
           </table>
         </div>
 
-        <!-- 3 BIỂU ĐỒ TỔNG QUAN (dàn ngang) -->
+        <!-- 6 BIỂU ĐỒ TỔNG QUAN (dàn ngang 2 hàng) -->
         <div class="row g-3 mt-2" id="lab-charts-row">
+          
+          <!-- HÀNG 1: 3 Biểu đồ cũ -->
           <div class="col-md-4">
             <div class="card h-100"><div class="card-body p-2">
               <div id="chart-tier" style="height:280px;"></div>
@@ -269,6 +271,24 @@
               <div id="chart-techniques" style="height:280px;"></div>
             </div></div>
           </div>
+
+          <!-- HÀNG 2: 3 Biểu đồ mới bổ sung -->
+          <div class="col-md-4">
+            <div class="card h-100"><div class="card-body p-2">
+              <div id="chart-bsl" style="height:280px;"></div>
+            </div></div>
+          </div>
+          <div class="col-md-4">
+            <div class="card h-100"><div class="card-body p-2">
+              <div id="chart-micro" style="height:280px;"></div>
+            </div></div>
+          </div>
+          <div class="col-md-4">
+            <div class="card h-100"><div class="card-body p-2">
+              <div id="chart-category" style="height:280px;"></div>
+            </div></div>
+          </div>
+
         </div>`;
 
       // Khởi tạo DataTable (tìm kiếm, phân trang, sắp xếp, xuất Excel/CSV)
@@ -496,67 +516,135 @@
   };
 
   // ==========================================================================
-  // 3 BIỂU ĐỒ TỔNG QUAN (Highcharts — nhất quán với app)
-  //   1. Phân bố Cấp năng lực (1-5) — cột
-  //   2. Cơ cấu Mô hình cơ quan — donut
-  //   3. Top kỹ thuật phổ biến — thanh ngang
+  // 6 BIỂU ĐỒ TỔNG QUAN DASHBOARD (Highcharts) - BẢN HOÀN THIỆN UI & ACTIONABLE DATA
   // ==========================================================================
   async function _renderLabCharts() {
     if (typeof Highcharts === 'undefined') {
       console.warn('[lab-admin] Chưa nạp Highcharts — bỏ qua biểu đồ.');
       return;
     }
+
     try {
-      // Tải dữ liệu tổng hợp
+      // 👉 BƯỚC 1 CỰC QUAN TRỌNG: Gọi thêm cột 'name' để lấy tên PXN
       const { data: labs } = await window.supabaseClient
         .from('laboratories')
-        .select('level, capability_tier, does_microbiology');
+        .select(
+          'name, level, capability_tier, does_microbiology, bsl_level, head_name, head_phone, head_email'
+        );
+
       const { data: caps } = await window.supabaseClient
         .from('lab_capabilities')
         .select('test_types(name, category)');
 
       const L = labs || [];
 
-      // --- 1. Phân bố cấp năng lực (1..5) ---
-      const tierCount = [0, 0, 0, 0, 0]; // index 0 = cấp 1
+      // ======== BỘ SƯU TẬP MÀU SẮC ========
+      const TEAL = '#0f766e';
+      const TEAL_LIGHT = '#2dd4bf';
+      const ORANGE = '#ea580c';
+      const ORANGE_LIGHT = '#f97316';
+      const BLUE = '#0284c7';
+      const PURPLE = '#7c3aed';
+      const YELLOW = '#eab308';
+      const RED = '#dc2626';
+      const GRAY_DARK = '#1e293b';
+      const GRAY_MED = '#647481';
+      const WHITE = '#ffffff';
+      const BG_TOOLTIP = 'rgba(15, 23, 42, 0.95)';
+
+      const EXTENDED_PALETTE = [
+        TEAL,
+        ORANGE,
+        BLUE,
+        YELLOW,
+        PURPLE,
+        RED,
+        '#059669',
+        '#be123c',
+        GRAY_MED,
+      ];
+
+      Highcharts.setOptions({ credits: { enabled: false } });
+
+      // --- Hàm Helper: Định dạng danh sách Lab trong Tooltip ---
+      const formatLabList = (labsArray) => {
+        if (!labsArray || labsArray.length === 0) return '';
+        const displayLabs = labsArray.slice(0, 10); // Hiển thị tối đa 10 cái để không tràn màn hình
+        let html = `<div style="margin-top:10px; padding-top:8px; border-top:1px solid rgba(255,255,255,0.2); font-size:12px; color:#cbd5e1; text-align: left;">`;
+        displayLabs.forEach((name) => {
+          html += `<div style="margin-bottom:4px; white-space: normal; line-height: 1.4;">• ${name}</div>`;
+        });
+        if (labsArray.length > 10) {
+          html += `<div style="color:#f97316; font-style:italic; margin-top:4px;">... và ${
+            labsArray.length - 10
+          } đơn vị khác</div>`;
+        }
+        html += `</div>`;
+        return html;
+      };
+
+      // ----------------------------------------------------------------------
+      // CHART 1: Phân bố Cấp năng lực (Cột dọc)
+      // ----------------------------------------------------------------------
+      const tierCount = [0, 0, 0, 0, 0];
       L.forEach((l) => {
         const t = l.capability_tier;
         if (t >= 1 && t <= 5) tierCount[t - 1]++;
       });
-      const tierColors = [
-        '#94a3b8',
-        '#0ea5e9',
-        '#ca8a04',
-        '#ea580c',
-        '#dc2626',
-      ];
+
       Highcharts.chart('chart-tier', {
         chart: {
           type: 'column',
           backgroundColor: 'transparent',
-          style: { fontFamily: "'Ubuntu',sans-serif" },
+          style: { fontFamily: "'Inter', 'Lexend', sans-serif" },
         },
         title: {
-          text: 'Phân bố Cấp năng lực',
-          style: { fontSize: '14px', fontWeight: 'bold' },
+          text: 'Phân bố cấp năng lực xét nghiệm',
+          style: { fontSize: '15px', fontWeight: '700', color: GRAY_DARK },
         },
-        subtitle: { text: 'Số PXN theo cấp (1→5)' },
-        xAxis: { categories: ['Cấp 1', 'Cấp 2', 'Cấp 3', 'Cấp 4', 'Cấp 5'] },
-        yAxis: { min: 0, title: { text: 'Số PXN' }, allowDecimals: false },
+        xAxis: {
+          categories: ['Cấp 1', 'Cấp 2', 'Cấp 3', 'Cấp 4', 'Cấp 5'],
+          labels: {
+            style: { color: GRAY_DARK, fontWeight: '600', fontSize: '12px' },
+          },
+        },
+        yAxis: {
+          min: 0,
+          title: { text: '' },
+          allowDecimals: false,
+          labels: { style: { color: GRAY_DARK } },
+        },
         legend: { enabled: false },
-        credits: { enabled: false },
+        tooltip: {
+          backgroundColor: BG_TOOLTIP,
+          style: { color: WHITE },
+          borderWidth: 0,
+          borderRadius: 8,
+          pointFormat: '<b>{point.y}</b> PXN',
+        },
         plotOptions: {
           column: {
-            borderRadius: 5,
-            dataLabels: { enabled: true },
+            borderRadius: 4,
+            dataLabels: {
+              enabled: true,
+              color: GRAY_DARK,
+              style: {
+                textOutline: 'none',
+                fontWeight: 'bold',
+                fontSize: '13px',
+              },
+              y: -5,
+            },
             colorByPoint: true,
-            colors: tierColors,
+            colors: [ORANGE_LIGHT, ORANGE, TEAL_LIGHT, TEAL, RED],
           },
         },
         series: [{ name: 'PXN', data: tierCount }],
       });
 
-      // --- 2. Cơ cấu mô hình cơ quan (donut) ---
+      // ----------------------------------------------------------------------
+      // CHART 2: Cơ cấu Mô hình cơ quan (Donut)
+      // ----------------------------------------------------------------------
       const orgMap = {};
       L.forEach((l) => {
         const k = l.level || 'Khác';
@@ -564,36 +652,51 @@
       });
       const orgData = Object.entries(orgMap)
         .sort((a, b) => b[1] - a[1])
-        .map(([name, y]) => ({ name, y }));
+        .map(([name, y], i) => ({
+          name: name,
+          y: y,
+          color: EXTENDED_PALETTE[i % EXTENDED_PALETTE.length],
+        }));
+
       Highcharts.chart('chart-orgmodel', {
         chart: {
           type: 'pie',
           backgroundColor: 'transparent',
-          style: { fontFamily: "'Ubuntu',sans-serif" },
+          height: 280,
+          style: { fontFamily: "'Inter', 'Lexend', sans-serif" },
         },
         title: {
-          text: 'Cơ cấu Mô hình cơ quan',
-          style: { fontSize: '14px', fontWeight: 'bold' },
+          text: 'Phân bố Mô hình cơ quan',
+          style: { fontSize: '15px', fontWeight: '700', color: GRAY_DARK },
         },
-        subtitle: { text: `Tổng ${L.length} PXN` },
         tooltip: {
-          pointFormat: '<b>{point.y}</b> PXN ({point.percentage:.0f}%)',
+          backgroundColor: BG_TOOLTIP,
+          style: { color: WHITE },
+          borderWidth: 0,
+          borderRadius: 8,
+          pointFormat: '<b>{point.y}</b> PXN ({point.percentage:.1f}%)',
         },
-        credits: { enabled: false },
         plotOptions: {
           pie: {
-            innerSize: '55%',
+            innerSize: '60%',
             dataLabels: {
               enabled: true,
-              format: '{point.name}: {point.y}',
-              style: { fontSize: '10px' },
+              format: '<b>{point.name}</b><br>{point.y}',
+              style: {
+                fontWeight: '600',
+                textOutline: 'none',
+                color: GRAY_DARK,
+                fontSize: '11px',
+              },
             },
           },
         },
         series: [{ name: 'PXN', data: orgData }],
       });
 
-      // --- 3. Top kỹ thuật phổ biến (thanh ngang) ---
+      // ----------------------------------------------------------------------
+      // CHART 3: Top 8 Kỹ thuật (Thanh ngang)
+      // ----------------------------------------------------------------------
       const techMap = {};
       (caps || []).forEach((c) => {
         const n = c.test_types?.name;
@@ -601,33 +704,319 @@
       });
       const techData = Object.entries(techMap)
         .sort((a, b) => b[1] - a[1])
-        .slice(0, 8); // top 8
+        .slice(0, 10);
+
       Highcharts.chart('chart-techniques', {
         chart: {
           type: 'bar',
           backgroundColor: 'transparent',
-          style: { fontFamily: "'Ubuntu',sans-serif" },
+          height: 280,
+          style: { fontFamily: "'Inter', 'Lexend', sans-serif" },
         },
         title: {
-          text: 'Kỹ thuật phổ biến (Top 8)',
-          style: { fontSize: '14px', fontWeight: 'bold' },
+          text: 'Phân bố Kỹ thuật xét nghiệm (Top 10)',
+          style: { fontSize: '15px', fontWeight: '700', color: GRAY_DARK },
         },
-        subtitle: { text: 'Số PXN làm được mỗi kỹ thuật' },
         xAxis: {
           categories: techData.map((d) => d[0]),
-          labels: { style: { fontSize: '10px' } },
+          labels: {
+            align: 'right',
+            reserveSpace: true,
+            style: {
+              fontSize: '11px',
+              width: '130px',
+              whiteSpace: 'normal',
+              color: GRAY_DARK,
+              fontWeight: '600',
+            },
+          },
         },
-        yAxis: { min: 0, title: { text: 'Số PXN' }, allowDecimals: false },
+        yAxis: {
+          min: 0,
+          title: { text: '' },
+          allowDecimals: false,
+          labels: { style: { color: GRAY_DARK } },
+        },
         legend: { enabled: false },
-        credits: { enabled: false },
+        tooltip: {
+          backgroundColor: BG_TOOLTIP,
+          style: { color: WHITE },
+          borderWidth: 0,
+          borderRadius: 8,
+          pointFormat: 'Thực hiện tại <b>{point.y}</b> PXN',
+        },
         plotOptions: {
           bar: {
-            borderRadius: 4,
-            dataLabels: { enabled: true },
-            color: '#0f766e',
+            borderRadius: 3,
+            dataLabels: {
+              enabled: true,
+              align: 'left',
+              style: {
+                color: GRAY_DARK,
+                textOutline: 'none',
+                fontWeight: 'bold',
+              },
+            },
+            color: TEAL,
           },
         },
         series: [{ name: 'PXN', data: techData.map((d) => d[1]) }],
+      });
+
+      // ----------------------------------------------------------------------
+      // CHART 4: Phân bố An toàn sinh học (Pie)
+      // ----------------------------------------------------------------------
+      const bslMap = { 'Cấp 1': 0, 'Cấp 2': 0, 'Cấp 3': 0, 'Chưa rõ': 0 };
+      L.forEach((l) => {
+        if (l.bsl_level === 1) bslMap['Cấp 1']++;
+        else if (l.bsl_level === 2) bslMap['Cấp 2']++;
+        else if (l.bsl_level === 3) bslMap['Cấp 3']++;
+        else bslMap['Chưa rõ']++;
+      });
+
+      const bslData = Object.entries(bslMap)
+        .filter((d) => d[1] > 0)
+        .map(([name, y]) => ({
+          name: name,
+          y: y,
+          color:
+            name === 'Cấp 2'
+              ? ORANGE
+              : name === 'Cấp 3'
+              ? RED
+              : name === 'Cấp 1'
+              ? TEAL
+              : GRAY_MED,
+        }));
+
+      Highcharts.chart('chart-bsl', {
+        chart: {
+          type: 'pie',
+          backgroundColor: 'transparent',
+          height: 280,
+          style: { fontFamily: "'Inter', 'Lexend', sans-serif" },
+        },
+        title: {
+          text: 'Phân bố cấp An toàn sinh học',
+          style: { fontSize: '15px', fontWeight: '700', color: GRAY_DARK },
+        },
+        tooltip: {
+          backgroundColor: BG_TOOLTIP,
+          style: { color: WHITE },
+          borderWidth: 0,
+          borderRadius: 8,
+          pointFormat: '<b>{point.y}</b> PXN ({point.percentage:.1f}%)',
+        },
+        plotOptions: {
+          pie: {
+            dataLabels: {
+              enabled: true,
+              distance: 15,
+              format: '<b>{point.name}</b>: {point.y}',
+              style: {
+                color: GRAY_DARK,
+                textOutline: 'none',
+                fontWeight: '600',
+              },
+            },
+          },
+        },
+        series: [{ data: bslData }],
+      });
+
+      // ----------------------------------------------------------------------
+      // HÀM LỌC RÁC
+      // ----------------------------------------------------------------------
+      const isValidContact = (val) => {
+        if (!val) return false;
+        const s = String(val).trim().toLowerCase();
+        if (
+          s === '' ||
+          s === 'null' ||
+          s === 'không cung cấp' ||
+          s === 'n/a' ||
+          s === 'chưa có'
+        )
+          return false;
+        return true;
+      };
+
+      // ----------------------------------------------------------------------
+      // CHART 5: Mạng lưới kết nối (Bán khuyên) - ĐÃ FIX VỊ TRÍ CHỮ
+      // ----------------------------------------------------------------------
+      let fullContact = 0;
+      let missingContactLabs = [];
+
+      L.forEach((l) => {
+        if (
+          isValidContact(l.head_name) &&
+          isValidContact(l.head_phone) &&
+          isValidContact(l.head_email)
+        ) {
+          fullContact++;
+        } else {
+          missingContactLabs.push(l.name || 'PXN chưa cập nhật tên');
+        }
+      });
+
+      Highcharts.chart('chart-micro', {
+        chart: {
+          type: 'pie',
+          backgroundColor: 'transparent',
+          height: 280,
+          style: { fontFamily: "'Inter', 'Lexend', sans-serif" },
+        },
+        title: {
+          text: 'Sẵn sàng Kết nối (Họ tên; Số Điện thoại; Email)',
+          style: { fontSize: '15px', fontWeight: '700', color: GRAY_DARK },
+        },
+        tooltip: {
+          useHTML: true,
+          backgroundColor: BG_TOOLTIP,
+          style: { color: WHITE },
+          borderWidth: 0,
+          borderRadius: 8,
+          formatter: function () {
+            let text = `<div style="text-align:center;"><b>${this.point.percentage.toFixed(
+              1
+            )}%</b> (${this.point.y} PXN)</div>`;
+            if (
+              this.point.custom &&
+              this.point.custom.labsList &&
+              this.point.custom.labsList.length > 0
+            ) {
+              text += formatLabList(this.point.custom.labsList);
+            }
+            return text;
+          },
+        },
+        plotOptions: {
+          pie: {
+            dataLabels: {
+              enabled: true,
+              distance: 20, // 👉 BÍ QUYẾT 1: Đổi thành số dương để đẩy chữ ra ngoài
+              style: {
+                fontWeight: '600',
+                color: GRAY_DARK,
+                textOutline: 'none',
+                fontSize: '12px',
+              },
+              connectorColor: GRAY_MED, // Thêm đường kẻ nối mảnh
+              format: '<b>{point.name}</b>',
+            },
+            startAngle: -90,
+            endAngle: 90,
+            center: ['50%', '75%'],
+            size: '90%', // 👉 BÍ QUYẾT 2: Thu nhỏ vòng cung lại 1 chút để có không gian cho chữ bên ngoài
+            innerSize: '55%',
+          },
+        },
+        series: [
+          {
+            data: [
+              { name: 'Đầy đủ', y: fullContact, color: TEAL },
+              // Bỏ đi thuộc tính ép màu chữ riêng vì giờ chữ đã nằm ngoài nền trắng
+              {
+                name: 'Chưa đủ',
+                y: missingContactLabs.length,
+                color: '#94a5b8',
+                custom: { labsList: missingContactLabs },
+              },
+            ],
+          },
+        ],
+      });
+
+      // ----------------------------------------------------------------------
+      // CHART 6: Phân tích Dữ liệu hổng - ĐÃ BỔ SUNG DANH SÁCH LAB
+      // ----------------------------------------------------------------------
+      let missingNameLabs = [],
+        missingPhoneLabs = [],
+        missingEmailLabs = [];
+
+      L.forEach((l) => {
+        const labName = l.name || 'PXN chưa cập nhật tên';
+        if (!isValidContact(l.head_name)) missingNameLabs.push(labName);
+        if (!isValidContact(l.head_phone)) missingPhoneLabs.push(labName);
+        if (!isValidContact(l.head_email)) missingEmailLabs.push(labName);
+      });
+
+      Highcharts.chart('chart-category', {
+        chart: {
+          type: 'bar',
+          backgroundColor: 'transparent',
+          height: 280,
+          style: { fontFamily: "'Inter', 'Lexend', sans-serif" },
+        },
+        title: {
+          text: ' Thông tin Đầu mối liên hệ còn thiếu',
+          style: { fontSize: '15px', fontWeight: '700', color: GRAY_DARK },
+        },
+        xAxis: {
+          categories: ['Họ tên', 'Số Điện thoại', 'Email'],
+          labels: {
+            style: { fontSize: '12px', color: GRAY_DARK, fontWeight: '600' },
+          },
+        },
+        yAxis: {
+          min: 0,
+          title: { text: '' },
+          allowDecimals: false,
+          labels: { style: { color: GRAY_DARK } },
+        },
+        legend: { enabled: false },
+        tooltip: {
+          useHTML: true,
+          backgroundColor: BG_TOOLTIP,
+          style: { color: WHITE, width: '220px' },
+          borderWidth: 0,
+          borderRadius: 8,
+          formatter: function () {
+            let text = `<b>${this.point.y}</b> PXN`;
+            if (
+              this.point.custom &&
+              this.point.custom.labsList &&
+              this.point.custom.labsList.length > 0
+            ) {
+              text += formatLabList(this.point.custom.labsList);
+            }
+            return text;
+          },
+        },
+        plotOptions: {
+          bar: {
+            borderRadius: 3,
+            color: ORANGE,
+            dataLabels: {
+              enabled: true,
+              color: GRAY_DARK,
+              style: {
+                textOutline: 'none',
+                fontWeight: 'bold',
+                fontSize: '13px',
+              },
+            },
+          },
+        },
+        series: [
+          {
+            name: 'PXN',
+            data: [
+              {
+                y: missingNameLabs.length,
+                custom: { labsList: missingNameLabs },
+              },
+              {
+                y: missingPhoneLabs.length,
+                custom: { labsList: missingPhoneLabs },
+              },
+              {
+                y: missingEmailLabs.length,
+                custom: { labsList: missingEmailLabs },
+              },
+            ],
+          },
+        ],
       });
     } catch (e) {
       console.warn('[lab-admin] Lỗi vẽ biểu đồ:', e.message);
