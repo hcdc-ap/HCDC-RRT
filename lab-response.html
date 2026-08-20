@@ -83,10 +83,12 @@
     }
 
     function renderForm(data) {
-      // FIX 1: kiểm null cho pathogens
+      // KIỂM TRA NULL/UNDEFINED VÀ ÉP KIỂU MẢNG CHO CẢ KỸ THUẬT VÀ TÁC NHÂN
       const pathogens = Array.isArray(data.pathogens) ? data.pathogens : [];
-      _reqQty = parseInt(data.requested_qty, 10) || 0; // FIX 2
+      const testTypes = Array.isArray(data.test_types) ? data.test_types : [];
+      _reqQty = parseInt(data.requested_qty, 10) || 0; 
 
+      // 1. Dựng HTML cho danh sách Tác nhân
       let pathogensHtml = '';
       if (pathogens.length === 0) {
         pathogensHtml = '<div style="font-size:14px; color:#6b7280; font-style: italic;">Không chỉ định cụ thể tác nhân.</div>';
@@ -98,6 +100,21 @@
           </div>
         `).join('');
       }
+
+      // 2. Dựng HTML cho danh sách Kỹ thuật (Mới)
+      let techsHtml = '';
+      if (testTypes.length === 0) {
+        techsHtml = '<div style="font-size:14px; color:#6b7280; font-style: italic;">Không có thông tin kỹ thuật.</div>';
+      } else {
+        techsHtml = testTypes.map(t => `
+          <div class="chk-item">
+            <input type="checkbox" class="chk-tech" value="${t}" checked style="width:18px; height:18px; margin-right:12px; accent-color:#fd7e14; cursor:pointer;">
+            <span style="font-size:14px; font-weight:600;">${t}</span>
+          </div>
+        `).join('');
+      }
+
+      // 3. Render giao diện tổng
       dynamicContent.innerHTML = `
         <div style="text-align: left; animation: slideUp .4s ease;">
           <h2 style="color: #006a75; font-size: 18px; margin-bottom: 8px; border-bottom: 2px solid #e5e7eb; padding-bottom: 12px;">XÁC NHẬN NHẬN MỘT PHẦN MẪU</h2>
@@ -105,25 +122,27 @@
 
           <div class="form-group">
             <label class="form-label">Kỹ thuật yêu cầu:</label>
-            <div class="form-box">
-              <input type="checkbox" id="chk-tech" checked style="width:18px; height:18px; margin-right:12px; accent-color:#fd7e14; cursor:pointer;">
-              <span id="tech-name" data-val="${data.test_type || ''}" style="font-size:14px; font-weight:600;">${data.test_type || 'Không rõ kỹ thuật'}</span>
+            <div class="form-box-multi">
+              ${techsHtml}
             </div>
           </div>
+
           <div class="form-group">
             <label class="form-label">Tác nhân có thể thực hiện (Còn sinh phẩm):</label>
             <div class="form-box-multi">
               ${pathogensHtml}
             </div>
           </div>
+
           <div class="form-group" style="margin-bottom: 28px;">
             <label class="form-label">Số lượng mẫu có thể nhận tối đa:</label>
             <input type="number" id="qty-input" class="num-input" min="1" max="${_reqQty}" value="${_reqQty}">
-            <div class="err-hint" id="qty-err"></div>
+            <div class="err-hint" id="qty-err" style="color: #dc2626; font-size: 13px; margin-top: 6px; display: none;"></div>
             <div style="font-size: 13px; color: #6b7280; margin-top: 8px;">
               Số mẫu HCDC đang yêu cầu: <b style="color:#fd7e14;">${_reqQty}</b> mẫu.
             </div>
           </div>
+
           <button class="btn" id="submit-btn" onclick="submitForm()">🚀 XÁC NHẬN GỬI KẾT QUẢ</button>
         </div>
       `;
@@ -158,20 +177,20 @@
 
       const qty = parseInt(qtyInput.value, 10);
 
-      // FIX 2: kiểm số lượng phía client (thân thiện), server vẫn kiểm lại
+      // Kiểm số lượng phía client (thân thiện)
       if (!Number.isFinite(qty) || qty <= 0 || qty > _reqQty) {
-        qtyInput.classList.add('invalid');
+        qtyInput.style.borderColor = '#dc2626';
         if (errEl) {
           errEl.textContent = `Vui lòng nhập số từ 1 đến ${_reqQty} mẫu.`;
           errEl.style.display = 'block';
         }
         return;
       }
-      qtyInput.classList.remove('invalid');
+      qtyInput.style.borderColor = '#d1d5db';
       if (errEl) errEl.style.display = 'none';
 
-      const isTechChecked = document.getElementById('chk-tech').checked;
-      const techVal = document.getElementById('tech-name').getAttribute('data-val');
+      // THU THẬP KẾT QUẢ TỪ CÁC CHECKBOX DƯỚI DẠNG MẢNG
+      const selectedTechs = Array.from(document.querySelectorAll('.chk-tech:checked')).map(cb => cb.value);
       const selectedPathogens = Array.from(document.querySelectorAll('.chk-pathogen:checked')).map(cb => cb.value);
 
       if (btn) btn.disabled = true;
@@ -183,13 +202,12 @@
         body: JSON.stringify({
           token: token,
           accepted_qty: qty,
-          accepted_test_types: isTechChecked ? [techVal] : [],
+          accepted_test_types: selectedTechs, 
           accepted_pathogens: selectedPathogens
         })
       })
       .then(res => res.json())
       .then(data => {
-        // FIX 3: chỉ kiểm data.success (không dựa vào data.message)
         if (data.success === true) {
           renderState('success', "Cảm ơn đơn vị. HCDC đã ghi nhận thông tin phản hồi và sẽ tiến hành phê duyệt điều phối trên hệ thống.", '<a href="https://hcdc-ap.github.io/RRT/" class="btn">🏠 Đóng cửa sổ</a>');
         } else {
