@@ -1,20 +1,23 @@
 // ============================================================================
-// DISPATCH MODAL (giao diện điều phối PXN) — BẢN CHỐT (quy trình mới 2026)
+// GIAI ĐOẠN 2C — HÀNH ĐỘNG ĐIỀU PHỐI (đề xuất / duyệt / chốt / hủy)
 // Hệ thống RRT-HCDC
 // ----------------------------------------------------------------------------
-// Phụ thuộc: lab-dispatch-engine.js (window.LabDispatch), Leaflet, Bootstrap 5.
+// Phụ thuộc: lab-dispatch-engine.js, lab-dispatch-modal.js, Bootstrap, Supabase.
+// NHÚNG: <script src="lab-dispatch-actions.js"></script>  (SAU lab-dispatch-modal.js)
 //
-// MỚI:
-//   • Ô nhập TIÊU CHÍ CHUYÊN GIA: QMS tối thiểu (ưu tiên) + Thời gian trả KQ
-//     tối đa (ưu tiên) → truyền xuống engine (minQsm, maxTurnaround).
-//   • Preset thứ 4: 🏅 Chất lượng (ưu tiên QMS). Giữ 3 slider gần/trống/nhanh.
-//   • Card kết quả: badge QMS + phân cấp mạng lưới, ĐẦU MỐI LIÊN HỆ (gọi/email),
-//     cảnh báo mềm (QMS thấp / trả KQ chậm hơn yêu cầu).
-//   • Sửa bug osrmWarn dùng trước khai báo ở nhánh "không tìm thấy".
+// LUỒNG NGHIỆP VỤ (đã chốt qua thảo luận):
+//   • Đội trưởng (position='Leader'):
+//       - Nút "Đề xuất PXN" → ghi lab_dispatch_log status='suggested'
+//         + gửi thông báo cho admin qua bảng notifications (hệ thống sẵn có)
+//   • Admin (role='admin'):
+//       - Thấy các đề xuất đang chờ (status='suggested') → "Duyệt" (→ dispatched)
+//         hoặc "Từ chối" (→ cancelled)
+//       - Nút "Chốt điều phối mẫu" → ghi thẳng status='dispatched' (trừ công suất)
+//       - Xem "Lịch sử điều phối mẫu hôm nay" + "Hủy" lệnh vừa chốt (→ cancelled)
 //
-// MỞ MODAL:
-//   (A) Từ hồ sơ sự cố: window.openDispatchModal({ incidentId, incidentName, lat, lng })
-//   (B) Từ bản đồ (tự nhập điểm):  window.openDispatchModal()
+// GHI CHÚ CÔNG SUẤT: chốt/duyệt (status dispatched) → sample_count tính vào
+//   tổng-theo-ngày → PXN đó giảm công suất còn lại ở lần tìm sau. Hủy
+//   (cancelled) → không còn tính (RPC find_candidate_labs đã loại 'cancelled').
 // ============================================================================
 
 (function () {
@@ -35,393 +38,1331 @@
             }[c])
         );
 
-  const VN_HOLIDAYS = ['01-01', '30-04', '01-05', '02-09'];
+  let _role = { isAdmin: false, isLeader: false, userId: null, checked: false };
 
-  function getDayWarning() {
-    const now = new Date();
-    const dow = now.getDay();
-    const dd = String(now.getDate()).padStart(2, '0');
-    const mm = String(now.getMonth() + 1).padStart(2, '0');
-    if (VN_HOLIDAYS.includes(`${dd}-${mm}`)) return 'Hôm nay là ngày lễ';
-    if (dow === 0) return 'Hôm nay là Chủ nhật';
-    if (dow === 6) return 'Hôm nay là Thứ Bảy';
-    return '';
+  // --------------------------------------------------------------------------
+  // XÁC ĐỊNH QUYỀN NGƯỜI DÙNG (cache trong phiên)
+  // --------------------------------------------------------------------------
+  async function resolveRole() {
+    if (_role.checked) return _role;
+    try {
+      const { data: userData } = await window.supabaseClient.auth.getUser();
+      _role.userId = userData?.user?.id || window.getCurrentUserId?.() || null;
+
+      const [adminRes, leaderRes] = await Promise.all([
+        window.supabaseClient.rpc('is_admin'),
+        window.supabaseClient.rpc('is_team_leader'),
+      ]);
+      _role.isAdmin = adminRes.data === true;
+      _role.isLeader = leaderRes.data === true;
+      _role.checked = true;
+    } catch (e) {
+      console.error('[dispatch-actions] Lỗi xác định quyền:', e);
+    }
+    return _role;
   }
 
-  const S = {
-    incidentId: null,
-    incidentName: null,
-    lat: null,
-    lng: null,
-    testTypeId: null,
-    testTypeIds: [],
-    sampleCount: 20,
-    preset: 'balanced',
-    weights: null,
-    minBsl: null, // BSL chuyên gia chọn (lọc cứng)
-    minQsm: null, // không nhập — chỉ chấm điểm
-    maxTurnaround: null, // không nhập — chỉ chấm điểm
-    pathogens: [], // THÊM DÒNG NÀY ĐỂ LƯU TÁC NHÂN
-    excludeLabIds: [],
-    lastResult: null,
-    map: null,
-    routeLayers: [],
+  // --------------------------------------------------------------------------
+  // GẮN NÚT HÀNH ĐỘNG VÀO MỖI CARD TOP 3 (modal 2B gọi hàm này)
+  //   lab: 1 phần tử trong result.top ; S: state của modal
+  // --------------------------------------------------------------------------
+  window.renderDispatchActions = async function (lab, S) {
+    const slot = document.getElementById('disp-action-' + lab.lab_id);
+    if (!slot) return;
+
+    const role = await resolveRole();
+
+    // Không đủ chỗ → không cho điều thẳng (chỉ cảnh báo); vẫn cho đề xuất để admin cân nhắc
+    const enoughNote = lab.is_enough
+      ? ''
+      : `<div class="text-danger" style="font-size:.7rem;">Vượt công suất còn lại</div>`;
+
+    if (role.isAdmin) {
+      slot.innerHTML = `
+        <button class="btn btn-success btn-sm w-100"
+          onclick='window.confirmDispatch(${_labPayloadAttr(lab, S)})'>
+          <i class='bx bx-check-double'></i> Xác nhận điều phối mẫu
+        </button>${enoughNote}`;
+    } else if (role.isLeader) {
+      slot.innerHTML = `
+        <button class="btn btn-warning btn-sm w-100"
+          onclick='window.suggestDispatch(${_labPayloadAttr(lab, S)})'>
+          <i class='bx bx-send'></i> Đề xuất lên điều phối
+        </button>${enoughNote}`;
+    } else {
+      // Thành viên thường: chỉ xem
+      slot.innerHTML = `<small class="text-muted">Chỉ xem</small>`;
+    }
   };
 
-  let _testTypes = [];
-  let _pathogensCache = []; // THÊM DÒNG NÀY ĐỂ CACHE TÁC NHÂN
+  // Đóng gói dữ liệu lab+ngữ cảnh thành tham số cho onclick (an toàn qua JSON)
+  function _labPayloadAttr(lab, S) {
+    const payload = {
+      source: 'modal',
+      labId: lab.lab_id,
+      labName: lab.lab_name,
+      testTypeId: S.testTypeId,
+      sampleCount: S.sampleCount,
+      incidentId: S.incidentId,
+      km: lab.route.km,
+      minutes: lab.route.minutes,
+      // Đầu mối liên hệ PXN — để RRT liên hệ ngay sau khi chốt
+      headName: lab.head_name || null,
+      headPhone: lab.head_phone || null,
+      headEmail: lab.head_email || null,
+    };
+    // Nhúng dưới dạng chuỗi JSON đã escape nháy đơn để đặt trong onclick='...'
+    return JSON.stringify(payload).replace(/'/g, '&#39;');
+  }
 
-  const RANK_COLORS = ['#16a34a', '#0ea5e9', '#f59e0b'];
-  const FALLBACK_COLOR = '#6b7280';
+  // --------------------------------------------------------------------------
+  // ĐỘI TRƯỞNG: ĐỀ XUẤT (ghi suggested + báo admin)
+  // --------------------------------------------------------------------------
+  window.suggestDispatch = async function (p) {
+    if (typeof p === 'string') p = JSON.parse(p);
+    const role = await resolveRole();
 
-  window.openDispatchModal = async function (opts = {}) {
-    // 1. KIỂM TRA XEM CÓ PHẢI ĐANG MỞ LẠI SỰ KIỆN CŨ HAY KHÔNG
-    const isSameIncident = opts.incidentId === S.incidentId;
+    const note = await _promptNote(
+      'Đề xuất phòng xét nghiệm',
+      `Đề xuất điều ${p.sampleCount} mẫu tới "${p.labName}".\nGhi chú cho điều phối (tùy chọn):`
+    );
+    if (note === null) return; // hủy
 
-    // 2. NẾU LÀ SỰ KIỆN MỚI (HOẶC MỞ CHAY KHÔNG GẮN SỰ KIỆN) -> RESET TRẠNG THÁI
-    if (!isSameIncident) {
-      S.incidentId = opts.incidentId || null;
-      S.incidentName = opts.incidentName || null;
-      S.lat = opts.lat ?? null;
-      S.lng = opts.lng ?? null;
-      S.testTypeId = null;
-      S.testTypeIds = [];
-      S.sampleCount = 20;
-      S.preset = 'balanced';
-      S.weights = null;
-      S.minBsl = null;
-      S.minQsm = null;
-      S.maxTurnaround = null;
-      S.pathogens = []; // Reset tác nhân
-      S.excludeLabIds = [];
-      S.lastResult = null;
-      S.map = null;
-      S.routeLayers = [];
+    try {
+      // 1. Ghi log đề xuất
+      const { data: logRow, error } = await window.supabaseClient
+        .from('lab_dispatch_log')
+        .insert([
+          {
+            lab_id: p.labId,
+            incident_id: p.incidentId || null,
+            test_type_id: p.testTypeId,
+            sample_count: p.sampleCount,
+            status: 'suggested',
+            dispatched_by: role.userId,
+            note: note || null,
+          },
+        ])
+        .select()
+        .single();
+      if (error) throw error;
+
+      // 2. Gửi thông báo cho admin qua hệ thống notifications sẵn có
+      await _notifyAdmins(
+        `Đề xuất điều ${p.sampleCount} mẫu tới ${p.labName}` +
+          (p.incidentId ? ' (có gắn sự kiện)' : ''),
+        p.incidentId
+      );
+
+      if (window.showToast)
+        window.showToast('✅ Đã gửi đề xuất lên điều phối', 'success');
+      // Cập nhật lại nút thành trạng thái đã gửi
+      const slot = document.getElementById('disp-action-' + p.labId);
+      if (slot)
+        slot.innerHTML =
+          '<span class="badge bg-warning text-dark"><i class="bx bx-time"></i> Đã đề xuất</span>';
+    } catch (e) {
+      console.error('[suggestDispatch]', e);
+      if (window.showToast)
+        window.showToast('Lỗi đề xuất: ' + e.message, 'error');
+    }
+  };
+
+  // Gửi notification cho toàn bộ admin (dùng bảng notifications sẵn có)
+  async function _notifyAdmins(message, incidentId) {
+    try {
+      const { data: admins } = await window.supabaseClient
+        .from('profiles')
+        .select('email')
+        .eq('role', 'admin');
+      if (!admins || admins.length === 0) return;
+
+      const rows = admins.map((a) => ({
+        user_email: a.email,
+        message: '[Điều phối Phòng Xét nghiệm] ' + message,
+        notification_type: 'thong_tin',
+        incident_id: incidentId || null,
+        is_read: false,
+      }));
+      await window.supabaseClient.from('notifications').insert(rows);
+    } catch (e) {
+      console.warn('[notifyAdmins] không gửi được thông báo:', e.message);
+      // Không chặn luồng chính nếu notify lỗi
+    }
+  }
+
+  // Báo cho THÀNH VIÊN đang tham gia sự cố khi đã CHỐT điều phối mẫu (kèm km + phút).
+  // Nguồn thành viên: incidents.members (chuỗi email nối bằng ';').
+  async function _notifyIncidentMembers(p) {
+    if (!p.incidentId) {
+      // điều phối mẫu không gắn sự cố (mở từ trang bản đồ) → không có thành viên để báo
+      return;
+    }
+    try {
+      // 1. Lấy danh sách email thành viên + tên loại XN để ghi nội dung
+      const [incRes, ttRes] = await Promise.all([
+        window.supabaseClient
+          .from('incidents')
+          .select('event_name, members')
+          .eq('id', p.incidentId)
+          .single(),
+        window.supabaseClient
+          .from('test_types')
+          .select('name')
+          .eq('id', p.testTypeId)
+          .single(),
+      ]);
+
+      const inc = incRes.data;
+      if (!inc) return;
+
+      const emails = String(inc.members || '')
+        .split(';')
+        .map((e) => e.trim().toLowerCase())
+        .filter(Boolean);
+
+      if (emails.length === 0) {
+        console.info(
+          '[notifyIncidentMembers] Sự kiện chưa có thành viên nào để báo.'
+        );
+        return;
+      }
+
+      const testName = ttRes.data?.name || 'xét nghiệm';
+
+      // 2. Soạn nội dung rút gọn (đã bỏ km và phút di chuyển)
+      const message = `Đã điều ${p.sampleCount} mẫu (${testName}) tới ${p.labName}.`;
+
+      // 3. Ghi vào notifications cho từng thành viên → trigger tự bắn Telegram/email
+      const rows = emails.map((email) => ({
+        user_email: email,
+        message: message,
+        notification_type: 'thong_tin',
+        incident_id: p.incidentId,
+        is_read: false,
+      }));
+      const { error } = await window.supabaseClient
+        .from('notifications')
+        .insert(rows);
+      if (error) throw error;
+
+      console.info(
+        `[notifyIncidentMembers] Đã báo ${emails.length} thành viên sự kiện.`
+      );
+    } catch (e) {
+      console.warn(
+        '[notifyIncidentMembers] tidak gửi được thông báo:',
+        e.message
+      );
+      // Không chặn luồng chính — điều phối mẫu đã thành công dù notify lỗi
+    }
+  }
+
+  // --------------------------------------------------------------------------
+  // ADMIN: CHỐT điều phối mẫu (ghi dispatched → trừ công suất)
+  // --------------------------------------------------------------------------
+  window.confirmDispatch = async function (p) {
+    if (typeof p === 'string') p = JSON.parse(p);
+    const role = await resolveRole();
+    if (!role.isAdmin) {
+      if (window.showToast)
+        window.showToast('Chỉ điều phối viên mới chốt được', 'warning');
+      return;
+    }
+
+    // Phân luồng RÕ RÀNG bằng cờ source. Fallback: có logId → coi như dashboard.
+    const source = p.source || (p.logId ? 'dashboard' : 'modal');
+
+    const routeLine =
+      p.km && p.km !== '?' ? `\n(${p.km} km · ${p.minutes} phút)` : '';
+    const ok = await window.showConfirm({
+      title: 'Xác nhận điều phối mẫu',
+      message: `Xác nhận điều ${p.sampleCount} mẫu tới:\n"${p.labName}"${routeLine}\n\nCông suất còn lại hôm nay của Phòng Xét nghiệm sẽ được trừ tương ứng.`,
+      confirmText: 'Xác nhận',
+      cancelText: 'Xem lại',
+      variant: 'primary',
+      icon: 'bx-check-double',
+    });
+    if (!ok) return;
+
+    try {
+      let logIdToNotify = p.logId;
+
+      if (source === 'dashboard') {
+        // LUỒNG 1 — chốt từ Dashboard (PXN đã khảo sát, đã có log) → UPDATE.
+        // KHÔNG đụng DOM modal, KHÔNG bắt chọn kỹ thuật lại.
+        if (!p.logId)
+          throw new Error('Thiếu logId để cập nhật lệnh điều phối.');
+        const { error } = await window.supabaseClient
+          .from('lab_dispatch_log')
+          .update({
+            status: 'dispatched',
+            sample_count: p.sampleCount,
+            dispatched_by: role.userId,
+          })
+          .eq('id', p.logId);
+        if (error) throw error;
+      } else {
+        // LUỒNG 2 — chốt trực tiếp từ Modal tìm kiếm (chưa khảo sát) → INSERT.
+        // Modal đang mở nên đọc kỹ thuật từ #disp-testtype là hợp lệ.
+        const techSelect = document.getElementById('disp-testtype');
+        let techNames = [];
+        if (techSelect) {
+          techNames =
+            window.$ && $(techSelect).hasClass('select2-hidden-accessible')
+              ? $(techSelect)
+                  .select2('data')
+                  .map((d) => d.text.trim())
+              : Array.from(techSelect.selectedOptions).map((o) =>
+                  o.text.trim()
+                );
+        }
+        if (techNames.length === 0) {
+          if (window.showToast)
+            window.showToast(
+              'Vui lòng chọn ít nhất 1 loại kỹ thuật',
+              'warning'
+            );
+          return;
+        }
+        const S = window._getDispatchState?.();
+        const { data: insertedLog, error } = await window.supabaseClient
+          .from('lab_dispatch_log')
+          .insert([
+            {
+              lab_id: p.labId,
+              incident_id: p.incidentId || null,
+              test_type_id: p.testTypeId,
+              requested_test_types: techNames,
+              pathogens: S?.pathogens || [],
+              sample_count: p.sampleCount,
+              status: 'dispatched',
+              dispatched_by: role.userId,
+            },
+          ])
+          .select('id')
+          .single();
+        if (error) throw error;
+        logIdToNotify = insertedLog.id;
+      }
+
+      if (window.showToast)
+        window.showToast(
+          `✅ Đã điều ${p.sampleCount} mẫu tới ${p.labName}`,
+          'success'
+        );
+      window.supabaseClient.functions
+        .invoke('notify-lab-result', {
+          body: {
+            logId: logIdToNotify,
+            action: 'dispatched',
+            message: `Nhân sự RRT của HCDC sẽ gửi ${p.sampleCount} mẫu đến trong vòng 60 phút. Vui lòng chuẩn bị tiếp nhận.`,
+          },
+        })
+        .catch((err) => console.warn('Lỗi gọi API:', err));
+
+      _showContactReminder(p);
+      await _notifyIncidentMembers(p);
+      await window.showDispatchHistory(p.incidentId, p.testTypeId);
+      if (typeof window._runDispatch === 'function') window._runDispatch();
+    } catch (e) {
+      if (window.showToast)
+        window.showToast('Lỗi xác nhận: ' + e.message, 'error');
+    }
+  };
+
+  // --------------------------------------------------------------------------
+  // ADMIN: DUYỆT / TỪ CHỐI ĐỀ XUẤT CỦA ĐỘI TRƯỞNG
+  // (hiển thị trong panel "Đề xuất đang chờ" — gọi từ showPendingSuggestions)
+  // --------------------------------------------------------------------------
+  window.approveSuggestion = async function (logId, action) {
+    const role = await resolveRole();
+    if (!role.isAdmin) return;
+
+    const newStatus = action === 'approve' ? 'dispatched' : 'cancelled';
+    try {
+      const { error } = await window.supabaseClient
+        .from('lab_dispatch_log')
+        .update({ status: newStatus })
+        .eq('id', logId);
+      if (error) throw error;
+
+      if (window.showToast)
+        window.showToast(
+          action === 'approve' ? 'Đã duyệt đề xuất' : 'Đã từ chối đề xuất',
+          'success'
+        );
+
+      // reload panel đề xuất + kết quả
+      const S = window._getDispatchState?.();
+      await window.showPendingSuggestions(S?.incidentId, S?.testTypeId);
+      if (typeof window._runDispatch === 'function') window._runDispatch();
+    } catch (e) {
+      if (window.showToast) window.showToast('Lỗi: ' + e.message, 'error');
+    }
+  };
+
+  // --------------------------------------------------------------------------
+  // PANEL: ĐỀ XUẤT ĐANG CHỜ DUYỆT (admin thấy, gắn vào modal)
+  // --------------------------------------------------------------------------
+  window.showPendingSuggestions = async function (incidentId, testTypeId) {
+    const role = await resolveRole();
+    const host = document.getElementById('disp-pending');
+    if (!host) return;
+    if (!role.isAdmin) {
+      host.innerHTML = '';
+      return;
     }
 
     try {
-      // 3. TẢI LOẠI XÉT NGHIỆM
-      if (!_testTypes || _testTypes.length === 0) {
-        const { data: ttData, error: ttErr } = await window.supabaseClient
-          .from('test_types')
-          .select('*')
-          .eq('is_active', true)
-          .order('name', { ascending: true });
-        if (ttErr) throw ttErr;
-        _testTypes = ttData || [];
+      let q = window.supabaseClient
+        .from('lab_dispatch_log')
+        .select(
+          '*, laboratories(name), test_types(name), profiles:dispatched_by(full_name)'
+        )
+        .eq('status', 'suggested')
+        .order('created_at', { ascending: false });
+      if (incidentId) q = q.eq('incident_id', incidentId);
+      const { data, error } = await q;
+      if (error) throw error;
+
+      if (!data || data.length === 0) {
+        host.innerHTML = '';
+        return;
       }
 
-      // 4. TẢI DANH MỤC TÁC NHÂN (Đã sửa lỗi khai báo biến ở đây)
-      if (!_pathogensCache || _pathogensCache.length === 0) {
-        const { data: pData, error: pErr } = await window.supabaseClient
-          .from('pathogens')
-          .select('*')
-          .eq('is_active', true)
-          .order('name', { ascending: true });
-        if (pErr) throw pErr;
-        _pathogensCache = pData || []; // Bỏ chữ "window." đi
-      }
+      const rows = data
+        .map(
+          (s) => `
+        <div class="d-flex justify-content-between align-items-center border rounded p-2 mb-1 bg-warning-subtle">
+          <div>
+            <small><b>${esc(s.laboratories?.name || '?')}</b> · ${
+            s.sample_count
+          } mẫu ·
+            ${esc(s.test_types?.name || '')}</small><br>
+            <small class="text-muted">Đề xuất bởi ${esc(
+              s.profiles?.full_name || '—'
+            )}
+            ${s.note ? '· "' + esc(s.note) + '"' : ''}</small>
+          </div>
+          <div class="btn-group btn-group-sm flex-shrink-0">
+            <button class="btn btn-success" onclick="window.approveSuggestion('${
+              s.id
+            }','approve')">
+              <i class='bx bx-check'></i> Duyệt
+            </button>
+            <button class="btn btn-outline-danger" onclick="window.approveSuggestion('${
+              s.id
+            }','reject')">
+              <i class='bx bx-x'></i>
+            </button>
+          </div>
+        </div>`
+        )
+        .join('');
+
+      host.innerHTML = `
+        <div class="card border-warning mb-3">
+          <div class="card-body py-2">
+            <h6 class="mb-2"><i class='bx bx-bell'></i> Đề xuất đang chờ duyệt (${data.length})</h6>
+            ${rows}
+          </div>
+        </div>`;
     } catch (e) {
-      if (window.showToast)
-        window.showToast('Lỗi tải danh mục: ' + e.message, 'error');
-      return;
-    }
-
-    if (!_testTypes.length) {
-      if (window.showToast)
-        window.showToast(
-          'Chưa có loại xét nghiệm nào. Vào Quản lý Phòng Xét nghiệm để thêm danh mục.',
-          'warning'
-        );
-      return;
-    }
-
-    // 5. DỰNG LẠI KHUNG MODAL
-    buildModal();
-
-    // 6. PHỤC HỒI DỮ LIỆU CŨ LÊN GIAO DIỆN (NẾU MỞ LẠI SỰ KIỆN)
-    if (isSameIncident && S.lastResult) {
-      setTimeout(() => {
-        if (S.testTypeId)
-          document.getElementById('disp-testtype').value = S.testTypeId;
-        if (S.sampleCount)
-          document.getElementById('disp-samples').value = S.sampleCount;
-        if (S.minBsl) document.getElementById('disp-bsl').value = S.minBsl;
-
-        const presetRadio = document.querySelector(
-          `input[name="preset"][value="${S.preset}"]`
-        );
-        if (presetRadio) presetRadio.checked = true;
-
-        if (window.$) {
-          if ($('#disp-testtype').hasClass('select2-hidden-accessible')) {
-            $('#disp-testtype').trigger('change');
-          }
-          // Phục hồi lại danh sách tác nhân đã chọn
-          if (S.pathogens && S.pathogens.length) {
-            $('#disp-pathogens').val(S.pathogens).trigger('change');
-          }
-        }
-
-        if (typeof renderResults === 'function') {
-          renderResults(S.lastResult);
-        }
-        // 👉 THÊM DÒNG NÀY ĐỂ ĐỒNG BỘ LẠI TRẠNG THÁI NÚT BẤM
-        if (window.syncDispatchStatuses) window.syncDispatchStatuses();
-      }, 50);
+      console.warn('[showPendingSuggestions]', e.message);
     }
   };
 
-  function buildModal() {
-    document.getElementById('dispatch-modal-wrapper')?.remove();
+  // --------------------------------------------------------------------------
+  // MINI DASHBOARD & LỊCH SỬ ĐIỀU PHỐI (Theo dõi toàn bộ vòng đời Yêu cầu 3)
+  // --------------------------------------------------------------------------
+  window._histState = { scopeIncidentId: null, date: null };
 
-    const ttOptions = _testTypes
-      .map((t) => `<option value="${t.id}">${esc(t.name)}</option>`)
-      .join('');
+  window.showDispatchHistory = function (incidentId) {
+    window._histState.scopeIncidentId = incidentId || null;
+    window._histState.date = new Date().toISOString().slice(0, 10);
+    _renderDispatchHistory();
+  };
 
-    const originBlock = S.incidentId
-      ? `<div class="alert alert-secondary py-2 mb-0">
-           <small class="text-muted d-block">Sự kiện khẩn cấp</small>
-           <strong>${esc(S.incidentName || 'Sự kiện')}</strong>
-           <span class="text-muted"> · ${S.lat?.toFixed?.(
-             5
-           )}, ${S.lng?.toFixed?.(5)}</span>
-         </div>`
-      : `<div>
-           <label class="form-label mb-1"><small>Vị trí sự kiện khẩn cấp</small></label>
-           <div class="input-group input-group-sm mb-2">
-             <input id="disp-address" class="form-control" placeholder="366A Âu Dương Lân, phường Chánh Hưng">
-             <button class="btn btn-outline-primary" type="button" onclick="window._geocodeAddress()">
-               <i class='bx bx-search'></i> Tìm
-             </button>
-             <button class="btn btn-outline-secondary" type="button" onclick="window._dispatchUseMyLocation()" title="Dùng vị trí hiện tại của tôi">
-               <i class='bx bx-current-location'></i>
-             </button>
-           </div>
-           <div class="row g-2">
-             <div class="col-6">
-               <input id="disp-lat" class="form-control form-control-sm" placeholder="Vĩ độ (lat)">
+  async function _renderDispatchHistory() {
+    const st = window._histState;
+    try {
+      // 1. Tải TOÀN BỘ trạng thái trong ngày
+      let q = window.supabaseClient
+        .from('lab_dispatch_log')
+        .select(
+          '*, laboratories(name), test_types(name), incidents(event_name)'
+        )
+        .eq('dispatch_date', st.date)
+        .order('created_at', { ascending: false });
+
+      if (st.scopeIncidentId) q = q.eq('incident_id', st.scopeIncidentId);
+
+      const { data, error } = await q;
+      if (error) throw error;
+
+      const role = await resolveRole();
+      const showIncidentCol = !st.scopeIncidentId;
+
+      // --- HÀM HELPER CHUẨN HÓA CHUỖI (Khắc phục triệt để Lỗi 6: Nhạy dấu/en-dash) ---
+      const normalizeStr = (s) =>
+        String(s || '')
+          .toLowerCase()
+          .trim()
+          .replace(/[–—]/g, '-')
+          .replace(/\s+/g, ' ');
+
+      // ===================================================================
+      // 2. TIỀN XỬ LÝ TRẠNG THÁI & TÍNH TOÁN X/Y TỪNG CHỈ TIÊU
+      // ===================================================================
+      const enrichedData = (data || []).map((d) => {
+        let displayStatus = d.status;
+
+        let reqQty = d.requested_sample_count || 0;
+        let accQty = d.accepted_sample_count || 0;
+        let isQtyFull = accQty >= reqQty;
+
+        let reqTechs = d.requested_test_types || [];
+        if (reqTechs.length === 0 && d.test_types?.name)
+          reqTechs = [d.test_types.name];
+        let accTechs = d.accepted_test_types || [];
+
+        // So sánh an toàn qua chuỗi đã chuẩn hóa
+        const normReqTechs = reqTechs.map(normalizeStr);
+        const normAccTechs = accTechs.map(normalizeStr);
+        let isTechFull =
+          normReqTechs.length === 0 ||
+          normReqTechs.every((t) => normAccTechs.includes(t));
+
+        let reqPaths = d.pathogens || [];
+        let accPaths = d.accepted_pathogens || [];
+        const normReqPaths = reqPaths.map(normalizeStr);
+        const normAccPaths = accPaths.map(normalizeStr);
+        let isPathFull =
+          normReqPaths.length === 0 ||
+          normReqPaths.every((p) => normAccPaths.includes(p));
+
+        let isSpecialtyFull = isTechFull && isPathFull;
+        let specificWarning = [];
+
+        if (
+          displayStatus === 'partially_accepted' ||
+          displayStatus === 'accepted'
+        ) {
+          if (isQtyFull && isSpecialtyFull) {
+            displayStatus = 'accepted_full';
+          } else {
+            displayStatus = 'accepted_partial';
+            if (!isQtyFull) specificWarning.push('Thiếu mẫu');
+            if (!isTechFull) specificWarning.push('Thiếu Kỹ thuật');
+            if (!isPathFull) specificWarning.push('Thiếu Tác nhân');
+          }
+        }
+
+        return {
+          ...d,
+          displayStatus,
+          specificWarning,
+          reqTechs,
+          accTechs,
+          reqPaths,
+          accPaths,
+          reqQty,
+          accQty,
+        };
+      });
+      // Lưu trữ tạm dữ liệu đã xử lý để phục vụ việc Xuất Excel
+      window._currentHistExportData = enrichedData;
+      // ===================================================================
+      // 3. TÍNH TOÁN THỐNG KÊ MINI DASHBOARD (Thống nhất dùng displayStatus)
+      // ===================================================================
+      let stats = {
+        waitingLabs: 0,
+        fullAccLabs: 0,
+        partialLabs: { total: 0, qtyShort: 0, techShort: 0, pathShort: 0 },
+        rejectedLabs: 0,
+        dispatchedSamples: 0,
+      };
+
+      enrichedData.forEach((d) => {
+        if (['inquiry_sent', 'suggested'].includes(d.displayStatus))
+          stats.waitingLabs++;
+        else if (d.displayStatus === 'accepted_full') stats.fullAccLabs++;
+        else if (d.displayStatus === 'accepted_partial') {
+          stats.partialLabs.total++;
+          if (d.accQty < d.reqQty) stats.partialLabs.qtyShort++;
+          if (d.specificWarning.includes('Thiếu Kỹ thuật'))
+            stats.partialLabs.techShort++;
+          if (d.specificWarning.includes('Thiếu Tác nhân'))
+            stats.partialLabs.pathShort++;
+        } else if (d.displayStatus === 'rejected') stats.rejectedLabs++;
+
+        // Thống nhất kiểm tra displayStatus cho cả trạng thái chốt
+        if (['dispatched', 'completed'].includes(d.displayStatus)) {
+          stats.dispatchedSamples += d.sample_count || 0;
+        }
+      });
+
+      // ===================================================================
+      // 4. KHUNG ĐỀ BÀI & THUẬT TOÁN GỢI Ý (Đã vá Lỗi 3, 4, 5)
+      // ===================================================================
+      let reqBlockHtml = '';
+      if (enrichedData.length > 0) {
+        let sampleD = enrichedData[0];
+        let eventName =
+          sampleD.incidents?.event_name || 'Tìm Phòng xét nghiệm (Bản đồ)';
+
+        const uniqueKeys = new Set(
+          enrichedData.map(
+            (d) =>
+              `${d.incident_id || 'map'}_${d.reqTechs.join(
+                ','
+              )}_${d.reqPaths.join(',')}_${d.reqQty}`
+          )
+        );
+        const isMixed = uniqueKeys.size > 1;
+
+        let blockTitle = isMixed
+          ? 'YÊU CẦU ĐIỀU PHỐI MẪU GẦN NHẤT'
+          : 'YÊU CẦU ĐIỀU PHỐI MẪU';
+        let badgeColor = sampleD.incidents?.event_name
+          ? 'bg-primary'
+          : 'bg-secondary';
+        let techsText =
+          sampleD.reqTechs.length > 0
+            ? sampleD.reqTechs.map(esc).join(', ')
+            : 'Không rõ';
+        let pathsText =
+          sampleD.reqPaths.length > 0
+            ? sampleD.reqPaths.map(esc).join(', ')
+            : 'Không yêu cầu';
+
+        let suggestionHtml = '';
+        let isAlreadyDispatched = enrichedData.some((d) =>
+          ['dispatched', 'completed'].includes(d.displayStatus)
+        );
+
+        // 👉 Vá Lỗi 3: Nếu đã có đơn vị nhận full 100% thì KHÔNG cần chạy thuật toán ghép đôi thừa thãi
+        let hasFullAccepted = enrichedData.some(
+          (d) => d.displayStatus === 'accepted_full'
+        );
+
+        if (!isMixed && !isAlreadyDispatched && !hasFullAccepted) {
+          // 👉 Vá Lỗi 4: Giới hạn tối đa 10 candidates để bảo vệ hiệu năng O(n³) tránh khựng UI
+          // Điểm 1: chỉ ghép PXN nhận 1 phần (đã chặn hasFullAccepted phía trên).
+          // Trần 12 ứng viên, ưu tiên PXN nhận nhiều mẫu → bảo vệ hiệu năng O(n³).
+          let candidates = enrichedData
+            .filter((d) => d.displayStatus === 'accepted_partial')
+            .sort((a, b) => (b.accQty || 0) - (a.accQty || 0))
+            .slice(0, 12);
+
+          const reqTechsN = sampleD.reqTechs.map(normalizeStr);
+          const reqPathsN = sampleD.reqPaths.map(normalizeStr);
+
+          // Kiểm 1 tổ hợp có phủ 100% đề bài không + trả tổng mẫu (để tính dư)
+          const coverInfo = (combo) => {
+            let sumQty = 0;
+            const techs = new Set();
+            const paths = new Set();
+            combo.forEach((c) => {
+              sumQty += c.accQty || 0;
+              (c.accTechs || []).forEach((t) => techs.add(normalizeStr(t)));
+              (c.accPaths || []).forEach((p) => paths.add(normalizeStr(p)));
+            });
+            const valid =
+              sumQty >= sampleD.reqQty &&
+              reqTechsN.every((t) => techs.has(t)) &&
+              reqPathsN.every((p) => paths.has(p));
+            return { valid, sumQty };
+          };
+
+          // Điểm 2: BEST combo thật — chấm điểm mọi tổ hợp cỡ 2 & 3.
+          // Ưu tiên ÍT PXN nhất → trong cùng số PXN thì DƯ mẫu ít nhất.
+          let best = null;
+          const consider = (combo) => {
+            const info = coverInfo(combo);
+            if (!info.valid) return;
+            const overshoot = info.sumQty - sampleD.reqQty;
+            const score = combo.length * 100000 + overshoot; // ít PXN quan trọng hơn
+            if (!best || score < best.score) best = { combo, score, overshoot };
+          };
+          const nCand = candidates.length;
+          for (let i = 0; i < nCand; i++) {
+            for (let j = i + 1; j < nCand; j++) {
+              consider([candidates[i], candidates[j]]);
+              for (let k = j + 1; k < nCand; k++) {
+                consider([candidates[i], candidates[j], candidates[k]]);
+              }
+            }
+          }
+
+          if (best) {
+            const comboNames = best.combo
+              .map(
+                (c) =>
+                  `<b class="text-dark">${esc(
+                    c.laboratories?.name || 'PXN'
+                  )}</b>`
+              )
+              .join(' <span class="text-muted">+</span> ');
+            const overNote =
+              best.overshoot > 0
+                ? ` <span class="text-muted">(dư ${best.overshoot} mẫu)</span>`
+                : '';
+            suggestionHtml = `
+                <div class="mt-3 p-2 rounded" style="background-color: #fef9c3; border: 1px dashed #eab308; font-size: 13px; color: #854d0e; animation: slideDown 0.5s ease;">
+                  <i class='bx bx-bulb text-warning fs-5 align-middle me-1'></i>
+                  <b>AP Assitant:</b> Chọn đồng thời ${comboNames} để bù trừ chuyên môn cho nhau và đáp ứng 100% Yêu cầu điều phối mẫu${overNote}.
+                </div>
+              `;
+          } else if (candidates.length > 0) {
+            // Điểm 3: có PXN nhận 1 phần nhưng ghép tối đa 3 PXN vẫn CHƯA đủ → cảnh báo mềm
+            suggestionHtml = `
+                <div class="mt-3 p-2 rounded" style="background-color: #fee2e2; border: 1px dashed #ef4444; font-size: 13px; color: #991b1b;">
+                  <i class='bx bx-error-circle fs-5 align-middle me-1'></i>
+                  <b>Chưa đủ năng lực:</b> Các phản hồi hiện tại (kể cả khi ghép nhiều PXN) vẫn chưa đáp ứng đủ Yêu cầu điều phối mẫu. Cân nhắc gửi khảo sát thêm đơn vị khác.
+                </div>
+              `;
+          }
+        }
+
+        reqBlockHtml = `
+          <div class="alert border-0 shadow-sm mb-3" style="background-color: #f0fdf4; position: relative; overflow: hidden; padding: 12px 16px;">
+             <div style="position: absolute; top: 0; left: 0; width: 4px; height: 100%; background-color: #16a34a;"></div>
+             <div class="d-flex align-items-center gap-3">
+               <div style="font-size: 32px; color: #16a34a;"><i class='bx bx-bullseye'></i></div>
+               <div class="flex-grow-1">
+                 <div class="d-flex justify-content-between align-items-center mb-2">
+                   <div class="fw-bold text-dark" style="font-size: 14px; text-transform: uppercase;">
+                     ${blockTitle} 
+                     <span class="badge ${badgeColor} ms-2 fw-normal" style="text-transform: none;">${esc(
+          eventName
+        )}</span>
+                   </div>
+                   ${
+                     isMixed
+                       ? `<span class="badge bg-warning text-dark shadow-sm" style="font-size:11px; font-weight:600;"><i class='bx bx-error-circle'></i> Ngày này có nhiều Yêu cầu điều phối mẫu khác nhau</span>`
+                       : ''
+                   }
+                 </div>
+                 <div class="row g-2 text-muted" style="font-size: 13px;">
+                   <div class="col-md-5"><b>Kỹ thuật xét nghiệm:</b> <span class="text-success fw-bold">${techsText}</span></div>
+                   <div class="col-md-5"><b>Tác nhân gây bệnh:</b> <span class="text-success fw-bold">${pathsText}</span></div>
+                   <div class="col-md-2"><b>Số lượng:</b> <span class="text-success fw-bold">${
+                     sampleD.reqQty
+                   }</span> mẫu</div>
+                 </div>
+               </div>
              </div>
-             <div class="col-6">
-               <input id="disp-lng" class="form-control form-control-sm" placeholder="Kinh độ (lng)">
-             </div>
-           </div>
-           <div id="disp-origin-hint" class="mt-1"></div>
-         </div>`;
+             ${suggestionHtml}
+          </div>
+        `;
+      }
 
-    const wrap = document.createElement('div');
-    wrap.id = 'dispatch-modal-wrapper';
-    // -- XỬ LÝ HTML ĐỘNG CHO TÁC NHÂN --
-    const groupA = _pathogensCache.filter((p) => p.category === 'Nhóm A');
-    const groupB = _pathogensCache.filter((p) => p.category === 'Nhóm B');
-    const groupOther = _pathogensCache.filter(
-      (p) => p.category !== 'Nhóm A' && p.category !== 'Nhóm B'
+      // ===================================================================
+      // 5. RENDER CÁC DÒNG BẢNG
+      // ===================================================================
+      const rows = enrichedData
+        .map((d) => {
+          const displayStatus = d.displayStatus;
+          const hasResponded = [
+            'accepted_full',
+            'accepted_partial',
+            'dispatched',
+            'completed',
+          ].includes(displayStatus);
+
+          let displayTechsHtml = '';
+          if (hasResponded) {
+            let techList =
+              d.accTechs.length > 0
+                ? d.accTechs.map(esc).join('<br>')
+                : '<span class="text-muted">Không nhận kỹ thuật nào</span>';
+            let ratioColor =
+              d.accTechs.length >= d.reqTechs.length
+                ? 'text-success'
+                : 'text-danger';
+            displayTechsHtml = `
+            <div style="line-height:1.4;">${techList}</div>
+            <div class="mt-1 ${ratioColor}" style="font-size:11px; font-weight:600;"><i class='bx bx-filter-alt'></i> Nhận: ${d.accTechs.length} / ${d.reqTechs.length}</div>
+          `;
+          } else {
+            let techList =
+              d.reqTechs.length > 0
+                ? d.reqTechs.map(esc).join('<br>')
+                : '<span class="text-muted">Không rõ</span>';
+            displayTechsHtml = `
+            <div style="line-height:1.4;">${techList}</div>
+            <div class="mt-1 text-muted" style="font-size:11px;"><i class='bx bx-target-lock'></i> Yêu cầu: ${d.reqTechs.length} loại</div>
+          `;
+          }
+
+          let displayPathsHtml = '';
+          if (hasResponded) {
+            let reqLen = d.reqPaths.length || 0;
+            if (reqLen > 0) {
+              let pathList =
+                d.accPaths.length > 0
+                  ? d.accPaths.map(esc).join('<br>')
+                  : '<span class="text-muted">Không nhận tác nhân nào</span>';
+              let ratioColor =
+                d.accPaths.length >= reqLen ? 'text-success' : 'text-danger';
+              displayPathsHtml = `
+              <div style="line-height:1.4;">${pathList}</div>
+              <div class="mt-1 ${ratioColor}" style="font-size:11px; font-weight:600;"><i class='bx bx-bug'></i> Nhận: ${d.accPaths.length} / ${reqLen}</div>
+            `;
+            } else
+              displayPathsHtml = `<span class="text-muted">Không yêu cầu</span>`;
+          } else {
+            let reqLen = d.reqPaths.length || 0;
+            if (reqLen > 0) {
+              let pathList = d.reqPaths.map(esc).join('<br>');
+              displayPathsHtml = `
+              <div style="line-height:1.4;">${pathList}</div>
+              <div class="mt-1 text-muted" style="font-size:11px;"><i class='bx bx-target-lock'></i> Yêu cầu: ${reqLen} loại</div>
+            `;
+            } else
+              displayPathsHtml = `<span class="text-muted">Không yêu cầu</span>`;
+          }
+
+          let sampleInfo = '';
+          if (
+            ['inquiry_sent', 'suggested', 'rejected'].includes(displayStatus)
+          ) {
+            sampleInfo = `<div class="text-muted">Yêu cầu: <b>${d.reqQty}</b></div>`;
+          } else if (
+            ['accepted_full', 'accepted_partial'].includes(displayStatus)
+          ) {
+            let ratioColor =
+              d.accQty >= d.reqQty ? 'text-success' : 'text-danger';
+            sampleInfo = `<div class="${ratioColor} fw-bold" style="font-size:14px;">Nhận: ${d.accQty} / ${d.reqQty}</div>`;
+          } else {
+            sampleInfo = `<div class="text-primary fw-bold" style="font-size:14px;">Đã chốt: ${d.sample_count}</div>`;
+          }
+
+          let statusBadge = '';
+          if (displayStatus === 'suggested')
+            statusBadge = `<span class="badge bg-warning text-dark"><i class='bx bx-time'></i> Đề xuất chờ duyệt</span>`;
+          else if (displayStatus === 'inquiry_sent')
+            statusBadge = `<span class="badge bg-info text-dark"><i class='bx bx-mail-send'></i> Chờ phản hồi</span>`;
+          else if (displayStatus === 'accepted_full')
+            statusBadge = `<span class="badge bg-success"><i class='bx bx-check-double'></i> Nhận toàn bộ</span>`;
+          else if (displayStatus === 'accepted_partial') {
+            statusBadge = `<span class="badge bg-warning text-dark"><i class='bx bx-adjust'></i> Nhận một phần</span>
+                         <div class="text-danger mt-1 fw-bold" style="font-size:10px;">(${d.specificWarning.join(
+                           ' & '
+                         )})</div>`;
+          } else if (displayStatus === 'rejected')
+            statusBadge = `<span class="badge bg-danger"><i class='bx bx-block'></i> Không nhận/Quá tải</span>`;
+          else if (displayStatus === 'dispatched')
+            statusBadge = `<span class="badge bg-primary"><i class='bx bx-rocket'></i> Đã chốt lệnh</span>`;
+          else if (displayStatus === 'completed')
+            statusBadge = `<span class="badge bg-success"><i class='bx bx-check'></i> Hoàn thành</span>`;
+          else if (displayStatus === 'cancelled')
+            statusBadge = `<span class="badge bg-secondary"><i class='bx bx-x'></i> Đã hủy</span>`;
+
+          let actionBtns = '';
+          if (role.isAdmin) {
+            if (['accepted_full', 'accepted_partial'].includes(displayStatus)) {
+              let pObj = {
+                source: 'dashboard',
+                labId: d.lab_id,
+                labName: d.laboratories?.name,
+                km: '?',
+                minutes: '?',
+                headName: d.laboratories?.head_name,
+                headPhone: d.laboratories?.head_phone,
+                headEmail: d.laboratories?.head_email,
+                testTypeId: d.test_type_id,
+                sampleCount: d.accQty,
+                incidentId: d.incident_id,
+                logId: d.id,
+              };
+              const finalPayload = JSON.stringify(pObj).replace(/'/g, '&#39;');
+              actionBtns = `<button class="btn btn-sm btn-success w-100 mb-1" onclick='window.confirmDispatch(${finalPayload})'>
+                          <i class='bx bx-check'></i> Chốt ngay
+                        </button>`;
+            }
+
+            let cxLabel = '',
+              cxIcon = 'bx-x-circle',
+              cxCls = 'btn-outline-danger';
+            if (displayStatus === 'dispatched') {
+              cxLabel = 'Thu hồi';
+              cxIcon = 'bx-undo';
+              cxCls = 'btn-outline-danger';
+            } else if (
+              ['accepted_full', 'accepted_partial', 'inquiry_sent'].includes(
+                displayStatus
+              )
+            ) {
+              cxLabel = 'Bỏ qua';
+              cxIcon = 'bx-x-circle';
+              cxCls = 'btn-outline-secondary';
+            } else if (displayStatus === 'suggested') {
+              cxLabel = 'Bỏ qua';
+              cxIcon = 'bx-x';
+              cxCls = 'btn-outline-danger';
+            }
+            if (cxLabel) {
+              actionBtns += `<button class="btn btn-sm ${cxCls} w-100" onclick="window.cancelDispatch('${d.id}')">
+                            <i class='bx ${cxIcon}'></i> ${cxLabel}
+                          </button>`;
+            }
+          }
+
+          return `
+      <tr class="${
+        displayStatus === 'rejected' ? 'table-secondary opacity-75' : ''
+      }">
+        ${
+          showIncidentCol
+            ? `<td><small class="fw-bold">${esc(
+                d.incidents?.event_name || '—'
+              )}</small></td>`
+            : ''
+        }
+        <td><b>${esc(d.laboratories?.name || '?')}</b></td>
+        <td><small class="text-primary fw-bold">${displayTechsHtml}</small></td>
+        <td><small class="text-secondary fw-bold">${displayPathsHtml}</small></td>
+        <td class="text-center">${sampleInfo}</td>
+        <td class="text-center">${statusBadge}</td>
+        <td class="text-center" style="width: 100px;">${actionBtns}</td>
+      </tr>`;
+        })
+        .join('');
+
+      const colspan = showIncidentCol ? 7 : 6;
+      const headIncident = showIncidentCol ? '<th>Sự kiện</th>' : '';
+
+      const scopeToggle = st.scopeIncidentId
+        ? `<button class="btn btn-sm btn-outline-primary" onclick="window._histSetScope(null)">
+             <i class='bx bx-list-ul'></i> Xem tất cả sự kiện
+           </button>`
+        : `<span class="badge bg-secondary">Đang xem: tất cả sự kiện</span>`;
+
+      // ===================================================================
+      // 6. RENDER GIAO DIỆN CHÍNH MODAL
+      // ===================================================================
+      document.getElementById('dispatch-history-wrapper')?.remove();
+      const wrap = document.createElement('div');
+      wrap.id = 'dispatch-history-wrapper';
+      wrap.innerHTML = `
+        <div class="modal fade" id="dispatchHistModal" tabindex="-1">
+          <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content">
+              <div class="modal-header" style="background:#006a75;color:#fff;">
+                <h5 class="modal-title"><i class='bx bx-radar'></i> Theo dõi điều phối mẫu</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+              </div>
+              <div class="modal-body" style="background: #f8f9fa;">
+                
+              <!-- HEADER CHỌN NGÀY & NÚT XUẤT EXCEL -->
+              <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+                <div class="d-flex align-items-center gap-2">
+                  <label class="mb-0 fw-bold"><i class='bx bx-calendar'></i> Theo dõi ngày:</label>
+                  <input type="date" id="hist-date" class="form-control" style="width:auto; font-weight: bold;"
+                         value="${
+                           st.date
+                         }" onchange="window._histSetDate(this.value)">
+                </div>
+                
+                <div class="d-flex gap-2">
+                  <button class="btn btn-sm btn-success shadow-sm" onclick="window.exportDispatchHistoryToExcel()">
+                    <i class='bx bx-export'></i> Xuất file (*.CSV)
+                  </button>
+                  ${scopeToggle}
+                </div>
+              </div>
+
+                ${reqBlockHtml}
+
+                <div class="row row-cols-1 row-cols-md-5 g-2 mb-3">
+                  <div class="col">
+                    <div class="card bg-info text-white h-100 border-0 shadow-sm">
+                      <div class="card-body p-2 text-center">
+                        <h6 class="mb-1" style="font-size: 11.5px;"><i class='bx bx-mail-send'></i> Đang chờ phản hồi</h6>
+                        <h4 class="mb-0 fw-bold">${
+                          stats.waitingLabs
+                        } <small style="font-size:11px; font-weight:normal;">PXN</small></h4>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="col">
+                    <div class="card bg-success text-white h-100 border-0 shadow-sm">
+                      <div class="card-body p-2 text-center">
+                        <h6 class="mb-1" style="font-size: 11.5px;"><i class='bx bx-check-double'></i> Nhận toàn bộ</h6>
+                        <h4 class="mb-0 fw-bold">${
+                          stats.fullAccLabs
+                        } <small style="font-size:11px; font-weight:normal;">PXN</small></h4>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="col">
+                  <div class="card bg-warning text-dark h-100 border-0 shadow-sm">
+                    <div class="card-body p-2 text-center">
+                      <h6 class="mb-1" style="font-size: 11.5px;"><i class='bx bx-adjust'></i> Nhận một phần</h6>
+                      <h4 class="mb-0 fw-bold">${
+                        stats.partialLabs.total
+                      } <small style="font-size:11px; font-weight:normal;">PXN</small></h4>
+                      <div style="font-size:10px; margin-top: 3px; opacity: 0.85; font-weight: 600; line-height: 1.5;">
+                         Thiếu mẫu: ${stats.partialLabs.qtyShort}<br>
+                         Thiếu Kỹ thuật: ${
+                           stats.partialLabs.techShort
+                         } | Thiếu Tác nhân: ${stats.partialLabs.pathShort}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                  <div class="col">
+                    <div class="card bg-danger text-white h-100 border-0 shadow-sm">
+                      <div class="card-body p-2 text-center">
+                        <h6 class="mb-1" style="font-size: 11.5px;"><i class='bx bx-block'></i> Không nhận/Quá tải</h6>
+                        <h4 class="mb-0 fw-bold">${
+                          stats.rejectedLabs
+                        } <small style="font-size:11px; font-weight:normal;">PXN</small></h4>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="col">
+                    <div class="card bg-primary text-white h-100 border-0 shadow-sm">
+                      <div class="card-body p-2 text-center">
+                        <h6 class="mb-1" style="font-size: 11.5px;"><i class='bx bx-rocket'></i> ĐÃ CHỐT ĐIỀU PHỐI</h6>
+                        <h4 class="mb-0 fw-bold">${
+                          stats.dispatchedSamples
+                        } <small style="font-size:11px; font-weight:normal;">mẫu</small></h4>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="card border-0 shadow-sm">
+                  <div class="card-body p-0 table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                      <thead class="table-light"><tr>
+                        ${headIncident}
+                        <th>Phòng Xét nghiệm</th>
+                        <th>Kỹ thuật xét nghiệm</th>
+                        <th>Tác nhân gây bệnh</th>
+                        <th class="text-center">Số lượng</th>
+                        <th class="text-center">Trạng thái (Realtime)</th>
+                        <th class="text-center">Thao tác</th>
+                      </tr></thead>
+                      <tbody>${
+                        rows ||
+                        `<tr><td colspan="${colspan}" class="text-center text-muted py-4">Không có hoạt động điều phối nào ${
+                          st.scopeIncidentId ? 'cho sự kiện này ' : ''
+                        }trong ngày ${st.date}.</td></tr>`
+                      }</tbody>
+                    </table>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+          </div>
+        </div>`;
+      document.body.appendChild(wrap);
+      new bootstrap.Modal(document.getElementById('dispatchHistModal')).show();
+    } catch (e) {
+      console.error('[showDispatchHistory]', e);
+      if (window.showToast)
+        window.showToast('Lỗi tải lịch sử: ' + e.message, 'error');
+    }
+  }
+
+  window._histSetScope = function (incidentId) {
+    window._histState.scopeIncidentId = incidentId;
+    _renderDispatchHistory();
+  };
+
+  window._histSetDate = function (dateStr) {
+    window._histState.date = dateStr;
+    _renderDispatchHistory();
+  };
+  // ===================================================================
+  // HÀM XUẤT BÁO CÁO ĐIỀU PHỐI RA FILE EXCEL (CSV)
+  // ===================================================================
+  window.exportDispatchHistoryToExcel = function () {
+    const data = window._currentHistExportData; // Lấy dữ liệu đã được xử lý từ hàm render
+    if (!data || data.length === 0) {
+      if (window.showToast)
+        window.showToast('Không có dữ liệu để xuất', 'warning');
+      return;
+    }
+
+    // 1. Khởi tạo nội dung CSV với BOM (\uFEFF) để Excel nhận diện đúng Tiếng Việt có dấu
+    let csvContent = '\uFEFF';
+
+    // 2. Tạo dòng tiêu đề (Headers)
+    csvContent +=
+      'Sự kiện,Phòng Xét nghiệm,Kỹ thuật yêu cầu,Kỹ thuật nhận,Tác nhân yêu cầu,Tác nhân nhận,Số lượng yêu cầu,Số lượng nhận,Số lượng chốt,Trạng thái\n';
+
+    // 3. Quét dữ liệu và định dạng từng dòng
+    data.forEach((d) => {
+      const eventName = `"${d.incidents?.event_name || 'Điều phối độc lập'}"`;
+      const labName = `"${d.laboratories?.name || ''}"`;
+      const reqTechs = `"${d.reqTechs.join(', ')}"`;
+      const accTechs = `"${d.accTechs.join(', ')}"`;
+      const reqPaths = `"${d.reqPaths.join(', ')}"`;
+      const accPaths = `"${d.accPaths.join(', ')}"`;
+      const reqQty = d.reqQty || 0;
+      const accQty = d.accQty || 0;
+      const dispatchedQty = d.sample_count || 0;
+
+      // Chuyển mã trạng thái sang Tiếng Việt dễ đọc
+      const statusMap = {
+        suggested: 'Đề xuất chờ duyệt',
+        inquiry_sent: 'Đang chờ phản hồi',
+        accepted_full: 'Đồng ý 100%',
+        accepted_partial: 'Nhận 1 phần / Lệch',
+        rejected: 'Từ chối / Quá tải',
+        dispatched: 'Đã chốt lệnh',
+        completed: 'Hoàn thành',
+        cancelled: 'Đã hủy',
+      };
+      let statusText = `"${statusMap[d.displayStatus] || d.displayStatus}"`;
+
+      // Nối các cột lại bằng dấu phẩy
+      csvContent +=
+        [
+          eventName,
+          labName,
+          reqTechs,
+          accTechs,
+          reqPaths,
+          accPaths,
+          reqQty,
+          accQty,
+          dispatchedQty,
+          statusText,
+        ].join(',') + '\n';
+    });
+
+    // 4. Kích hoạt trình duyệt tải file xuống
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute(
+      'download',
+      `Bao_Cao_Dieu_Phoi_${window._histState.date}.csv`
     );
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+  // --------------------------------------------------------------------------
+  // HỦY LỆNH điều phối mẫu (→ cancelled, trả lại công suất)
+  // --------------------------------------------------------------------------
+  window.cancelDispatch = async function (logId) {
+    // Đọc trạng thái hiện tại để quyết định nhãn xác nhận + email phù hợp
+    const { data: before } = await window.supabaseClient
+      .from('lab_dispatch_log')
+      .select('status')
+      .eq('id', logId)
+      .single();
+    const status = before?.status;
+    const wasDispatched = status === 'dispatched';
+    const isResponded = [
+      'accepted',
+      'partially_accepted',
+      'inquiry_sent',
+    ].includes(status);
 
-    let pathogenHtml = '';
-    if (groupA.length) {
-      pathogenHtml +=
-        `<optgroup label="Bệnh truyền nhiễm Nhóm A (Đặc biệt nguy hiểm)">` +
-        groupA
-          .map((p) => `<option value="${p.name}">${p.name}</option>`)
-          .join('') +
-        `</optgroup>`;
+    // Nhãn hộp xác nhận theo ngữ cảnh
+    let confTitle, confMsg, confBtn;
+    if (wasDispatched) {
+      confTitle = 'Thu hồi lệnh điều phối';
+      confMsg =
+        'Thu hồi lệnh đã chốt? Công suất sẽ được trả lại cho PXN. Đơn vị sẽ nhận email báo lệnh đã hủy.';
+      confBtn = 'Thu hồi lệnh';
+    } else if (isResponded) {
+      confTitle = 'Không chọn đơn vị này';
+      confMsg =
+        'Không điều phối tới đơn vị này? Đơn vị sẽ nhận email cảm ơn và biết HCDC đã gửi mẫu ở nơi khác.';
+      confBtn = 'Không chọn đơn vị này';
+    } else {
+      confTitle = 'Bỏ đề xuất';
+      confMsg =
+        'Bỏ dòng đề xuất này? (Đơn vị chưa được liên hệ nên sẽ không nhận thông báo.)';
+      confBtn = 'Bỏ đề xuất';
     }
-    if (groupB.length) {
-      pathogenHtml +=
-        `<optgroup label="Bệnh truyền nhiễm Nhóm B (Nguy hiểm)">` +
-        groupB
-          .map((p) => `<option value="${p.name}">${p.name}</option>`)
-          .join('') +
-        `</optgroup>`;
+
+    const ok = await window.showConfirm({
+      title: confTitle,
+      message: confMsg,
+      confirmText: confBtn,
+      cancelText: 'Giữ lại',
+      variant: 'danger',
+      icon: 'bx-x-circle',
+    });
+    if (!ok) return;
+
+    try {
+      const { error } = await window.supabaseClient
+        .from('lab_dispatch_log')
+        .update({ status: 'cancelled' })
+        .eq('id', logId);
+      if (error) throw error;
+
+      if (window.showToast)
+        window.showToast('Đã cập nhật trạng thái', 'success');
+
+      // Gửi email/telegram theo ngữ cảnh (chạy ngầm)
+      if (wasDispatched) {
+        window.supabaseClient.functions
+          .invoke('notify-lab-result', {
+            body: {
+              logId: logId,
+              action: 'cancelled',
+              message:
+                'Lệnh điều phối mẫu trước đó đã được HCDC thu hồi. Đơn vị KHÔNG cần chuẩn bị tiếp nhận. Trân trọng cảm ơn sự phối hợp của đơn vị!',
+            },
+          })
+          .catch((err) => console.warn('Lỗi gửi báo thu hồi:', err));
+      } else if (isResponded) {
+        window.supabaseClient.functions
+          .invoke('notify-lab-result', {
+            body: {
+              logId: logId,
+              action: 'not_selected',
+              message:
+                'HCDC cảm ơn phản hồi năng lực của đơn vị. Lần điều phối này HCDC đã gửi mẫu tới đơn vị khác. Rất mong tiếp tục nhận được sự phối hợp của đơn vị trong các đợt sau!',
+            },
+          })
+          .catch((err) => console.warn('Lỗi gửi báo không chọn:', err));
+      }
+      // suggested → KHÔNG gửi email (đơn vị chưa được liên hệ)
+
+      // Reload lịch sử GIỮ NGUYÊN phạm vi + ngày đang xem
+      _renderDispatchHistory();
+      if (typeof window._runDispatch === 'function') window._runDispatch();
+    } catch (e) {
+      if (window.showToast) window.showToast('Lỗi: ' + e.message, 'error');
     }
-    if (groupOther.length) {
-      pathogenHtml +=
-        `<optgroup label="Khác">` +
-        groupOther
-          .map((p) => `<option value="${p.name}">${p.name}</option>`)
-          .join('') +
-        `</optgroup>`;
-    }
+  };
+
+  // --------------------------------------------------------------------------
+  // Ô NHẬP GHI CHÚ (promise, thay prompt() xấu)
+  // --------------------------------------------------------------------------
+  function _promptNote(title, message) {
+    return new Promise((resolve) => {
+      document.getElementById('note-modal-wrapper')?.remove();
+      const wrap = document.createElement('div');
+      wrap.id = 'note-modal-wrapper';
+      wrap.innerHTML = `
+        <div class="modal fade" id="noteModal" tabindex="-1">
+          <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+              <div class="modal-header" style="background:#006a75;color:#fff;">
+                <h5 class="modal-title">${esc(title)}</h5>
+              </div>
+              <div class="modal-body">
+                <p style="white-space:pre-line;">${esc(message)}</p>
+                <textarea id="note-input" class="form-control" rows="2" placeholder="Ghi chú..."></textarea>
+              </div>
+              <div class="modal-footer">
+                <button class="btn btn-secondary" id="note-cancel">Hủy</button>
+                <button class="btn btn-primary" id="note-ok">Gửi đề xuất</button>
+              </div>
+            </div>
+          </div>
+        </div>`;
+      document.body.appendChild(wrap);
+      const modalEl = document.getElementById('noteModal');
+      const modal = new bootstrap.Modal(modalEl);
+      let done = false,
+        val = null;
+      const finish = (v) => {
+        if (done) return;
+        done = true;
+        val = v;
+        modal.hide();
+      };
+      document.getElementById('note-ok').onclick = () =>
+        finish(document.getElementById('note-input').value.trim());
+      document.getElementById('note-cancel').onclick = () => finish(null);
+      modalEl.addEventListener(
+        'hidden.bs.modal',
+        () => {
+          wrap.remove();
+          setTimeout(() => {
+            if (!document.querySelector('.modal.show')) {
+              document
+                .querySelectorAll('.modal-backdrop')
+                .forEach((b) => b.remove());
+              document.body.classList.remove('modal-open');
+              document.body.style.overflow = '';
+            }
+          }, 150);
+          resolve(val);
+        },
+        { once: true }
+      );
+      modal.show();
+    });
+  }
+
+  // --------------------------------------------------------------------------
+  // NHẮC LIÊN HỆ ĐẦU MỐI PXN sau khi chốt (mong muốn Khoa XN: phối hợp nhanh)
+  // --------------------------------------------------------------------------
+  function _showContactReminder(p) {
+    if (!p.headName && !p.headPhone && !p.headEmail) return; // không có đầu mối → bỏ qua
+
+    document.getElementById('lab-contact-reminder')?.remove();
+    const wrap = document.createElement('div');
+    wrap.id = 'lab-contact-reminder';
     wrap.innerHTML = `
-      <div class="modal fade" id="dispatchModal" tabindex="-1">
-        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+      <div class="modal fade" id="labContactModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
           <div class="modal-content">
-            <div class="modal-header" style="background:#006a75;color:#fff;">
-              <h5 class="modal-title"><i class='bx bx-test-tube'></i> Điều phối mẫu xét nghiệm</h5>
+            <div class="modal-header" style="background:#0f766e;color:#fff;">
+              <h5 class="modal-title"><i class='bx bx-phone-call'></i> Liên hệ đầu mối Phòng xét nghiệm</h5>
               <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
-              <!-- HÀNG INPUT: kỹ thuật + BSL (lọc cứng) + số mẫu -->
-              <div class="row g-3 align-items-end mb-2">
-                <div class="col-md-7">
-                  <label class="form-label mb-1">Loại xét nghiệm (kỹ thuật) <span class="text-danger">*</span></label>
-                  <select id="disp-testtype" class="form-select" multiple="multiple">${ttOptions}</select>
-                </div>
-                <div class="col-md-3">
-                  <label class="form-label mb-1">An toàn sinh học <span class="text-danger">*</span></label>
-                  <select id="disp-bsl" class="form-select" title="Cấp ATSH tối thiểu — PXN thấp hơn sẽ bị loại">
-                    <option value="1">ATSH cấp 1</option>
-                    <option value="2" selected>ATSH cấp 2</option>
-                    <option value="3">ATSH cấp 3</option>
-                    <option value="4">ATSH cấp 4</option>
-                  </select>
-                </div>
-                <div class="col-md-2">
-                  <label class="form-label mb-1">Số mẫu</label>
-                  <input id="disp-samples" type="number" min="1" class="form-control" value="20">
-                </div>
-                <!-- BỔ SUNG TRƯỜNG CHỌN TÁC NHÂN (YÊU CẦU 3) -->
-                <!-- TRƯỜNG CHỌN TÁC NHÂN (DỮ LIỆU ĐỘNG TỪ BẢNG) -->
-                <div class="col-md-12">
-                  <label class="form-label mb-1">Tác nhân gây bệnh</label>
-                  <select id="disp-pathogens" class="form-select" multiple="multiple">
-                    ${pathogenHtml}
-                  </select>
-                </div>
-                <div class="col-md-12">${originBlock}</div>
+              <p class="mb-2">Đã điều <b>${p.sampleCount}</b> mẫu tới <b>${esc(
+      p.labName
+    )}</b>.
+              Vui lòng liên hệ đầu mối để thống nhất phối hợp:</p>
+              <div class="p-3 rounded" style="background:#f0fdf4;border:1px solid #bbf7d0;">
+                <div class="mb-1"><i class='bx bx-user'></i> <b>${esc(
+                  p.headName || 'Trưởng khoa XN'
+                )}</b></div>
+                ${
+                  p.headPhone
+                    ? `<div class="mb-2"><a href="tel:${esc(
+                        p.headPhone
+                      )}" class="btn btn-success btn-sm">
+                         <i class='bx bx-phone'></i> Gọi ${esc(
+                           p.headPhone
+                         )}</a></div>`
+                    : '<div class="text-muted mb-2"><small>Chưa có số điện thoại đầu mối</small></div>'
+                }
+                ${
+                  p.headEmail
+                    ? `<div><a href="mailto:${esc(
+                        p.headEmail
+                      )}"><i class='bx bx-envelope'></i> ${esc(
+                        p.headEmail
+                      )}</a></div>`
+                    : ''
+                }
               </div>
-
-              <!-- TRỌNG SỐ: PRESET + SLIDER NÂNG CAO -->
-              <div class="card mb-3">
-                <div class="card-body py-2">
-                  <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
-                    <div class="btn-group btn-group-sm flex-wrap" role="group" id="disp-presets">
-                      <input type="radio" class="btn-check" name="preset" id="p-urgent" value="urgent">
-                      <label class="btn btn-outline-danger" for="p-urgent">⚡ Khẩn</label>
-                      <input type="radio" class="btn-check" name="preset" id="p-balanced" value="balanced" checked>
-                      <label class="btn btn-outline-secondary" for="p-balanced">⚖️ Cân bằng</label>
-                      <input type="radio" class="btn-check" name="preset" id="p-capacity" value="capacity">
-                      <label class="btn btn-outline-primary" for="p-capacity">📦 Nhiều mẫu</label>
-                      <input type="radio" class="btn-check" name="preset" id="p-quality" value="quality">
-                      <label class="btn btn-outline-success" for="p-quality">🏅 Chất lượng</label>
-                    </div>
-                    <div class="d-flex align-items-center gap-1">
-                      <button class="btn btn-sm btn-link text-decoration-none p-1" type="button"
-                              onclick="window._toggleDispatchHelp()">
-                        <i class='bx bx-info-circle'></i> Giải thích
-                      </button>
-                      <button class="btn btn-sm btn-link text-decoration-none p-1" type="button"
-                              onclick="document.getElementById('disp-advanced').classList.toggle('d-none')">
-                        <i class='bx bx-slider'></i> Tùy chỉnh
-                      </button>
-                    </div>
-                  </div>
-                  <div id="disp-advanced" class="d-none mt-2 pt-2 border-top">
-                  <small class="text-muted d-block mb-2"> Chọn 1 trong 4 chế độ (⚡Khẩn/ ⚖️ Cân bằng/ 📦 Nhiều mẫu/ 🏅 Chất lượng) hoặc điều chỉnh trọng số của 5 tiêu chí:</small>
-                  <div class="row g-2">
-                    <div class="col-md-4">
-                      <label class="form-label mb-0"><small>🟢 Gần nhất <span id="w-near">25</span>%</small></label>
-                      <input type="range" class="form-range" id="slider-near" min="0" max="100" value="25">
-                    </div>
-                    <div class="col-md-4">
-                      <label class="form-label mb-0"><small>🔵 Còn nhận mẫu <span id="w-free">20</span>%</small></label>
-                      <input type="range" class="form-range" id="slider-free" min="0" max="100" value="20">
-                    </div>
-                    <div class="col-md-4">
-                      <label class="form-label mb-0"><small>🟠 Trả Kết quả nhanh <span id="w-fast">20</span>%</small></label>
-                      <input type="range" class="form-range" id="slider-fast" min="0" max="100" value="20">
-                    </div>
-                    <div class="col-md-4">
-                      <label class="form-label mb-0"><small>🏅 Chất lượng (QMS) <span id="w-qual">20</span>%</small></label>
-                      <input type="range" class="form-range" id="slider-qual" min="0" max="100" value="20">
-                    </div>
-                    <div class="col-md-4">
-                      <label class="form-label mb-0"><small>🌐 Năng lực Xét nghiệm <span id="w-net">15</span>%</small></label>
-                      <input type="range" class="form-range" id="slider-net" min="0" max="100" value="15">
-                    </div>
-                    <div class="col-md-4 d-flex align-items-end">
-                      <small class="text-muted">Tổng: <b><span id="w-total">100</span>%</b></small>
-                    </div>
-                  </div>
-                  </div>
-                  <div id="disp-help" class="d-none mt-2 pt-2 border-top">
-                    <div class="alert alert-info py-2 mb-0" style="font-size:.85rem;">
-                      <div class="mb-2"><b><i class='bx bx-bulb'></i> Hệ thống tìm phòng xét nghiệm tối ưu theo 5 tiêu chí:</b></div>
-                      <div class="ms-1" style="line-height:1.7;">
-                        🟢 <b>Gần nhất</b>: thời gian di chuyển từ sự kiện khẩn cấp đến phòng xét nghiệm ngắn nhất.<br>
-                        🔵 <b>Còn nhận mẫu</b>: phòng xét nghiệm còn công suất tiếp nhận mẫu trong ngày.<br>
-                        🟠 <b>Trả Kết quả nhanh</b>: phòng xét nghiệm trả kết quả xét nghiệm nhanh nhất.<br>
-                        🏅 <b>Chất lượng (QMS)</b>: phòng xét nghiệm đạt ISO 15189 / QĐ2429 mức cao.<br>
-                        🌐 <b>Năng lực xét nghiệm</b>: phân cấp năng lực xét nghiệm cao trong mạng lưới.
-                      </div>
-                      <div class="mb-1 mt-2"><b><i class='bx bx-equalizer'></i> Chế độ:</b></div>
-                      <div class="ms-1" style="line-height:1.7;">
-                        ⚡ <b>Khẩn</b>: ưu tiên khoảng cách gần nhất & trả kết quả nhanh.<br>
-                        ⚖️ <b>Cân bằng</b>: cân bằng tương đối 5 tiêu chí.<br>
-                        📦 <b>Nhiều mẫu</b>: ưu tiên công suất tiếp nhận mẫu nhiều trong ngày.<br>
-                        🏅 <b>Chất lượng</b>: ưu tiên QMS & năng lực xét nghiệm cao trong mạng lưới.
-                      </div>
-                      <div class="mt-2 pt-1 border-top text-muted">
-                        <i class='bx bx-shield'></i> An toàn: Phòng xét nghiệm không đủ cấp ATSH cho loại tác nhân này
-                        <b>không bao giờ xuất hiện</b>, bất kể chế độ. QSM & thời gian trả kết quả là
-                        <b>ưu tiên</b> (thiếu vẫn hiện nhưng xếp sau + cảnh báo).
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div class="text-center mb-3">
-                <button class="btn btn-primary px-4" onclick="window._runDispatch()">
-                  <i class='bx bx-search-alt'></i> Tìm Phòng xét nghiệm phù hợp
-                </button>
-              </div>
-
-              <div id="disp-results"></div>
-              <div id="disp-map-wrap" class="d-none mt-3">
-                <div class="d-flex justify-content-between align-items-center mb-1">
-                  <small class="text-muted"><i class='bx bx-map'></i> <span id="disp-map-label">Tuyến đường</span></small>
-                  <button class="btn btn-sm btn-outline-secondary" onclick="window._hideDispatchMap()">
-                    <i class='bx bx-x'></i> Ẩn bản đồ
-                  </button>
-                </div>
-                <div id="disp-map" style="height:340px;border-radius:8px;background:#eee;"></div>
-              </div>
+            </div>
+            <div class="modal-footer">
+              <button class="btn btn-secondary" data-bs-dismiss="modal">Đóng</button>
             </div>
           </div>
         </div>
       </div>`;
     document.body.appendChild(wrap);
-
-    const modalEl = document.getElementById('dispatchModal');
+    const modalEl = document.getElementById('labContactModal');
     new bootstrap.Modal(modalEl).show();
-
-    if (window.$ && $.fn.select2) {
-      $('#disp-testtype').select2({
-        dropdownParent: $('#dispatchModal'),
-        placeholder: 'Loại kỹ thuật xét nghiệm....',
-        width: '100%',
-        allowClear: true,
-      });
-      $('#disp-pathogens').select2({
-        dropdownParent: $('#dispatchModal'),
-        placeholder: 'Tác nhân gây bệnh...',
-        width: '100%',
-        allowClear: true,
-      });
-    }
-
-    // BSL KHÔNG auto-set theo kỹ thuật. Chuyên gia CHỦ ĐỘNG chọn cấp ATSH theo
-    // TÁC NHÂN của tình huống (dropdown mặc định ATSH cấp 2). Kỹ thuật không gắn BSL.
-
     modalEl.addEventListener(
       'hidden.bs.modal',
-      function () {
-        if (S.map) {
-          try {
-            S.map.remove();
-          } catch (_) {}
-          S.map = null;
-          S.routeLayers = [];
-        }
-        if (
-          window.$ &&
-          $.fn.select2 &&
-          $('#disp-testtype').hasClass('select2-hidden-accessible')
-        ) {
-          $('#disp-testtype').select2('destroy');
-        }
+      () => {
         wrap.remove();
         setTimeout(() => {
           if (!document.querySelector('.modal.show')) {
@@ -430,724 +1371,360 @@
               .forEach((b) => b.remove());
             document.body.classList.remove('modal-open');
             document.body.style.overflow = '';
-            document.body.style.paddingRight = '';
           }
         }, 150);
       },
       { once: true }
     );
-
-    ['near', 'free', 'fast', 'qual', 'net'].forEach((k) => {
-      const el = document.getElementById('slider-' + k);
-      if (el) el.addEventListener('input', () => rebalanceSliders(k));
-    });
-    document.querySelectorAll('input[name="preset"]').forEach((r) => {
-      r.addEventListener('change', () => {
-        S.weights = null;
-        syncSlidersToPreset(r.value);
-      });
-    });
-
-    syncSlidersToPreset('balanced');
   }
+  // ==========================================================================
+  // [YÊU CẦU 3] - GỬI KHẢO SÁT HÀNG LOẠT VÀ LẮNG NGHE REALTIME
+  // ==========================================================================
 
-  // Trọng số HIỂN THỊ cho 3 slider (near/free/fast, tổng 100).
-  // Lưu ý: trọng số THẬT khi chọn preset lấy từ engine.PRESETS (5 chiều);
-  // 3 slider chỉ hiện tương quan gần/trống/nhanh cho trực quan.
+  // 1. Hàm Gửi Khảo Sát Hàng Loạt
+  window.sendMassInquiry = async function () {
+    const result = window._currentDispatchResult;
+    const S = window._getDispatchState?.();
+    if (!result || !result.top || result.top.length === 0) return;
 
-  // (2) Lấy trọng số preset ĐÚNG từ engine (đổi 0..1 → 0..100 để hiển thị).
-  const DIMS = ['near', 'free', 'fast', 'qual', 'net'];
-
-  // Lấy % preset ĐÚNG từ engine (LabDispatch.PRESETS, 0..1 → 0..100)
-  function _getPresetPct(preset) {
-    const P = (window.LabDispatch && window.LabDispatch.PRESETS) || {};
-    const w = P[preset] ||
-      P.balanced || { near: 0.25, free: 0.2, fast: 0.2, qual: 0.2, net: 0.15 };
-    const pct = {};
-    let acc = 0;
-    DIMS.forEach((k) => {
-      pct[k] = Math.round((w[k] || 0) * 100);
-      acc += pct[k];
-    });
-    pct.near += 100 - acc; // bù sai số làm tròn để tổng = 100
-    return pct;
-  }
-
-  // (3a) Nạp slider theo preset (đủ 5 chiều)
-  // Nạp slider theo preset (đủ 5 chiều). Đặt S.weights = null → engine dùng PRESETS[preset].
-  function syncSlidersToPreset(preset) {
-    const w = _getPresetPct(preset);
-    DIMS.forEach((k) => {
-      const slider = document.getElementById('slider-' + k);
-      const label = document.getElementById('w-' + k);
-      if (slider) slider.value = w[k];
-      if (label) label.textContent = w[k];
-    });
-    _updateTotalLabel();
-    S.weights = null; // ← GHI TRỰC TIẾP vào S cục bộ: preset → engine dùng PRESETS
-  }
-
-  // (3b) Kéo 1 slider → 4 slider còn lại tự chia phần còn lại theo tỉ lệ (tổng=100)
-  // Kéo 1 slider → 4 cái kia tự chia phần còn lại (tổng = 100). Ghi ĐỦ 5 chiều vào S.weights.
-  function rebalanceSliders(changed) {
-    const get = (k) =>
-      parseInt(document.getElementById('slider-' + k)?.value) || 0;
-    const cur = {};
-    DIMS.forEach((k) => (cur[k] = get(k)));
-    const changedVal = cur[changed];
-    const others = DIMS.filter((k) => k !== changed);
-    const remain = 100 - changedVal;
-    const sumOthers = others.reduce((s, k) => s + cur[k], 0);
-
-    const vals = { [changed]: changedVal };
-    if (sumOthers === 0) {
-      const base = Math.floor(remain / others.length);
-      others.forEach((k) => (vals[k] = base));
-      vals[others[0]] += remain - base * others.length;
-    } else {
-      let acc = 0;
-      others.forEach((k, i) => {
-        if (i < others.length - 1) {
-          vals[k] = Math.round((cur[k] / sumOthers) * remain);
-          acc += vals[k];
-        } else {
-          vals[k] = remain - acc;
-        }
-      });
-    }
-
-    DIMS.forEach((k) => {
-      const slider = document.getElementById('slider-' + k);
-      const label = document.getElementById('w-' + k);
-      if (slider) slider.value = vals[k];
-      if (label) label.textContent = vals[k];
-    });
-    _updateTotalLabel();
-
-    // ← GHI TRỰC TIẾP vào S cục bộ: custom → engine dùng weights 5 chiều (0..1)
-    S.weights = {
-      near: vals.near / 100,
-      free: vals.free / 100,
-      fast: vals.fast / 100,
-      qual: vals.qual / 100,
-      net: vals.net / 100,
-    };
-  }
-
-  function _updateTotalLabel() {
-    const total = DIMS.reduce(
-      (s, k) =>
-        s + (parseInt(document.getElementById('slider-' + k)?.value) || 0),
-      0
-    );
-    const el = document.getElementById('w-total');
-    if (el) {
-      el.textContent = total;
-      if (el.parentElement)
-        el.parentElement.style.color = total === 100 ? '' : '#dc3545';
-    }
-  }
-
-  // (3c) Gắn sự kiện cho 5 slider — GỌI hàm này trong buildModal thay cho vòng ['near','free','fast']
-  window._bindDispatchSliders = function () {
-    DIMS.forEach((k) => {
-      const el = document.getElementById('slider-' + k);
-      if (el) el.addEventListener('input', () => window.rebalanceSliders(k));
-    });
-  };
-
-  // --------------------------------------------------------------------------
-  // CHẠY TÌM KIẾM
-  // --------------------------------------------------------------------------
-  window._runDispatch = async function () {
-    // Đa chọn kỹ thuật (mảng). Giữ S.testTypeId = phần tử đầu cho các hàm cũ.
-    S.testTypeIds = $('#disp-testtype').val() || [];
-    S.testTypeId = S.testTypeIds[0] || null;
-    if (!S.testTypeIds.length) {
-      if (window.showToast)
-        window.showToast(
-          'Vui lòng chọn ít nhất 1 kỹ thuật xét nghiệm!',
-          'warning'
-        );
-      return;
-    }
-    S.sampleCount =
-      parseInt(document.getElementById('disp-samples').value) || 1;
-    // BẮT TÁC NHÂN NGƯỜI DÙNG CHỌN
-    S.pathogens = $('#disp-pathogens').val() || [];
-    S.preset =
-      document.querySelector('input[name="preset"]:checked')?.value ||
-      'balanced';
-
-    // BSL chuyên gia chọn (lọc CỨNG). QMS/turnaround KHÔNG nhập — chỉ vào chấm điểm.
-    const bslRaw = document.getElementById('disp-bsl')?.value;
-    S.minBsl = bslRaw ? parseInt(bslRaw) : null;
-    S.minQsm = null;
-    S.maxTurnaround = null;
-
-    if (!S.incidentId) {
-      S.lat = parseFloat(document.getElementById('disp-lat')?.value);
-      S.lng = parseFloat(document.getElementById('disp-lng')?.value);
-    }
-    if (isNaN(S.lat) || isNaN(S.lng) || S.lat == null || S.lng == null) {
-      if (window.showToast)
-        window.showToast(
-          'Chưa có tọa độ điểm sự cố (nhập địa chỉ/vị trí/tọa độ)',
-          'warning'
-        );
-      return;
-    }
-
-    const resultsEl = document.getElementById('disp-results');
-    resultsEl.innerHTML =
-      '<div class="text-center p-4"><span class="spinner-border"></span> Đang tìm phòng xét nghiệm tối ưu...</div>';
-    _hideDispatchMap();
+    const btn = document.getElementById('btn-mass-inquiry');
+    btn.innerHTML = `<span class="spinner-border spinner-border-sm"></span> Đang gửi...`;
+    btn.disabled = true;
 
     try {
-      const result = await window.LabDispatch.findBestLabs({
-        testTypeIds: S.testTypeIds,
-        sampleCount: S.sampleCount,
-        originLat: S.lat,
-        originLng: S.lng,
-        preset: S.preset,
-        weights: S.weights,
-        minBsl: S.minBsl,
-        excludeLabIds: S.excludeLabIds,
-        candidateLimit: 10,
-        topN: 3,
-      });
-      S.lastResult = result;
-      renderResults(result);
-    } catch (e) {
-      console.error('[dispatch] Lỗi:', e);
-      resultsEl.innerHTML = `<div class="alert alert-danger">Lỗi: ${esc(
-        e.message
-      )}</div>`;
-    }
-  };
+      const role = await resolveRole();
+      // 👉 BỔ SUNG: Lấy mảng tên các kỹ thuật đã chọn trên giao diện
+      const techSelect = document.getElementById('disp-testtype');
+      let techNames = [];
+      if (techSelect) {
+        techNames =
+          window.$ && $(techSelect).hasClass('select2-hidden-accessible')
+            ? $(techSelect)
+                .select2('data')
+                .map((d) => d.text.trim())
+            : Array.from(techSelect.selectedOptions).map((o) => o.text.trim());
+      }
+      for (const lab of result.top) {
+        const actionToken = crypto.randomUUID();
+        const { data: insertedLog, error } = await window.supabaseClient
+          .from('lab_dispatch_log')
+          .insert([
+            {
+              lab_id: lab.lab_id,
+              incident_id: S.incidentId || null,
+              test_type_id:
+                S.testTypeIds && S.testTypeIds.length > 0
+                  ? S.testTypeIds[0]
+                  : S.testTypeId || null,
+              requested_test_types: techNames, // 👉 BỔ SUNG LƯU VÀO DB TẠI ĐÂY
+              requested_sample_count: S.sampleCount,
+              sample_count: 0,
+              status: 'inquiry_sent',
+              dispatched_by: role.userId,
+              action_token: actionToken,
+              pathogens: S.pathogens,
+            },
+          ])
+          .select('id')
+          .single();
+        if (error) throw error;
 
-  // --------------------------------------------------------------------------
-  // HIỂN THỊ PANEL XẾP HẠNG
-  // --------------------------------------------------------------------------
-  function renderResults(result) {
-    const el = document.getElementById('disp-results');
-    let { ranked, top, meta } = result; // ĐỔI const → let (để gán lại)
+        await new Promise((r) => setTimeout(r, 400));
+        window.supabaseClient.functions
+          .invoke('send-lab-inquiry', {
+            body: { record: { id: insertedLog.id } },
+          })
+          .catch((err) => console.warn('Lỗi gọi Edge Function:', err));
 
-    // ƯU TIÊN CÔNG LẬP: tách nhóm, công lập trên / tư nhân dưới
-    if (
-      typeof window.regroupPublicFirst === 'function' &&
-      ranked &&
-      ranked.length
-    ) {
-      ranked = window.regroupPublicFirst(ranked);
-      top = ranked.slice(0, top ? top.length : 3); // cắt lại top theo thứ tự mới
-      result.ranked = ranked; // đồng bộ để map/nơi khác dùng
-      result.top = top;
-    }
-
-    window._currentDispatchResult = result;
-
-    // Ghi chú giao thông (thay cảnh báo OSRM cũ — nay tính offline)
-    const trafficNote = `<div class="alert alert-info py-1 px-2 mb-2"><small><i class='bx bx-info-circle'></i>
-    Thời gian, quãng đường được tính bằng thuật toán phân tích dữ liệu giao thông thời gian thực & bản đồ API OSM</small></div>`;
-
-    if (!ranked.length) {
-      const ttNames = (S.testTypeIds || [])
-        .map((id) => _testTypes.find((t) => t.id === id)?.name)
-        .filter(Boolean)
-        .join(', ');
-      const tt = { name: ttNames };
-      const dayWarn = getDayWarning();
-      const dayWarnHtml = dayWarn
-        ? `<div class="alert alert-warning py-2 mb-2">
-           <i class='bx bx-calendar-exclamation'></i> <b>${dayWarn}</b> — đa số Phòng xét nghiệm
-           có thể nghỉ. Vui lòng <b>gọi xác nhận</b> Phòng xét nghiệm còn trực trước khi điều phối mẫu.
-         </div>`
-        : '';
-      el.innerHTML = `
-       <div id="disp-pending"></div>
-       ${dayWarnHtml}
-       ${trafficNote}
-        <div class="alert alert-warning">
-          <i class='bx bx-error'></i> <strong>Không tìm thấy Phòng xét nghiệm phù hợp</strong> cho "${esc(
-            tt?.name || ''
-          )}".<br>
-          <small>Nguyên nhân có thể: chưa PXN nào đạt cấp an toàn sinh học bạn yêu cầu (ATSH cấp ${
-            S.minBsl ?? '?'
-          }),
-          chưa khai báo năng lực loại này, hoặc tất cả đã bị loại trừ.
-          Có thể thử hạ cấp ATSH yêu cầu (nếu phù hợp với tác nhân).</small>
-        </div>`;
-      if (typeof window.showPendingSuggestions === 'function')
-        window.showPendingSuggestions(S.incidentId, S.testTypeId);
-      if (window.LabDispatchMap) window.LabDispatchMap.clear();
-      return;
-    }
-
-    const cards = ranked
-      .map((lab, idx) => {
-        const isTop3 = lab.rank <= 3;
-        const color = isTop3 ? RANK_COLORS[lab.rank - 1] : FALLBACK_COLOR;
-        const rankLabel = lab.rank === 1 ? 'TỐI ƯU' : `Dự phòng ${lab.rank}`;
-
-        // Công lập / Tư nhân (Cách B). Ưu tiên lab.sector do regroupPublicFirst gán;
-        // fallback: tự nhận diện theo level chứa "tư nhân".
-        const isPriv =
-          lab.sector === 'tu_nhan' ||
-          String(lab.level || '')
-            .toLowerCase()
-            .includes('tư nhân');
-        const sectorBadge = isPriv
-          ? `<span class="badge bg-warning text-dark">Tư nhân</span>`
-          : `<span class="badge bg-success">Công lập</span>`;
-
-        // Vạch ngăn khi chuyển từ nhóm công lập sang nhóm tư nhân
-        const prev = ranked[idx - 1];
-        const prevPriv =
-          prev &&
-          (prev.sector === 'tu_nhan' ||
-            String(prev.level || '')
-              .toLowerCase()
-              .includes('tư nhân'));
-        const groupDivider =
-          prev && !prevPriv && isPriv
-            ? `<div class="text-center my-2"><small class="text-muted">
-                 <i class='bx bx-buildings'></i> — Các Phòng xét nghiệm tư nhân —</small></div>`
-            : '';
-
-        const enoughBadge = lab.is_enough
-          ? `<span class="badge bg-success">Đủ chỗ (còn ${lab.remaining_today})</span>`
-          : `<span class="badge bg-danger">Không đủ chỗ (còn ${lab.remaining_today}/${S.sampleCount})</span>`;
-
-        const srcNote = lab.route.trafficLabel
-          ? ` <small class="text-muted">(${esc(
-              lab.route.trafficLabel
-            )})</small>`
-          : '';
-
-        const qsmBadge = lab.qsm_label
-          ? `<span class="badge bg-info text-dark">${esc(lab.qsm_label)}</span>`
-          : `<span class="badge bg-light text-muted">Chưa có QMS</span>`;
-        const netBadge =
-          lab.capability_tier != null
-            ? `<span class="badge bg-secondary">Cấp năng lực ${lab.capability_tier}</span>`
-            : '';
-
-        const warnHtml = '';
-
-        const contactHtml =
-          lab.head_name || lab.head_phone
-            ? `<div class="mt-1 p-2 rounded" style="background:#f0fdf4;border:1px solid #bbf7d0;">
-                 <small class="d-block text-muted">Đầu mối PXN</small>
-                 <div class="d-flex justify-content-between align-items-center flex-wrap gap-1">
-                   <span><i class='bx bx-user'></i> <b>${esc(
-                     lab.head_name || '—'
-                   )}</b></span>
-                   ${
-                     lab.head_phone
-                       ? `<a href="tel:${esc(
-                           lab.head_phone
-                         )}" class="btn btn-sm btn-success py-0"><i class='bx bx-phone'></i> ${esc(
-                           lab.head_phone
-                         )}</a>`
-                       : ''
-                   }
-                 </div>
-                 ${
-                   lab.head_email
-                     ? `<small><a href="mailto:${esc(
-                         lab.head_email
-                       )}"><i class='bx bx-envelope'></i> ${esc(
-                         lab.head_email
-                       )}</a></small>`
-                     : ''
-                 }
-               </div>`
-            : '';
-
-        return (
-          groupDivider +
-          `
-            <div class="card mb-2 dispatch-lab-card disp-lab-card" id="lab-card-${
-              lab.lab_id
-            }"
-                 style="border-left:5px solid ${color};">
-              <div class="card-body py-2">
-                <!-- HÀNG TRÊN: tên (co giãn) | điểm + nút (cố định phải) -->
-                <div class="d-flex justify-content-between align-items-start disp-head">
-                  <div style="min-width:0;flex:1;">
-                    <div class="d-flex align-items-center gap-2 flex-wrap">
-                      <span class="badge" style="background:${color};">#${
-            lab.rank
-          } ${rankLabel}</span>
-                      <span class="disp-name">${esc(lab.lab_name)}</span>
-                      <span class="badge bg-dark">ATSH ${lab.bsl_level}</span>
-                      ${sectorBadge}
-                      ${
-                        lab.is_equivalent
-                          ? `<span class="badge bg-light text-muted border" title="PXN có kỹ thuật tương đương (không phải kỹ thuật chọn trực tiếp)">≈ Tương đương</span>`
-                          : ''
-                      }
-                    </div>
-                    <small class="text-muted d-block">${esc(
-                      lab.level || ''
-                    )} · ${esc(lab.address || '')}</small>
-                    <div class="mt-1 d-flex flex-wrap gap-1">${qsmBadge} ${netBadge}</div>
-                  </div>
-                  <div class="text-end flex-shrink-0 ms-2">
-                    <div class="mb-1"><span class="badge bg-light text-dark" style="font-size:.95em;">
-                      Điểm: <b>${lab.scores.total}</b></span></div>
-                    <div class="btn-group btn-group-sm">
-                      <button class="btn btn-outline-warning" onclick="window.sendSingleInquiry('${
-                        lab.lab_id
-                      }')" title="Gửi khảo sát riêng cho đơn vị này">
-                        <i class='bx bx-mail-send'></i> Gửi
-                      </button>
-                      <button class="btn btn-outline-secondary" onclick="window._showLabRoute('${
-                        lab.lab_id
-                      }')" title="Xem đường đi">
-                        <i class='bx bx-map'></i>
-                      </button>
-                      <button class="btn btn-outline-danger" onclick="window._excludeLab('${
-                        lab.lab_id
-                      }')" title="Loại trừ Phòng xét nghiệm này">
-                        <i class='bx bx-x-circle'></i>
-                      </button>
-                    </div>
-                    <div class="mt-1" id="disp-action-${lab.lab_id}"></div>
-                  </div>
-                </div>
-    
-                <!-- HÀNG CHỈ SỐ: grid cột cố định → thẳng hàng giữa các card -->
-                <div class="disp-metrics">
-                  <div class="disp-metric">
-                    <div class="m-label"><i class='bx bx-map-pin'></i> Khoảng cách</div>
-                    <div class="m-value">${lab.route.km} km</div>
-                  </div>
-                  <div class="disp-metric">
-                    <div class="m-label"><i class='bx bx-time'></i> Thời gian</div>
-                    <div class="m-value">~${
-                      lab.route.minutes
-                    } phút ${srcNote}</div>
-                  </div>
-                  <div class="disp-metric">
-                    <div class="m-label"><i class='bx bx-timer'></i> Trả KQ</div>
-                    <div class="m-value">${
-                      lab.turnaround_hours != null
-                        ? lab.turnaround_hours + 'h'
-                        : '—'
-                    }</div>
-                  </div>
-                  <div class="disp-metric">
-                    <div class="m-label"><i class='bx bx-box'></i> Chỗ trống</div>
-                    <div class="m-value">${enoughBadge}</div>
-                  </div>
-                </div>
-    
-                ${contactHtml}
-    
-                <!-- THANH 5 TIÊU CHÍ -->
-                <div class="mt-2 d-flex gap-1" style="height:5px;" title="Gần nhất ${
-                  lab.scores.gan
-                } · Còn nhận mẫu ${lab.scores.trong} · Trả Kết quả nhanh ${
-            lab.scores.nhanh
-          } · Chất lượng (QMS) ${lab.scores.chatLuong} · Năng lực Xét nghiệm ${
-            lab.scores.mangLuoi
-          }">
-                  <div style="flex:${
-                    lab.scores.gan
-                  };background:#16a34a;border-radius:3px;"></div>
-                  <div style="flex:${
-                    lab.scores.trong
-                  };background:#0ea5e9;border-radius:3px;"></div>
-                  <div style="flex:${
-                    lab.scores.nhanh
-                  };background:#f59e0b;border-radius:3px;"></div>
-                  <div style="flex:${
-                    lab.scores.chatLuong
-                  };background:#8b5cf6;border-radius:3px;"></div>
-                  <div style="flex:${
-                    lab.scores.mangLuoi
-                  };background:#64748b;border-radius:3px;"></div>
-                </div>
-              </div>
-            </div>`
+        // Cập nhật giao diện thành "Đang chờ"
+        const slot = document.getElementById('disp-action-' + lab.lab_id);
+        if (slot) {
+          slot.innerHTML = `<button class="btn btn-info btn-sm w-100 disabled text-white">
+                              <i class='bx bx-time'></i> Đang chờ PXN phản hồi...
+                            </button>`;
+        }
+      }
+      if (window.showToast)
+        window.showToast(
+          'Đã gửi yêu cầu điều phối mẫu đến Top PXN.',
+          'success'
         );
-      })
-      .join('');
-
-    const excludeInfo = S.excludeLabIds.length
-      ? `<div class="mb-2"><small class="text-muted">Đã loại trừ ${S.excludeLabIds.length} Phòng xét nghiệm.
-         <a href="#" onclick="window._resetExclude();return false;">Khôi phục tất cả</a></small></div>`
-      : '';
-
-    el.innerHTML = `
-      <div id="disp-pending"></div>
-      ${trafficNote}
-      <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-1">
-        <small class="text-muted">Tìm thấy ${
-          ranked.length
-        } Phòng xét nghiệm phù hợp · Xếp theo <b>${labelPreset(
-      meta
-    )}</b></small>
-        <small class="text-muted"><i class='bx bx-bulb'></i> 🟢Gần nhất   🔵Còn nhận mẫu   🟠Trả Kết quả nhanh   🟣Chất lượng (QMS)   ⚫Năng lực Xét nghiệm</small>
-        <button id="btn-mass-inquiry" class="btn btn-warning btn-sm shadow-sm fw-bold" onclick="window.sendMassInquiry()">
-          <i class='bx bx-mail-send'></i> Gửi yêu cầu điều phối mẫu (Top PXN)
-        </button>
-      </div>
-      ${excludeInfo}
-      ${cards}
-      <div class="mt-2 d-flex justify-content-between align-items-center flex-wrap gap-2">
-        <small class="text-muted"><i class='bx bx-info-circle'></i>
-          Bấm <i class='bx bx-map'></i> xem tuyến · <i class='bx bx-x-circle'></i> loại Phòng xét nghiệm và xếp lại.</small>
-        <button class="btn btn-sm btn-outline-secondary" onclick="window.showDispatchHistory(window._getDispatchState().incidentId)">
-          <i class='bx bx-history'></i> Lịch sử điều phối mẫu hôm nay
-        </button>
-      </div>`;
-
-    if (typeof window.renderDispatchActions === 'function') {
-      top.forEach((lab) => window.renderDispatchActions(lab, S));
+      btn.innerHTML = `<i class='bx bx-check'></i> Đã gửi yêu cầu hàng loạt`;
+      window._subscribeToLabResponses();
+    } catch (e) {
+      if (window.showToast)
+        window.showToast('Lỗi gửi yêu cầu: ' + e.message, 'error');
+      btn.innerHTML = `<i class='bx bx-mail-send'></i> Gửi lại yêu cầu`;
+      btn.disabled = false;
     }
-    if (typeof window.showPendingSuggestions === 'function') {
-      window.showPendingSuggestions(S.incidentId, S.testTypeId);
-    }
-    if (window.LabDispatchMap && ranked.length) {
-      window.LabDispatchMap.project(result, {
-        lat: S.lat,
-        lng: S.lng,
-        name: S.incidentName || 'Điểm sự kiện',
-      });
-    }
-  }
-
-  window._toggleDispatchHelp = function () {
-    document.getElementById('disp-help')?.classList.toggle('d-none');
   };
+  // 2. Hàm Gửi Khảo Sát Riêng Lẻ Cho 1 PXN
+  window.sendSingleInquiry = async function (labId) {
+    const result = window._currentDispatchResult;
+    const S = window._getDispatchState?.();
+    if (!result || !result.ranked) return;
 
-  function labelPreset(meta) {
-    if (meta.preset === 'custom') return 'trọng số tùy chỉnh';
-    return (
-      {
-        urgent: '⚡ Khẩn',
-        balanced: '⚖️ Cân bằng',
-        capacity: '📦 Nhiều mẫu',
-        quality: '🏅 Chất lượng',
-      }[meta.preset] || meta.preset
-    );
-  }
-
-  window._excludeLab = function (labId) {
-    if (!S.excludeLabIds.includes(labId)) S.excludeLabIds.push(labId);
-    window._runDispatch();
-  };
-  window._resetExclude = function () {
-    S.excludeLabIds = [];
-    window._runDispatch();
-  };
-
-  // --------------------------------------------------------------------------
-  // BẢN ĐỒ — hiện khi bấm 1 PXN
-  // --------------------------------------------------------------------------
-  window._showLabRoute = function (labId) {
-    const result = S.lastResult;
-    if (!result) return;
     const lab = result.ranked.find((l) => l.lab_id === labId);
     if (!lab) return;
-    window.LabRouteSteps.show(
-      S.lat,
-      S.lng,
-      lab.lat,
-      lab.lng,
-      lab.lab_name,
-      lab.route.km,
-      lab.route.minutes // ← số tổng offline để khớp card
-    );
-    document.getElementById('disp-map-wrap').classList.remove('d-none');
-    document.getElementById(
-      'disp-map-label'
-    ).textContent = `${lab.lab_name} — ${lab.route.km} km, ${lab.route.minutes} phút`;
 
-    if (!S.map) {
-      if (typeof L === 'undefined') {
-        document.getElementById('disp-map').innerHTML =
-          '<div class="alert alert-warning m-2">Không nạp được bản đồ (Leaflet).</div>';
-        return;
-      }
-      S.map = L.map('disp-map').setView([S.lat, S.lng], 13);
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '© OpenStreetMap',
-        maxZoom: 19,
-      }).addTo(S.map);
-      L.marker([S.lat, S.lng], {
-        icon: L.divIcon({
-          className: '',
-          html: '<div style="background:#dc2626;color:#fff;border-radius:50%;width:26px;height:26px;display:flex;align-items:center;justify-content:center;font-weight:bold;box-shadow:0 0 4px rgba(0,0,0,.5);">A</div>',
-          iconSize: [26, 26],
-          iconAnchor: [13, 13],
-        }),
-      })
-        .addTo(S.map)
-        .bindPopup('Điểm sự cố');
+    const slot = document.getElementById('disp-action-' + labId);
+    if (slot) {
+      slot.innerHTML = `<button class="btn btn-outline-secondary btn-sm w-100 disabled">
+                          <i class='bx bx-loader-circle bx-spin'></i> Đang gửi...
+                        </button>`;
     }
 
-    S.routeLayers.forEach((layer) => {
-      try {
-        S.map.removeLayer(layer);
-      } catch (_) {}
-    });
-    S.routeLayers = [];
-
-    result.top.forEach((l) => {
-      const selected = l.lab_id === labId;
-      const color = l.rank <= 3 ? RANK_COLORS[l.rank - 1] : FALLBACK_COLOR;
-      const coords = l.route.geometry.coordinates.map((c) => [c[1], c[0]]);
-
-      const poly = L.polyline(coords, {
-        color,
-        weight: selected ? 6 : 3,
-        opacity: selected ? 0.95 : 0.35,
-        dashArray: l.rank === 1 ? null : '8,6',
-      }).addTo(S.map);
-      S.routeLayers.push(poly);
-
-      const marker = L.marker([l.lat, l.lng], {
-        icon: L.divIcon({
-          className: '',
-          html: `<div style="background:${color};color:#fff;border-radius:50%;width:24px;height:24px;display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:12px;box-shadow:0 0 4px rgba(0,0,0,.4);">${l.rank}</div>`,
-          iconSize: [24, 24],
-          iconAnchor: [12, 12],
-        }),
-      })
-        .addTo(S.map)
-        .bindPopup(
-          `<b>#${l.rank} ${esc(l.lab_name)}</b><br>${l.route.km} km · ${
-            l.route.minutes
-          } phút` +
-            (l.route.source === 'haversine'
-              ? '<br><i>(ước lượng đường chim bay)</i>'
-              : '')
-        );
-      S.routeLayers.push(marker);
-      if (selected) marker.openPopup();
-    });
-
-    const selCoords = lab.route.geometry.coordinates.map((c) => [c[1], c[0]]);
-    S.map.fitBounds(L.latLngBounds(selCoords).pad(0.2));
-    setTimeout(() => S.map.invalidateSize(), 150);
-    document
-      .getElementById('disp-map-wrap')
-      .scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-  };
-
-  window._hideDispatchMap = function () {
-    document.getElementById('disp-map-wrap')?.classList.add('d-none');
-  };
-
-  // --------------------------------------------------------------------------
-  // NHẬP TỌA ĐỘ (trang bản đồ)
-  // --------------------------------------------------------------------------
-  window._geocodeAddress = async function () {
-    const q = document.getElementById('disp-address')?.value.trim();
-    const hint = document.getElementById('disp-origin-hint');
-    if (!q) {
-      if (window.showToast) window.showToast('Nhập địa chỉ cần tìm', 'warning');
-      return;
-    }
-    hint.innerHTML =
-      '<small class="text-muted"><span class="spinner-border spinner-border-sm"></span> Đang tìm địa chỉ...</small>';
     try {
-      const url =
-        'https://nominatim.openstreetmap.org/search?format=json&limit=5&countrycodes=vn&q=' +
-        encodeURIComponent(q);
-      const res = await fetch(url, { headers: { 'Accept-Language': 'vi' } });
-      const data = await res.json();
-      if (!data || data.length === 0) {
-        hint.innerHTML =
-          '<small class="text-danger">Không tìm thấy địa chỉ. Thử nhập cụ thể hơn (thêm quận, thành phố).</small>';
-        return;
+      const role = await resolveRole();
+
+      // Lấy mảng tên các kỹ thuật đã chọn trên giao diện
+      const techSelect = document.getElementById('disp-testtype');
+      let techNames = [];
+      if (techSelect) {
+        techNames =
+          window.$ && $(techSelect).hasClass('select2-hidden-accessible')
+            ? $(techSelect)
+                .select2('data')
+                .map((d) => d.text.trim())
+            : Array.from(techSelect.selectedOptions).map((o) => o.text.trim());
       }
-      if (data.length === 1) {
-        _applyGeocode(data[0]);
-      } else {
-        const opts = data
-          .map(
-            (d, i) =>
-              `<a href="#" class="list-group-item list-group-item-action py-1"
-              onclick='window._pickGeocode(${i});return false;'>
-             <small>${esc(d.display_name)}</small>
-           </a>`
-          )
-          .join('');
-        window._geocodeResults = data;
-        hint.innerHTML = `<div class="list-group mt-1" style="max-height:160px;overflow:auto;">
-          <small class="text-muted px-2 py-1">Chọn địa điểm đúng:</small>${opts}</div>`;
+
+      // ĐÃ SỬA: KHÔNG DÙNG VÒNG LẶP FOR Ở ĐÂY NỮA, CHỈ GỬI CHO ĐÚNG LAB NÀY
+      const actionToken = crypto.randomUUID();
+      const { data: insertedLog, error } = await window.supabaseClient
+        .from('lab_dispatch_log')
+        .insert([
+          {
+            lab_id: lab.lab_id,
+            incident_id: S.incidentId || null,
+            test_type_id:
+              S.testTypeIds && S.testTypeIds.length > 0
+                ? S.testTypeIds[0]
+                : S.testTypeId || null,
+            requested_test_types: techNames, // 👉 LƯU MẢNG KỸ THUẬT VÀO DB
+            requested_sample_count: S.sampleCount,
+            sample_count: 0,
+            status: 'inquiry_sent',
+            dispatched_by: role.userId,
+            action_token: actionToken,
+            pathogens: S.pathogens,
+          },
+        ])
+        .select('id')
+        .single();
+      if (error) throw error;
+
+      await new Promise((r) => setTimeout(r, 600));
+      await window.supabaseClient.functions.invoke('send-lab-inquiry', {
+        body: { record: { id: insertedLog.id } },
+      });
+
+      if (window.showToast)
+        window.showToast(`✅ Đã gửi yêu cầu tới ${lab.lab_name}`, 'success');
+
+      if (slot) {
+        slot.innerHTML = `<button class="btn btn-info btn-sm w-100 disabled text-white">
+                            <i class='bx bx-time'></i> Đang chờ PXN phản hồi...
+                          </button>`;
+      }
+      window._subscribeToLabResponses();
+    } catch (e) {
+      if (window.showToast)
+        window.showToast('Lỗi gửi yêu cầu: ' + e.message, 'error');
+      if (slot) {
+        slot.innerHTML = `<button class="btn btn-outline-warning btn-sm w-100 shadow-sm" onclick="window.sendSingleInquiry('${labId}')">
+                            <i class='bx bx-mail-send'></i> Gửi lại yêu cầu
+                          </button>`;
+      }
+    }
+  };
+
+  // 3. LẮNG NGHE REALTIME PHẢN HỒI
+  let _realtimeChannel = null;
+  function _subscribeToLabResponses() {
+    if (_realtimeChannel) return; // đã đăng ký
+
+    _realtimeChannel = window.supabaseClient
+      .channel('lab_responses_channel')
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'lab_dispatch_log' },
+        (payload) => {
+          const newData = payload.new;
+          const labId = newData.lab_id;
+
+          // A. Cập nhật nút trên CARD tìm kiếm (nếu modal đang mở)
+          const cardEl = document.getElementById('lab-card-' + labId);
+          const slotEl = document.getElementById('disp-action-' + labId);
+          const labData = window._currentDispatchResult?.top?.find(
+            (l) => l.lab_id === labId
+          );
+
+          if (cardEl && slotEl && labData) {
+            const S = window._getDispatchState?.();
+            // Payload chốt dùng logId của CHÍNH bản ghi realtime → UPDATE (không trùng, không quét DOM)
+            const approvePayload = (qty) =>
+              JSON.stringify({
+                source: 'dashboard',
+                logId: newData.id,
+                labId: labData.lab_id,
+                labName: labData.lab_name,
+                testTypeId:
+                  newData.test_type_id ||
+                  labData.test_type_id ||
+                  (S && S.testTypeId),
+                sampleCount: qty,
+                incidentId: newData.incident_id || (S && S.incidentId) || null,
+                headName: labData.head_name,
+                headPhone: labData.head_phone,
+                headEmail: labData.head_email,
+                km: labData.route?.km,
+                minutes: labData.route?.minutes,
+              }).replace(/'/g, '&#39;');
+
+            // Nâng cấp: nhận 1 phần nhưng đủ số lượng → coi như nhận đủ
+            let displayStatus = newData.status;
+            if (
+              displayStatus === 'partially_accepted' &&
+              newData.accepted_sample_count >= newData.requested_sample_count
+            ) {
+              displayStatus = 'accepted';
+            }
+
+            if (displayStatus === 'accepted') {
+              if (window.showToast)
+                window.showToast(
+                  `🔔 ${labData.lab_name} đã đồng ý nhận đủ mẫu!`,
+                  'success'
+                );
+              cardEl.style.backgroundColor = '#f0fdf4';
+              slotEl.innerHTML = `<button class="btn btn-success btn-sm w-100 shadow-sm" onclick='window.confirmDispatch(${approvePayload(
+                newData.accepted_sample_count
+              )})'>
+                                    <i class='bx bx-rocket'></i> Phê duyệt điều phối (Đủ mẫu)
+                                  </button>`;
+            } else if (displayStatus === 'partially_accepted') {
+              if (window.showToast)
+                window.showToast(
+                  `🔔 ${labData.lab_name} chỉ nhận ${newData.accepted_sample_count} mẫu.`,
+                  'warning'
+                );
+              cardEl.style.backgroundColor = '#fffbeb';
+              const short =
+                (newData.requested_sample_count || 0) -
+                (newData.accepted_sample_count || 0);
+              slotEl.innerHTML = `<button class="btn btn-warning btn-sm w-100 shadow-sm" onclick='window.confirmDispatch(${approvePayload(
+                newData.accepted_sample_count
+              )})'>
+                                    <i class='bx bx-rocket'></i> Phê duyệt điều phối (${
+                                      newData.accepted_sample_count
+                                    } mẫu)
+                                  </button>
+                                  <div class="text-danger mt-1" style="font-size:11px;">⚠️ Thiếu ${short} mẫu</div>`;
+            } else if (displayStatus === 'rejected') {
+              if (window.showToast)
+                window.showToast(
+                  `🔔 ${labData.lab_name} đã từ chối nhận mẫu.`,
+                  'error'
+                );
+              cardEl.style.opacity = '0.6';
+              cardEl.style.backgroundColor = '#fef2f2';
+              slotEl.innerHTML = `<span class="badge bg-danger w-100 py-2"><i class='bx bx-block'></i> TỪ CHỐI / QUÁ TẢI</span>`;
+            }
+          }
+
+          // B. Tự làm mới bảng mini-dashboard nếu đang mở
+          const histModal = document.getElementById('dispatchHistModal');
+          if (
+            histModal &&
+            histModal.classList.contains('show') &&
+            typeof _renderDispatchHistory === 'function'
+          ) {
+            setTimeout(() => _renderDispatchHistory(), 300);
+          }
+        }
+      )
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED')
+          console.log('[Realtime] Đã kết nối kênh theo dõi phản hồi PXN.');
+      });
+  }
+  window._subscribeToLabResponses = _subscribeToLabResponses;
+
+  // 4. ĐỒNG BỘ TRẠNG THÁI NÚT BẤM (CẬP NHẬT GIAO DIỆN KHI MỞ MODAL)
+  window.syncDispatchStatuses = async function () {
+    if (typeof window._getDispatchState !== 'function') return;
+    const S = window._getDispatchState();
+    if (!S || !S.incidentId) return;
+
+    try {
+      const { data, error } = await window.supabaseClient
+        .from('lab_dispatch_log')
+        .select('*')
+        .eq('incident_id', S.incidentId)
+        .order('created_at', { ascending: false });
+      if (error || !data) return;
+
+      const latestStatus = {};
+      data.forEach((d) => {
+        if (!latestStatus[d.lab_id]) latestStatus[d.lab_id] = d;
+      });
+
+      const role = await resolveRole();
+
+      Object.values(latestStatus).forEach((record) => {
+        const slot = document.getElementById('disp-action-' + record.lab_id);
+        if (slot) {
+          const allLabs =
+            window._currentDispatchResult?.ranked ||
+            window._currentDispatchResult?.top ||
+            [];
+          const labData = allLabs.find((l) => l.lab_id === record.lab_id);
+          const payloadStr = labData ? _labPayloadAttr(labData, S) : null;
+
+          let displayStatus = record.status;
+          if (
+            displayStatus === 'partially_accepted' &&
+            record.accepted_sample_count >= record.requested_sample_count
+          ) {
+            displayStatus = 'accepted';
+          }
+
+          let btnHtml = '';
+          if (displayStatus === 'inquiry_sent') {
+            btnHtml = `<button class="btn btn-info btn-sm w-100 disabled text-white"><i class='bx bx-time'></i> Đang chờ PXN...</button>`;
+          } else if (displayStatus === 'accepted') {
+            if (role.isAdmin && payloadStr) {
+              btnHtml = `<button class="btn btn-success btn-sm w-100 shadow-sm" onclick='window.confirmDispatch(${payloadStr})'><i class='bx bx-rocket'></i> Chốt điều phối (Đủ mẫu)</button>`;
+            } else {
+              btnHtml = `<button class="btn btn-success btn-sm w-100 disabled"><i class='bx bx-check-double'></i> Đã đồng ý nhận</button>`;
+            }
+          } else if (displayStatus === 'partially_accepted') {
+            if (role.isAdmin && payloadStr) {
+              btnHtml = `<button class="btn btn-warning btn-sm w-100 shadow-sm" onclick='window.confirmDispatch(${payloadStr})'><i class='bx bx-rocket'></i> Chốt (${record.accepted_sample_count} mẫu)</button>`;
+            } else {
+              btnHtml = `<button class="btn btn-warning btn-sm w-100 text-dark disabled"><i class='bx bx-adjust'></i> Nhận ${record.accepted_sample_count}/${record.requested_sample_count}</button>`;
+            }
+          } else if (displayStatus === 'rejected') {
+            btnHtml = `<button class="btn btn-danger btn-sm w-100 disabled"><i class='bx bx-block'></i> Đã từ chối</button>`;
+          } else if (displayStatus === 'dispatched') {
+            btnHtml = `<button class="btn btn-primary btn-sm w-100 disabled"><i class='bx bx-check'></i> Đã chốt lệnh</button>`;
+          }
+
+          if (btnHtml) slot.innerHTML = btnHtml;
+        }
+      });
+
+      // 👉 BÍ QUYẾT NẰM Ở ĐÂY: KÍCH HOẠT REALTIME MỖI KHI ĐỒNG BỘ
+      if (typeof window._subscribeToLabResponses === 'function') {
+        window._subscribeToLabResponses();
       }
     } catch (e) {
-      console.error('[geocode]', e);
-      hint.innerHTML =
-        '<small class="text-danger">Lỗi tìm địa chỉ: ' +
-        esc(e.message) +
-        '</small>';
+      console.warn('Lỗi đồng bộ trạng thái nút:', e);
     }
-  };
-
-  window._pickGeocode = function (i) {
-    const d = window._geocodeResults?.[i];
-    if (d) _applyGeocode(d);
-  };
-
-  function _applyGeocode(d) {
-    const lat = parseFloat(d.lat),
-      lng = parseFloat(d.lon);
-    document.getElementById('disp-lat').value = lat.toFixed(6);
-    document.getElementById('disp-lng').value = lng.toFixed(6);
-    document.getElementById(
-      'disp-origin-hint'
-    ).innerHTML = `<small class="text-success"><i class='bx bx-check-circle'></i> ${esc(
-      d.display_name
-    )}</small>`;
-  }
-
-  window._dispatchUseMyLocation = function () {
-    const hint = document.getElementById('disp-origin-hint');
-    if (!navigator.geolocation) {
-      if (window.showToast)
-        window.showToast('Trình duyệt không hỗ trợ định vị', 'warning');
-      return;
-    }
-    hint.innerHTML =
-      '<small class="text-muted"><span class="spinner-border spinner-border-sm"></span> Đang lấy vị trí...</small>';
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        document.getElementById('disp-lat').value =
-          pos.coords.latitude.toFixed(6);
-        document.getElementById('disp-lng').value =
-          pos.coords.longitude.toFixed(6);
-        hint.innerHTML =
-          '<small class="text-success"><i class="bx bx-check-circle"></i> Đã lấy vị trí hiện tại của bạn.</small>';
-      },
-      (err) => {
-        hint.innerHTML =
-          '<small class="text-danger">Không lấy được vị trí: ' +
-          esc(err.message) +
-          '</small>';
-      },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
-    );
-  };
-
-  window._getDispatchState = function () {
-    return {
-      incidentId: S.incidentId,
-      testTypeId: S.testTypeId,
-      sampleCount: S.sampleCount,
-      lat: S.lat,
-      lng: S.lng,
-      pathogens: S.pathogens, // TRUYỀN TÁC NHÂN ĐI
-    };
   };
 
   console.log(
-    '[lab-dispatch-modal.js] ✅ Dispatch Modal (tiêu chí chuyên gia + QSM/đầu mối) sẵn sàng.'
+    '[lab-dispatch-actions.js] ✅ Hành động điều phối (đề xuất/duyệt/chốt/hủy + đầu mối liên hệ) sẵn sàng.'
   );
 })();
