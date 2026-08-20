@@ -1106,7 +1106,7 @@
             <div class="modal-header" style="background:#006a75;color:#fff;">
               <h5 class="modal-title">
                 <i class='bx bxs-flask'></i> ${
-                  labId ? 'Sửa' : 'Thêm'
+                  labId ? 'Sửa thông tin' : 'Thêm'
                 } Phòng xét nghiệm
               </h5>
               <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
