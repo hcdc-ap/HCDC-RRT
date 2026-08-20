@@ -117,25 +117,25 @@
       // 3. Render giao diện tổng
       dynamicContent.innerHTML = `
         <div style="text-align: left; animation: slideUp .4s ease;">
-          <h2 style="color: #006a75; font-size: 18px; margin-bottom: 8px; border-bottom: 2px solid #e5e7eb; padding-bottom: 12px;">XÁC NHẬN NHẬN MỘT PHẦN MẪU</h2>
+          <h2 style="color: #006a75; font-size: 18px; margin-bottom: 8px; border-bottom: 2px solid #e5e7eb; padding-bottom: 12px;">XÁC NHẬN TIẾP NHẬN MỘT PHẦN THEO YÊU CẦU ĐIỀU PHỐI MẪU</h2>
           <p style="font-size: 13px; color: #6b7280; margin-bottom: 20px; line-height: 1.5;">Vui lòng điều chỉnh thông tin bên dưới phù hợp với năng lực thực tế của đơn vị hiện tại.</p>
 
           <div class="form-group">
-            <label class="form-label">Kỹ thuật yêu cầu:</label>
+            <label class="form-label">Kỹ thuật xét nghiệm:</label>
             <div class="form-box-multi">
               ${techsHtml}
             </div>
           </div>
 
           <div class="form-group">
-            <label class="form-label">Tác nhân có thể thực hiện (Còn sinh phẩm):</label>
+            <label class="form-label">Tác nhân gây bệnh mà đơn vị có thể thực hiện (Còn sinh phẩm):</label>
             <div class="form-box-multi">
               ${pathogensHtml}
             </div>
           </div>
 
           <div class="form-group" style="margin-bottom: 28px;">
-            <label class="form-label">Số lượng mẫu có thể nhận tối đa:</label>
+            <label class="form-label">Số lượng mẫu có thể tiếp nhận tối đa:</label>
             <input type="number" id="qty-input" class="num-input" min="1" max="${_reqQty}" value="${_reqQty}">
             <div class="err-hint" id="qty-err" style="color: #dc2626; font-size: 13px; margin-top: 6px; display: none;"></div>
             <div style="font-size: 13px; color: #6b7280; margin-top: 8px;">
@@ -209,7 +209,7 @@
       .then(res => res.json())
       .then(data => {
         if (data.success === true) {
-          renderState('success', "Cảm ơn đơn vị. HCDC đã ghi nhận thông tin phản hồi và sẽ tiến hành phê duyệt điều phối trên hệ thống.", '<a href="https://hcdc-ap.github.io/RRT/" class="btn">🏠 Đóng cửa sổ</a>');
+          renderState('success', "Cảm ơn đơn vị. HCDC đã ghi nhận thông tin phản hồi và sẽ tiến hành phê duyệt điều phối mẫu trên hệ thống.", '<a href="https://hcdc-ap.github.io/RRT/" class="btn">🏠 Đóng cửa sổ</a>');
         } else {
           renderState('error', (data.message || "Có lỗi xảy ra trong quá trình ghi nhận.") + " Vui lòng thử lại sau.");
         }
