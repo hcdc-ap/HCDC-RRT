@@ -193,47 +193,72 @@
 
   // Báo cho THÀNH VIÊN đang tham gia sự cố khi đã CHỐT điều phối mẫu (kèm km + phút).
   // Nguồn thành viên: incidents.members (chuỗi email nối bằng ';').
-  async function _notifyIncidentMembers(p) {
-    if (!p.incidentId) {
-      // điều phối mẫu không gắn sự cố (mở từ trang bản đồ) → không có thành viên để báo
+  // Đã bỏ cột pathogens ở bảng incidents, chỉ lấy dữ liệu từ bảng lab_dispatch_log
+  async function _notifyIncidentMembers(p, logId) {
+    if (!p.incidentId || !logId) {
       return;
     }
     try {
-      // 1. Lấy danh sách email thành viên + tên loại XN để ghi nội dung
-      const [incRes, ttRes] = await Promise.all([
+      // Lấy danh sách thành viên VÀ thông tin log điều phối
+      const [incRes, logRes] = await Promise.all([
         window.supabaseClient
           .from('incidents')
-          .select('event_name, members')
+          .select('event_name, members') // 👉 CHỈ LẤY event_name và members
           .eq('id', p.incidentId)
           .single(),
         window.supabaseClient
-          .from('test_types')
-          .select('name')
-          .eq('id', p.testTypeId)
-          .single(),
+          .from('lab_dispatch_log')
+          .select('requested_test_types, accepted_test_types, test_types(name), pathogens, accepted_pathogens')
+          .eq('id', logId)
+          .single()
       ]);
 
       const inc = incRes.data;
-      if (!inc) return;
+      const logData = logRes.data;
+      if (!inc || !logData) return;
 
       const emails = String(inc.members || '')
         .split(';')
         .map((e) => e.trim().toLowerCase())
         .filter(Boolean);
 
-      if (emails.length === 0) {
-        console.info(
-          '[notifyIncidentMembers] Sự kiện chưa có thành viên nào để báo.'
-        );
-        return;
+      if (emails.length === 0) return;
+
+      // ==========================================
+      // 1. Xử lý lấy tên Kỹ thuật (Ưu tiên đã nhận)
+      // ==========================================
+      let testName = "xét nghiệm chuyên sâu";
+      const finalTechs = (logData.accepted_test_types && logData.accepted_test_types.length > 0) 
+                          ? logData.accepted_test_types 
+                          : logData.requested_test_types;
+                          
+      if (Array.isArray(finalTechs) && finalTechs.length > 0) {
+        testName = finalTechs.join(", ");
+      } else if (logData.test_types?.name) {
+        testName = logData.test_types.name;
       }
 
-      const testName = ttRes.data?.name || 'xét nghiệm';
+      // ==========================================
+      // 2. Xử lý lấy tên Tác nhân (Từ log điều phối)
+      // ==========================================
+      let pathogensList = "Không chỉ định cụ thể";
+      let rawPathogens = logData.accepted_pathogens;
+      
+      // Nếu không có tác nhân "đã nhận", lấy tác nhân "yêu cầu ban đầu"
+      if (!rawPathogens || rawPathogens.length === 0) {
+        rawPathogens = logData.pathogens;
+      }
+      
+      if (Array.isArray(rawPathogens) && rawPathogens.length > 0) {
+        pathogensList = rawPathogens.join(", ");
+      }
 
-      // 2. Soạn nội dung rút gọn (đã bỏ km và phút di chuyển)
-      const message = `Đã điều ${p.sampleCount} mẫu (${testName}) tới ${p.labName}.`;
+      // ==========================================
+      // 3. Soạn thông báo đầy đủ
+      // ==========================================
+      const message = `Đã điều ${p.sampleCount} mẫu (Kỹ thuật: ${testName} | Tác nhân: ${pathogensList}) tới ${p.labName}.`;
 
-      // 3. Ghi vào notifications cho từng thành viên → trigger tự bắn Telegram/email
+      // Ghi vào bảng notifications để hệ thống tự bắn vào ứng dụng/email
       const rows = emails.map((email) => ({
         user_email: email,
         message: message,
@@ -241,40 +266,33 @@
         incident_id: p.incidentId,
         is_read: false,
       }));
-      const { error } = await window.supabaseClient
-        .from('notifications')
-        .insert(rows);
+      
+      const { error } = await window.supabaseClient.from('notifications').insert(rows);
       if (error) throw error;
 
-      console.info(
-        `[notifyIncidentMembers] Đã báo ${emails.length} thành viên sự kiện.`
-      );
+      console.info(`[notifyIncidentMembers] Đã báo ${emails.length} thành viên sự kiện.`);
     } catch (e) {
-      console.warn(
-        '[notifyIncidentMembers] tidak gửi được thông báo:',
-        e.message
-      );
-      // Không chặn luồng chính — điều phối mẫu đã thành công dù notify lỗi
+      console.warn('[notifyIncidentMembers] không gửi được thông báo:', e.message);
     }
   }
 
-  // --------------------------------------------------------------------------
-  // ADMIN: CHỐT điều phối mẫu (ghi dispatched → trừ công suất)
-  // --------------------------------------------------------------------------
+  // ===================================================================
+  // HÀM CHỐT ĐIỀU PHỐI MẪU (CONFIRM DISPATCH)
+  // Xử lý 2 luồng: Từ Modal tìm kiếm (INSERT) và Từ Bảng Lịch sử (UPDATE)
+  // ===================================================================
   window.confirmDispatch = async function (p) {
     if (typeof p === 'string') p = JSON.parse(p);
+    
     const role = await resolveRole();
     if (!role.isAdmin) {
-      if (window.showToast)
-        window.showToast('Chỉ điều phối viên mới chốt được', 'warning');
+      if (window.showToast) window.showToast('Chỉ điều phối viên mới chốt được', 'warning');
       return;
     }
 
-    // Phân luồng RÕ RÀNG bằng cờ source. Fallback: có logId → coi như dashboard.
-    const source = p.source || (p.logId ? 'dashboard' : 'modal');
+    // 👉 ÉP LUỒNG RÕ RÀNG: Cứ có logId thì chắc chắn là từ Mini-Dashboard -> UPDATE
+    const source = (p.logId || p.source === 'dashboard') ? 'dashboard' : 'modal';
 
-    const routeLine =
-      p.km && p.km !== '?' ? `\n(${p.km} km · ${p.minutes} phút)` : '';
+    const routeLine = p.km && p.km !== '?' ? `\n(${p.km} km · ${p.minutes} phút)` : '';
     const ok = await window.showConfirm({
       title: 'Xác nhận điều phối mẫu',
       message: `Xác nhận điều ${p.sampleCount} mẫu tới:\n"${p.labName}"${routeLine}\n\nCông suất còn lại hôm nay của Phòng Xét nghiệm sẽ được trừ tương ứng.`,
@@ -283,16 +301,17 @@
       variant: 'primary',
       icon: 'bx-check-double',
     });
+    
     if (!ok) return;
 
     try {
       let logIdToNotify = p.logId;
 
       if (source === 'dashboard') {
-        // LUỒNG 1 — chốt từ Dashboard (PXN đã khảo sát, đã có log) → UPDATE.
+        // LUỒNG 1 — chốt từ Dashboard (PXN đã khảo sát, đã có sẵn log) → UPDATE.
         // KHÔNG đụng DOM modal, KHÔNG bắt chọn kỹ thuật lại.
-        if (!p.logId)
-          throw new Error('Thiếu logId để cập nhật lệnh điều phối.');
+        if (!p.logId) throw new Error('Thiếu logId để cập nhật lệnh điều phối.');
+        
         const { error } = await window.supabaseClient
           .from('lab_dispatch_log')
           .update({
@@ -301,35 +320,30 @@
             dispatched_by: role.userId,
           })
           .eq('id', p.logId);
+          
         if (error) throw error;
+        
       } else {
         // LUỒNG 2 — chốt trực tiếp từ Modal tìm kiếm (chưa khảo sát) → INSERT.
         // Modal đang mở nên đọc kỹ thuật từ #disp-testtype là hợp lệ.
         const techSelect = document.getElementById('disp-testtype');
         let techNames = [];
+        
         if (techSelect) {
-          techNames =
-            window.$ && $(techSelect).hasClass('select2-hidden-accessible')
-              ? $(techSelect)
-                  .select2('data')
-                  .map((d) => d.text.trim())
-              : Array.from(techSelect.selectedOptions).map((o) =>
-                  o.text.trim()
-                );
+          techNames = window.$ && $(techSelect).hasClass('select2-hidden-accessible')
+              ? $(techSelect).select2('data').map((d) => d.text.trim())
+              : Array.from(techSelect.selectedOptions).map((o) => o.text.trim());
         }
+        
         if (techNames.length === 0) {
-          if (window.showToast)
-            window.showToast(
-              'Vui lòng chọn ít nhất 1 loại kỹ thuật',
-              'warning'
-            );
+          if (window.showToast) window.showToast('Vui lòng chọn ít nhất 1 loại kỹ thuật', 'warning');
           return;
         }
+        
         const S = window._getDispatchState?.();
         const { data: insertedLog, error } = await window.supabaseClient
           .from('lab_dispatch_log')
-          .insert([
-            {
+          .insert([{
               lab_id: p.labId,
               incident_id: p.incidentId || null,
               test_type_id: p.testTypeId,
@@ -338,19 +352,20 @@
               sample_count: p.sampleCount,
               status: 'dispatched',
               dispatched_by: role.userId,
-            },
-          ])
+          }])
           .select('id')
           .single();
+          
         if (error) throw error;
         logIdToNotify = insertedLog.id;
       }
 
-      if (window.showToast)
-        window.showToast(
-          `✅ Đã điều ${p.sampleCount} mẫu tới ${p.labName}`,
-          'success'
-        );
+      // Thông báo thành công trên giao diện
+      if (window.showToast) {
+        window.showToast(`✅ Đã điều ${p.sampleCount} mẫu tới ${p.labName}`, 'success');
+      }
+
+      // Bắn lệnh qua Edge Function (Sẽ tự gửi mail và bắn Group Telegram)
       window.supabaseClient.functions
         .invoke('notify-lab-result', {
           body: {
@@ -361,13 +376,20 @@
         })
         .catch((err) => console.warn('Lỗi gọi API:', err));
 
-      _showContactReminder(p);
-      await _notifyIncidentMembers(p);
-      await window.showDispatchHistory(p.incidentId, p.testTypeId);
+      // Thực thi các hành động hậu kỳ (Cập nhật giao diện, thông báo nội bộ...)
+      if (typeof _notifyIncidentMembers === 'function') await _notifyIncidentMembers(p, logIdToNotify);
+      if (typeof _notifyIncidentMembers === 'function') await _notifyIncidentMembers(p);
+      
+      // Load lại bảng lịch sử nếu đang mở
+      if (typeof window.showDispatchHistory === 'function') {
+        await window.showDispatchHistory(p.incidentId, p.testTypeId);
+      }
+      
+      // Chạy lại tìm kiếm trên bản đồ để cập nhật công suất
       if (typeof window._runDispatch === 'function') window._runDispatch();
+      
     } catch (e) {
-      if (window.showToast)
-        window.showToast('Lỗi xác nhận: ' + e.message, 'error');
+      if (window.showToast) window.showToast('Lỗi xác nhận: ' + e.message, 'error');
     }
   };
 
@@ -1539,117 +1561,144 @@
     }
   };
 
-  // 3. LẮNG NGHE REALTIME PHẢN HỒI
-  let _realtimeChannel = null;
-  function _subscribeToLabResponses() {
-    if (_realtimeChannel) return; // đã đăng ký
+// 3. LẮNG NGHE REALTIME PHẢN HỒI (Đã vá lỗi mất nút)
+let _realtimeChannel = null;
+function _subscribeToLabResponses() {
+  if (_realtimeChannel) return; // đã đăng ký
 
-    _realtimeChannel = window.supabaseClient
-      .channel('lab_responses_channel')
-      .on(
-        'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'lab_dispatch_log' },
-        (payload) => {
-          const newData = payload.new;
-          const labId = newData.lab_id;
+  _realtimeChannel = window.supabaseClient
+    .channel('lab_responses_channel')
+    .on(
+      'postgres_changes',
+      { event: 'UPDATE', schema: 'public', table: 'lab_dispatch_log' },
+      async (payload) => {
+        const newData = payload.new;
+        const labId = newData.lab_id;
 
-          // A. Cập nhật nút trên CARD tìm kiếm (nếu modal đang mở)
-          const cardEl = document.getElementById('lab-card-' + labId);
-          const slotEl = document.getElementById('disp-action-' + labId);
-          const labData = window._currentDispatchResult?.top?.find(
-            (l) => l.lab_id === labId
-          );
+        // A. Tìm card trên giao diện (hỗ trợ fallback nếu đổi cấu trúc ID)
+        let cardEl = document.getElementById('lab-card-' + labId);
+        let slotEl = document.getElementById('disp-action-' + labId);
+        
+        // Fallback: nếu không tìm thấy ID chính xác, thử tìm qua thuộc tính data-lab-id
+        if (!slotEl) {
+          slotEl = document.querySelector(`[data-disp-action="${labId}"]`);
+        }
+        if (!cardEl) {
+          cardEl = document.querySelector(`[data-lab-card="${labId}"]`);
+        }
 
-          if (cardEl && slotEl && labData) {
-            const S = window._getDispatchState?.();
-            // Payload chốt dùng logId của CHÍNH bản ghi realtime → UPDATE (không trùng, không quét DOM)
-            const approvePayload = (qty) =>
-              JSON.stringify({
-                source: 'dashboard',
-                logId: newData.id,
-                labId: labData.lab_id,
-                labName: labData.lab_name,
-                testTypeId:
-                  newData.test_type_id ||
-                  labData.test_type_id ||
-                  (S && S.testTypeId),
-                sampleCount: qty,
-                incidentId: newData.incident_id || (S && S.incidentId) || null,
-                headName: labData.head_name,
-                headPhone: labData.head_phone,
-                headEmail: labData.head_email,
-                km: labData.route?.km,
-                minutes: labData.route?.minutes,
-              }).replace(/'/g, '&#39;');
+        // Lấy thông tin phòng xét nghiệm (Ưu tiên window._currentDispatchResult, nếu không có thì query trực tiếp Supabase)
+        let labData = window._currentDispatchResult?.top?.find(
+          (l) => l.lab_id === labId
+        );
 
-            // Nâng cấp: nhận 1 phần nhưng đủ số lượng → coi như nhận đủ
-            let displayStatus = newData.status;
-            if (
-              displayStatus === 'partially_accepted' &&
-              newData.accepted_sample_count >= newData.requested_sample_count
-            ) {
-              displayStatus = 'accepted';
-            }
-
-            if (displayStatus === 'accepted') {
-              if (window.showToast)
-                window.showToast(
-                  `🔔 ${labData.lab_name} đã đồng ý nhận đủ mẫu!`,
-                  'success'
-                );
-              cardEl.style.backgroundColor = '#f0fdf4';
-              slotEl.innerHTML = `<button class="btn btn-success btn-sm w-100 shadow-sm" onclick='window.confirmDispatch(${approvePayload(
-                newData.accepted_sample_count
-              )})'>
-                                    <i class='bx bx-rocket'></i> Phê duyệt điều phối (Đủ mẫu)
-                                  </button>`;
-            } else if (displayStatus === 'partially_accepted') {
-              if (window.showToast)
-                window.showToast(
-                  `🔔 ${labData.lab_name} chỉ nhận ${newData.accepted_sample_count} mẫu.`,
-                  'warning'
-                );
-              cardEl.style.backgroundColor = '#fffbeb';
-              const short =
-                (newData.requested_sample_count || 0) -
-                (newData.accepted_sample_count || 0);
-              slotEl.innerHTML = `<button class="btn btn-warning btn-sm w-100 shadow-sm" onclick='window.confirmDispatch(${approvePayload(
-                newData.accepted_sample_count
-              )})'>
-                                    <i class='bx bx-rocket'></i> Phê duyệt điều phối (${
-                                      newData.accepted_sample_count
-                                    } mẫu)
-                                  </button>
-                                  <div class="text-danger mt-1" style="font-size:11px;">⚠️ Thiếu ${short} mẫu</div>`;
-            } else if (displayStatus === 'rejected') {
-              if (window.showToast)
-                window.showToast(
-                  `🔔 ${labData.lab_name} đã từ chối nhận mẫu.`,
-                  'error'
-                );
-              cardEl.style.opacity = '0.6';
-              cardEl.style.backgroundColor = '#fef2f2';
-              slotEl.innerHTML = `<span class="badge bg-danger w-100 py-2"><i class='bx bx-block'></i> TỪ CHỐI / QUÁ TẢI</span>`;
-            }
-          }
-
-          // B. Tự làm mới bảng mini-dashboard nếu đang mở
-          const histModal = document.getElementById('dispatchHistModal');
-          if (
-            histModal &&
-            histModal.classList.contains('show') &&
-            typeof _renderDispatchHistory === 'function'
-          ) {
-            setTimeout(() => _renderDispatchHistory(), 300);
+        if (!labData) {
+          const { data: labInfo } = await window.supabaseClient
+            .from('laboratories')
+            .select('id, name, head_name, head_phone, head_email')
+            .eq('id', labId)
+            .maybeSingle();
+          
+          if (labInfo) {
+            labData = {
+              lab_id: labInfo.id,
+              lab_name: labInfo.name,
+              head_name: labInfo.head_name,
+              head_phone: labInfo.head_phone,
+              head_email: labInfo.head_email
+            };
           }
         }
-      )
-      .subscribe((status) => {
-        if (status === 'SUBSCRIBED')
-          console.log('[Realtime] Đã kết nối kênh theo dõi phản hồi PXN.');
-      });
-  }
-  window._subscribeToLabResponses = _subscribeToLabResponses;
+
+        // Nếu tìm thấy slot hiển thị nút thao tác trên màn hình
+        if (slotEl && labData) {
+          const S = window._getDispatchState?.();
+          const approvePayload = (qty) =>
+            JSON.stringify({
+              source: 'dashboard',
+              logId: newData.id,
+              labId: labData.lab_id,
+              labName: labData.lab_name,
+              testTypeId:
+                newData.test_type_id ||
+                labData.test_type_id ||
+                (S && S.testTypeId),
+              sampleCount: qty,
+              incidentId: newData.incident_id || (S && S.incidentId) || null,
+              headName: labData.head_name,
+              headPhone: labData.head_phone,
+              headEmail: labData.head_email,
+              km: labData.route?.km || '?',
+              minutes: labData.route?.minutes || '?',
+            }).replace(/'/g, '&#39;');
+
+          let displayStatus = newData.status;
+          if (
+            displayStatus === 'partially_accepted' &&
+            (newData.accepted_sample_count || 0) >= (newData.requested_sample_count || 0)
+          ) {
+            displayStatus = 'accepted';
+          }
+
+          if (displayStatus === 'accepted') {
+            if (window.showToast)
+              window.showToast(
+                `🔔 ${labData.lab_name} đã đồng ý nhận đủ mẫu!`,
+                'success'
+              );
+            if (cardEl) cardEl.style.backgroundColor = '#f0fdf4';
+            slotEl.innerHTML = `<button class="btn btn-success btn-sm w-100 shadow-sm" onclick='window.confirmDispatch(${approvePayload(
+              newData.accepted_sample_count
+            )})'>
+                                  <i class='bx bx-rocket'></i> Phê duyệt điều phối (Đủ mẫu)
+                                </button>`;
+          } else if (displayStatus === 'partially_accepted') {
+            if (window.showToast)
+              window.showToast(
+                `🔔 ${labData.lab_name} chỉ nhận ${newData.accepted_sample_count} mẫu.`,
+                'warning'
+              );
+            if (cardEl) cardEl.style.backgroundColor = '#fffbeb';
+            const short =
+              (newData.requested_sample_count || 0) -
+              (newData.accepted_sample_count || 0);
+            slotEl.innerHTML = `<button class="btn btn-warning btn-sm w-100 shadow-sm" onclick='window.confirmDispatch(${approvePayload(
+              newData.accepted_sample_count
+            )})'>
+                                  <i class='bx bx-rocket'></i> Phê duyệt điều phối (${newData.accepted_sample_count} mẫu)
+                                </button>
+                                <div class="text-danger mt-1" style="font-size:11px;">⚠️ Thiếu ${short} mẫu</div>`;
+          } else if (displayStatus === 'rejected') {
+            if (window.showToast)
+              window.showToast(
+                `🔔 ${labData.lab_name} đã từ chối nhận mẫu.`,
+                'error'
+              );
+            if (cardEl) {
+              cardEl.style.opacity = '0.6';
+              cardEl.style.backgroundColor = '#fef2f2';
+            }
+            slotEl.innerHTML = `<span class="badge bg-danger w-100 py-2"><i class='bx bx-block'></i> TỪ CHỐI / QUÁ TẢI</span>`;
+          }
+        }
+
+        // B. Tự làm mới bảng mini-dashboard nếu modal lịch sử đang mở
+        const histModal = document.getElementById('dispatchHistModal');
+        if (
+          histModal &&
+          histModal.classList.contains('show') &&
+          typeof _renderDispatchHistory === 'function'
+        ) {
+          setTimeout(() => _renderDispatchHistory(), 300);
+        }
+      }
+    )
+    .subscribe((status) => {
+      if (status === 'SUBSCRIBED')
+        console.log('[Realtime] Đã kết nối kênh theo dõi phản hồi PXN.');
+    });
+}
+window._subscribeToLabResponses = _subscribeToLabResponses;
 
   // 4. ĐỒNG BỘ TRẠNG THÁI NÚT BẤM (CẬP NHẬT GIAO DIỆN KHI MỞ MODAL)
   window.syncDispatchStatuses = async function () {
