@@ -193,47 +193,72 @@
 
   // Báo cho THÀNH VIÊN đang tham gia sự cố khi đã CHỐT điều phối mẫu (kèm km + phút).
   // Nguồn thành viên: incidents.members (chuỗi email nối bằng ';').
-  async function _notifyIncidentMembers(p) {
-    if (!p.incidentId) {
-      // điều phối mẫu không gắn sự cố (mở từ trang bản đồ) → không có thành viên để báo
+  // Đã bỏ cột pathogens ở bảng incidents, chỉ lấy dữ liệu từ bảng lab_dispatch_log
+  async function _notifyIncidentMembers(p, logId) {
+    if (!p.incidentId || !logId) {
       return;
     }
     try {
-      // 1. Lấy danh sách email thành viên + tên loại XN để ghi nội dung
-      const [incRes, ttRes] = await Promise.all([
+      // Lấy danh sách thành viên VÀ thông tin log điều phối
+      const [incRes, logRes] = await Promise.all([
         window.supabaseClient
           .from('incidents')
-          .select('event_name, members')
+          .select('event_name, members') // 👉 CHỈ LẤY event_name và members
           .eq('id', p.incidentId)
           .single(),
         window.supabaseClient
-          .from('test_types')
-          .select('name')
-          .eq('id', p.testTypeId)
-          .single(),
+          .from('lab_dispatch_log')
+          .select('requested_test_types, accepted_test_types, test_types(name), pathogens, accepted_pathogens')
+          .eq('id', logId)
+          .single()
       ]);
 
       const inc = incRes.data;
-      if (!inc) return;
+      const logData = logRes.data;
+      if (!inc || !logData) return;
 
       const emails = String(inc.members || '')
         .split(';')
         .map((e) => e.trim().toLowerCase())
         .filter(Boolean);
 
-      if (emails.length === 0) {
-        console.info(
-          '[notifyIncidentMembers] Sự kiện chưa có thành viên nào để báo.'
-        );
-        return;
+      if (emails.length === 0) return;
+
+      // ==========================================
+      // 1. Xử lý lấy tên Kỹ thuật (Ưu tiên đã nhận)
+      // ==========================================
+      let testName = "xét nghiệm chuyên sâu";
+      const finalTechs = (logData.accepted_test_types && logData.accepted_test_types.length > 0) 
+                          ? logData.accepted_test_types 
+                          : logData.requested_test_types;
+                          
+      if (Array.isArray(finalTechs) && finalTechs.length > 0) {
+        testName = finalTechs.join(", ");
+      } else if (logData.test_types?.name) {
+        testName = logData.test_types.name;
       }
 
-      const testName = ttRes.data?.name || 'xét nghiệm';
+      // ==========================================
+      // 2. Xử lý lấy tên Tác nhân (Từ log điều phối)
+      // ==========================================
+      let pathogensList = "Không chỉ định cụ thể";
+      let rawPathogens = logData.accepted_pathogens;
+      
+      // Nếu không có tác nhân "đã nhận", lấy tác nhân "yêu cầu ban đầu"
+      if (!rawPathogens || rawPathogens.length === 0) {
+        rawPathogens = logData.pathogens;
+      }
+      
+      if (Array.isArray(rawPathogens) && rawPathogens.length > 0) {
+        pathogensList = rawPathogens.join(", ");
+      }
 
-      // 2. Soạn nội dung rút gọn (đã bỏ km và phút di chuyển)
-      const message = `Đã điều ${p.sampleCount} mẫu (${testName}) tới ${p.labName}.`;
+      // ==========================================
+      // 3. Soạn thông báo đầy đủ
+      // ==========================================
+      const message = `Đã điều ${p.sampleCount} mẫu (Kỹ thuật: ${testName} | Tác nhân: ${pathogensList}) tới ${p.labName}.`;
 
-      // 3. Ghi vào notifications cho từng thành viên → trigger tự bắn Telegram/email
+      // Ghi vào bảng notifications để hệ thống tự bắn vào ứng dụng/email
       const rows = emails.map((email) => ({
         user_email: email,
         message: message,
@@ -241,20 +266,13 @@
         incident_id: p.incidentId,
         is_read: false,
       }));
-      const { error } = await window.supabaseClient
-        .from('notifications')
-        .insert(rows);
+      
+      const { error } = await window.supabaseClient.from('notifications').insert(rows);
       if (error) throw error;
 
-      console.info(
-        `[notifyIncidentMembers] Đã báo ${emails.length} thành viên sự kiện.`
-      );
+      console.info(`[notifyIncidentMembers] Đã báo ${emails.length} thành viên sự kiện.`);
     } catch (e) {
-      console.warn(
-        '[notifyIncidentMembers] tidak gửi được thông báo:',
-        e.message
-      );
-      // Không chặn luồng chính — điều phối mẫu đã thành công dù notify lỗi
+      console.warn('[notifyIncidentMembers] không gửi được thông báo:', e.message);
     }
   }
 
@@ -359,7 +377,7 @@
         .catch((err) => console.warn('Lỗi gọi API:', err));
 
       // Thực thi các hành động hậu kỳ (Cập nhật giao diện, thông báo nội bộ...)
-      if (typeof _showContactReminder === 'function') _showContactReminder(p);
+      if (typeof _notifyIncidentMembers === 'function') await _notifyIncidentMembers(p, logIdToNotify);
       if (typeof _notifyIncidentMembers === 'function') await _notifyIncidentMembers(p);
       
       // Load lại bảng lịch sử nếu đang mở
