@@ -78,73 +78,82 @@
       Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
     return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   }
-  const ROUTING_FACTOR = 1.35; // hệ số dích dắc đường bộ
+ // Hệ số dích dắc đặc thù TPHCM (hẻm, đường 1 chiều, vòng xoay)
+ const ROUTING_FACTOR = 1.45; 
+ // Thời gian hao phí cố định cho việc đỗ xe và bàn giao mẫu (phút)
+ const OVERHEAD_MINUTES = 5; 
 
-  // Vận tốc (km/h) theo giờ VN hiện tại. Cho phép truyền Date để test.
-  function getSpeedByHour(date) {
-    // Lấy giờ + phút theo múi giờ Việt Nam (bất kể server ở đâu)
-    const vn = new Date(
-      (date || new Date()).toLocaleString('en-US', {
-        timeZone: 'Asia/Ho_Chi_Minh',
-      })
-    );
-    const h = vn.getHours();
-    const m = vn.getMinutes();
-    const t = h * 60 + m; // phút kể từ 00:00
+ // Vận tốc (km/h) theo giờ thực tế tại TPHCM
+ function getSpeedByHour(date) {
+   const vn = new Date(
+     (date || new Date()).toLocaleString('en-US', {
+       timeZone: 'Asia/Ho_Chi_Minh',
+     })
+   );
+   const h = vn.getHours();
+   const m = vn.getMinutes();
+   const t = h * 60 + m; 
 
-    const between = (a, b) => t >= a && t < b;
+   const between = (a, b) => t >= a && t < b;
 
-    // Cao điểm: 07:00–08:30 (420–510) và 16:30–18:30 (990–1110)
-    if (between(420, 510) || between(990, 1110)) {
-      return { speed: 15, label: ' Giờ cao điểm', level: 'peak' };
-    }
-    // Ban đêm: 22:00–24:00 (1320–1440) và 00:00–07:00 (0–420)
-    if (t >= 1320 || t < 420) {
-      return { speed: 35, label: 'Giờ thấp điểm', level: 'night' };
-    }
-    // Còn lại là bình thường: 08:30–16:30 và 18:30–22:00
-    return { speed: 25, label: 'Giờ bình thường', level: 'normal' };
-  }
+   // Cao điểm: 07:00–08:30 và 16:30–18:30 (Kẹt xe)
+   if (between(420, 510) || between(990, 1110)) {
+     return { speed: 12, label: 'Giờ cao điểm', level: 'peak' };
+   }
+   // Ban đêm: 22:00–06:00 (Vắng xe, ít dừng đèn đỏ)
+   if (t >= 1320 || t < 360) {
+     return { speed: 30, label: 'Giờ thấp điểm', level: 'night' };
+   }
+   // Bình thường: Tốc độ đô thị tiêu chuẩn
+   return { speed: 18, label: 'Giờ bình thường', level: 'normal' };
+ }
 
-  // Ước tính quãng đường + thời gian OFFLINE (thay routeOne cũ)
-  function estimateTravel(originLat, originLng, destLat, destLng, atDate) {
-    const straightKm = haversineKm(originLat, originLng, destLat, destLng);
-    const roadKm = +(straightKm * ROUTING_FACTOR).toFixed(2);
-    const { speed, label, level } = getSpeedByHour(atDate);
-    const minutes = Math.round((roadKm / speed) * 60);
-    return {
-      km: roadKm,
-      minutes,
-      speed,
-      trafficLabel: label,
-      trafficLevel: level,
-      source: 'offline',
-      // đường thẳng để vẽ (không có tuyến thật vì không gọi API)
-      geometry: {
-        type: 'LineString',
-        coordinates: [
-          [originLng, originLat],
-          [destLng, destLat],
-        ],
-      },
-    };
-  }
+ // Ước tính quãng đường + thời gian OFFLINE
+ function estimateTravel(originLat, originLng, destLat, destLng, atDate) {
+   // Lưu ý: Đảm bảo hàm haversineKm đã được định nghĩa ở nơi khác trong script
+   const straightKm = haversineKm(originLat, originLng, destLat, destLng);
+   const roadKm = +(straightKm * ROUTING_FACTOR).toFixed(2);
+   
+   const { speed, label, level } = getSpeedByHour(atDate);
+   
+   // Tính phút di chuyển lăn bánh + hao phí giao nhận (nếu có di chuyển thực tế)
+   let minutes = Math.round((roadKm / speed) * 60);
+   if (roadKm > 0.1) {
+     minutes += OVERHEAD_MINUTES;
+   }
 
-  // THAY routeAll: tính offline cho tất cả ứng viên (không fetch, không chờ)
-  async function routeAll(originLat, originLng, candidates) {
-    const now = new Date();
-    return (candidates || []).map((c) => ({
-      ...c,
-      route: estimateTravel(originLat, originLng, c.lat, c.lng, now),
-    }));
-  }
+   return {
+     km: roadKm,
+     minutes,
+     speed,
+     trafficLabel: label,
+     trafficLevel: level,
+     source: 'offline',
+     geometry: {
+       type: 'LineString',
+       coordinates: [
+         [originLng, originLat],
+         [destLng, destLat],
+       ],
+     },
+   };
+ }
 
-  // (giữ để nơi khác gọi routeOne vẫn chạy — giờ trả offline)
-  function routeOne(originLat, originLng, destLat, destLng) {
-    return Promise.resolve(
-      estimateTravel(originLat, originLng, destLat, destLng)
-    );
-  }
+ // Tính offline cho tất cả ứng viên
+ async function routeAll(originLat, originLng, candidates) {
+   const now = new Date();
+   return (candidates || []).map((c) => ({
+     ...c,
+     route: estimateTravel(originLat, originLng, c.lat, c.lng, now),
+   }));
+ }
+
+ // Truy vấn đơn lẻ
+ function routeOne(originLat, originLng, destLat, destLng) {
+   return Promise.resolve(
+     estimateTravel(originLat, originLng, destLat, destLng)
+   );
+ }
   // --------------------------------------------------------------------------
   // CHẤM ĐIỂM 5 CHIỀU
   //   diemGan  = 100*(1 - phút/phútXaNhất)            gần/nhanh tới nơi
