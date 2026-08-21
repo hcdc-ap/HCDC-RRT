@@ -1,4 +1,4 @@
-// ===========================================================================
+// ============================================================================
 // GIAI ĐOẠN 2C — HÀNH ĐỘNG ĐIỀU PHỐI (đề xuất / duyệt / chốt / hủy)
 // Hệ thống RRT-HCDC
 // ----------------------------------------------------------------------------
@@ -265,6 +265,7 @@
         notification_type: 'thong_tin',
         incident_id: p.incidentId,
         is_read: false,
+        response_status: 'confirmed' // 👉 Khóa cứng trạng thái để giữ màu xanh trên Dashboard
       }));
       
       const { error } = await window.supabaseClient.from('notifications').insert(rows);
@@ -280,6 +281,33 @@
   // HÀM CHỐT ĐIỀU PHỐI MẪU (CONFIRM DISPATCH)
   // Xử lý 2 luồng: Từ Modal tìm kiếm (INSERT) và Từ Bảng Lịch sử (UPDATE)
   // ===================================================================
+  // HÀM BỌC (WRAPPER) ĐỂ LẤY SỐ LƯỢNG TỪ Ô INPUT TRƯỚC KHI CHỐT
+  window.submitCustomDispatch = function (payload, inputId) {
+    const inputEl = document.getElementById(inputId);
+    if (!inputEl) return;
+
+    const actualQty = parseInt(inputEl.value, 10);
+    const maxQty = payload.sampleCount; // Số lượng tối đa PXN đã đồng ý
+
+    if (isNaN(actualQty) || actualQty <= 0) {
+      if (window.showToast) window.showToast('Số lượng chốt không hợp lệ!', 'warning');
+      return;
+    }
+
+    if (actualQty > maxQty) {
+      if (window.showToast) window.showToast(`Phòng xét nghiệm này chỉ đồng ý nhận tối đa ${maxQty} mẫu!`, 'error');
+      inputEl.value = maxQty; // Tự động trả về mức tối đa
+      return;
+    }
+
+    // Cập nhật số lượng thực tế muốn chốt vào payload
+    payload.sampleCount = actualQty;
+
+    // Chuyển tiếp sang hàm chốt gốc của hệ thống
+    if (typeof window.confirmDispatch === 'function') {
+      window.confirmDispatch(payload);
+    }
+  };
   window.confirmDispatch = async function (p) {
     if (typeof p === 'string') p = JSON.parse(p);
     
@@ -901,14 +929,20 @@
                 logId: d.id,
               };
               const finalPayload = JSON.stringify(pObj).replace(/'/g, '&#39;');
-              actionBtns = `<button class="btn btn-sm btn-success w-100 mb-1" onclick='window.confirmDispatch(${finalPayload})'>
-                          <i class='bx bx-check'></i> Chốt ngay
-                        </button>`;
+              
+              // ĐÃ SỬA: Chống rớt dòng và ép nhỏ ô input lại
+              actionBtns += `
+                <div class="input-group input-group-sm mb-1 shadow-sm" style="flex-wrap: nowrap;">
+                  <input type="number" id="chot-qty-${d.id}" class="form-control text-center fw-bold text-primary px-1" 
+                         value="${d.accQty}" min="1" max="${d.accQty}" title="SL thực tế" style="max-width: 55px;">
+                  <button class="btn btn-success px-2" style="white-space: nowrap;" 
+                          onclick='window.submitCustomDispatch(${finalPayload}, "chot-qty-${d.id}")' title="Chốt điều phối">
+                    <i class='bx bx-check'></i> Chốt
+                  </button>
+                </div>`;
             }
 
-            let cxLabel = '',
-              cxIcon = 'bx-x-circle',
-              cxCls = 'btn-outline-danger';
+            let cxLabel = '', cxIcon = 'bx-x-circle', cxCls = 'btn-outline-danger';
             if (displayStatus === 'dispatched') {
               cxLabel = 'Thu hồi';
               cxIcon = 'bx-undo';
@@ -949,7 +983,8 @@
         <td><small class="text-secondary fw-bold">${displayPathsHtml}</small></td>
         <td class="text-center">${sampleInfo}</td>
         <td class="text-center">${statusBadge}</td>
-        <td class="text-center" style="width: 100px;">${actionBtns}</td>
+        <!-- ĐÃ SỬA: Tăng width lên 140px -->
+        <td class="text-center" style="width: 140px; min-width: 140px;">${actionBtns}</td>
       </tr>`;
         })
         .join('');
@@ -1068,7 +1103,8 @@
                         <th>Tác nhân gây bệnh</th>
                         <th class="text-center">Số lượng</th>
                         <th class="text-center">Trạng thái (Realtime)</th>
-                        <th class="text-center">Thao tác</th>
+                        <!-- ĐÃ SỬA: Tăng width lên 140px -->
+                        <th class="text-center" style="width: 140px; min-width: 140px;">Thao tác</th>
                       </tr></thead>
                       <tbody>${
                         rows ||
