@@ -15566,51 +15566,55 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
       // 3. KHỞI TẠO BẢN ĐỒ VÀ CÁC LỚP BASEMAP XỊN XÒ
       // =================================================================
       if (!map) {
-        map = L.map('containerMap', {
-          center: [10.77, 106.7],
-          zoom: 10,
-          zoomControl: true,
-        });
+  map = L.map('containerMap', {
+    center: [10.77, 106.7],
+    zoom: 10,
+    zoomControl: true,
+  });
 
-        const lightNoLabels = L.tileLayer(
-          'https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png',
-          {
-            opacity: 0.8,
-            attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
-            maxZoom: 20,
-          }
-        );
+  // ĐỔI: basemaps.cartocdn.com giờ yêu cầu API key
+  // → thay bằng Esri World_Light_Gray_Base (miễn phí, không cần key)
+  const lightNoLabels = L.tileLayer(
+    'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}',
+    {
+      opacity: 0.8,
+      attribution: '&copy; Esri',
+      maxZoom: 16, // Esri Canvas base chỉ hỗ trợ tới zoom 16
+    }
+  );
 
-        const darkNoLabels = L.tileLayer(
-          'https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png',
-          {
-            opacity: 0.8,
-            attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
-            maxZoom: 20,
-          }
-        );
+  // ĐỔI: tương tự, dùng Esri World_Dark_Gray_Base
+  const darkNoLabels = L.tileLayer(
+    'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}',
+    {
+      opacity: 0.8,
+      attribution: '&copy; Esri',
+      maxZoom: 16,
+    }
+  );
 
-        const satelliteMap = L.tileLayer(
-          'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-          {
-            attribution: 'Tiles &copy; Esri &mdash; Source: Esri',
-            maxZoom: 19,
-          }
-        );
+  const satelliteMap = L.tileLayer(
+    'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    {
+      attribution: 'Tiles &copy; Esri &mdash; Source: Esri',
+      maxZoom: 19,
+    }
+  );
 
-        // ------------------------------------------------------------------
-        // TẠO LỚP CHỈ CHỨA CHỮ ĐỊA DANH (Labels Only) + 2 QUẦN ĐẢO
-        // ------------------------------------------------------------------
-        window.mapLabelsLayer = L.layerGroup(); // Tạo nhóm chứa tất cả nhãn
+  // ------------------------------------------------------------------
+  // TẠO LỚP CHỈ CHỨA CHỮ ĐỊA DANH (Labels Only) + 2 QUẦN ĐẢO
+  // ------------------------------------------------------------------
+  window.mapLabelsLayer = L.layerGroup(); // Tạo nhóm chứa tất cả nhãn
 
-        // Thêm nhãn địa danh cơ bản từ CartoDB
-        const cartoLabels = L.tileLayer(
-          'https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png',
-          {
-            pane: 'overlayPane',
-            maxZoom: 20,
-          }
-        ).addTo(window.mapLabelsLayer);
+  // ĐỔI: dùng Esri World_Light_Gray_Reference — lớp nhãn riêng
+  // tương ứng chính xác với World_Light_Gray_Base ở trên (cặp Base+Reference chuẩn của Esri)
+  const cartoLabels = L.tileLayer(
+    'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Reference/MapServer/tile/{z}/{y}/{x}',
+    {
+      pane: 'overlayPane',
+      maxZoom: 16,
+    }
+  ).addTo(window.mapLabelsLayer);
 
         // Chèn CSS cho nhãn Hoàng Sa, Trường Sa (nếu chưa có)
         const customLabelStyle = `
