@@ -69,10 +69,30 @@
 
   // Phân loại từng người mời vào: confirmed / declined / pending
   function classifyMembers(inc) {
-    const invited = String(inc.initial_selected_members || '')
-      .split(';')
-      .map((s) => s.trim())
-      .filter(Boolean);
+    const splitEmails = (s) =>
+      String(s || '')
+        .split(';')
+        .map((x) => x.trim())
+        .filter(Boolean);
+
+    // Khi admin dùng chức năng "thay thế nhân sự", người bị thay bị XOÁ khỏi
+    // initial_selected_members (chỉ còn người thay thế). Nếu chỉ duyệt
+    // initial_selected_members sẽ mất luôn lượt "từ chối" của người bị thay —
+    // gộp thêm mọi email đang có trong members/declined_members để không sót.
+    const seenInvited = new Set();
+    const invited = [];
+    [
+      ...splitEmails(inc.initial_selected_members),
+      ...splitEmails(inc.members),
+      ...splitEmails(inc.declined_members),
+    ].forEach((email) => {
+      const key = norm(email);
+      if (!seenInvited.has(key)) {
+        seenInvited.add(key);
+        invited.push(email);
+      }
+    });
+
     const confirmedStr = norm(inc.members);
     const declinedStr = norm(inc.declined_members);
 
