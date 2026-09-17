@@ -560,6 +560,14 @@
   // CHẠY TÌM KIẾM
   // --------------------------------------------------------------------------
   window._runDispatch = async function () {
+    // Các nơi khác (cancelDispatch, approveSuggestion, confirmDispatch...) gọi
+    // hàm này để "làm mới danh sách PXN gợi ý" SAU khi xong việc, mà không biết
+    // modal Tìm PXN (#dispatchModal) có đang mở hay không. Nếu modal đó đã đóng
+    // thì #disp-testtype không còn trong DOM — coi như không có gì để chạy lại,
+    // thoát êm, KHÔNG báo lỗi "chưa chọn kỹ thuật" (lỗi đó chỉ có ý nghĩa khi
+    // modal Tìm PXN đang thực sự mở và người dùng thực sự đang tìm kiếm).
+    if (!document.getElementById('disp-testtype')) return;
+
     // Đa chọn kỹ thuật (mảng). Giữ S.testTypeId = phần tử đầu cho các hàm cũ.
     S.testTypeIds = $('#disp-testtype').val() || [];
     S.testTypeId = S.testTypeIds[0] || null;
