@@ -63,8 +63,11 @@
             {
               incident_id: window.selectedIncidentId,
               user_id: myUserId,
-              action_type:
-                actionType === 'confirm' ? 'Thành viên' : 'Không thể tham gia',
+              // Giá trị enum thật của deployment_history.action_type (ràng buộc CHECK
+              // ở DB), KHÔNG phải chữ hiển thị cho người dùng — trước đây dùng nhầm
+              // 'Thành viên'/'Không thể tham gia' nên upsert này luôn thất bại âm
+              // thầm (chỉ console.warn, không ai thấy).
+              action_type: actionType === 'confirm' ? 'deployed' : 'declined',
               updated_at: new Date().toISOString(),
             },
             { onConflict: 'incident_id,user_id' }

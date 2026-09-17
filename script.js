@@ -3522,7 +3522,7 @@ document.addEventListener('DOMContentLoaded', function () {
       console.log('   - Bắt đầu duyệt deploymentHistory...');
       deploymentHistory.forEach((h, index) => {
         const isValidForCombat =
-          (h.action_type === 'deployed' || h.action_type === 'replaced') &&
+          (h.action_type === 'deployed' || h.action_type === 'replace_in') &&
           h.confirmed_at &&
           h.incident_id;
         const userId = h.profile_id || h.user_id;
@@ -4163,7 +4163,7 @@ document.addEventListener('DOMContentLoaded', function () {
               const validDeps = (deps || []).filter(
                 (h) =>
                   (h.action_type === 'deployed' ||
-                    h.action_type === 'replaced') &&
+                    h.action_type === 'replace_in') &&
                   h.confirmed_at &&
                   h.incident_id &&
                   h.user_id
@@ -4192,7 +4192,7 @@ document.addEventListener('DOMContentLoaded', function () {
                   if (!combatDetailMap[h.user_id])
                     combatDetailMap[h.user_id] = [];
                   const label =
-                    h.action_type === 'replaced' ? ' (được thay thế)' : '';
+                    h.action_type === 'replace_in' ? ' (được thay thế)' : '';
                   combatDetailMap[h.user_id].push(
                     (incNameMap[String(h.incident_id)] || 'Sự kiện') + label
                   );
@@ -8731,7 +8731,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
             const ACTION_UI = {
               deployed: { label: 'Tham gia', cls: 'bg-success' },
-              replaced: { label: 'Được thay thế', cls: 'bg-secondary' },
+              replace_in: { label: 'Được thay thế', cls: 'bg-secondary' },
               declined: { label: 'Không thể tham gia', cls: 'bg-danger' },
             };
             const aUI = ACTION_UI[h.action_type] || {
@@ -8740,7 +8740,8 @@ document.addEventListener('DOMContentLoaded', function () {
             };
             const role = aUI.label;
             const isParticipated =
-              (h.action_type === 'deployed' || h.action_type === 'replaced') &&
+              (h.action_type === 'deployed' ||
+                h.action_type === 'replace_in') &&
               h.confirmed_at;
 
             const notes = h.reason || '';
@@ -9964,7 +9965,7 @@ document.addEventListener('DOMContentLoaded', function () {
     history.forEach((h) => {
       if (
         h.user_id === member.id &&
-        (h.action_type === 'deployed' || h.action_type === 'replaced') &&
+        (h.action_type === 'deployed' || h.action_type === 'replace_in') &&
         h.incident_id
       ) {
         missions.add(h.incident_id);
@@ -13595,7 +13596,7 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
             incident_id: targetId,
             user_id: wizardData.oldUserId,
             replaced_by: wizardData.newUserId,
-            action_type: 'replaced',
+            action_type: 'replace_in',
             reason: 'Cập nhật nhân sự bằng AI',
           },
         ]);
@@ -14387,7 +14388,7 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
           .update({ action_type: stdAction, reason: stdReason })
           .eq('incident_id', window.selectedIncidentId)
           .eq('user_id', myUserId)
-          .in('action_type', ['deployed', 'replaced', 'declined'])
+          .in('action_type', ['deployed', 'replace_in', 'declined'])
           .select('id');
 
         if (!updErr && (!updated || updated.length === 0)) {
