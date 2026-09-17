@@ -184,7 +184,7 @@
           <td colspan="5" style="font-size:12px;">
             <div class="row g-2">
               <div class="col-md-4"><span class="text-success">✅ Đồng ý:</span> ${nameList(g.confirmed)}</div>
-              <div class="col-md-4"><span class="text-danger">❌ Từ chối:</span> ${nameList(g.declined)}</div>
+              <div class="col-md-4"><span class="text-danger">❌ Không tham gia:</span> ${nameList(g.declined)}</div>
               <div class="col-md-4"><span class="text-secondary">⏳ Chưa phản hồi:</span> ${nameList(g.pending)}</div>
             </div>
             ${positionHtml}
@@ -214,7 +214,7 @@
             <tr>
               <th>Team</th>
               <th class="text-center">✅ Đồng ý</th>
-              <th class="text-center">❌ Từ chối</th>
+              <th class="text-center">❌ Không tham gia</th>
               <th class="text-center">⏳ Chưa phản hồi</th>
               <th class="text-center">Tổng</th>
             </tr>

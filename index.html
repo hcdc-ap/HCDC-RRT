@@ -38,6 +38,18 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.css" />
+  <script>
+    // Tắt console.log/console.debug khi chạy ở domain production (giữ nguyên
+    // console.warn/console.error). Chạy trên localhost/127.0.0.1 vẫn log bình
+    // thường để tiện debug. Đặt trước mọi script khác để áp dụng ngay từ đầu.
+    (function () {
+      var isLocal = /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);
+      if (!isLocal) {
+        console.log = function () {};
+        console.debug = function () {};
+      }
+    })();
+  </script>
   <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <script src="https://code.jquery.com/ui/1.13.2/jquery-ui.min.js"></script>
@@ -526,7 +538,7 @@
                   </div>
                 </div>
               </div>
-              <!-- Card 3: Từ chối Lịch Trực -->
+              <!-- Card 3: Báo Bận Lịch Trực -->
               <div class="col">
                 <div class="card h-100 border-start border-0 border-4 border-danger shadow-sm">
                   <div class="card-body d-flex align-items-center">
@@ -535,7 +547,7 @@
                     </div>
                     <div>
                       <h4 id="schedule-declined-count" class="mb-0 fw-bold text-dark">0</h4>
-                      <p class="card-text mb-0 text-muted small">Từ chối</p>
+                      <p class="card-text mb-0 text-muted small">Báo bận</p>
                     </div>
                   </div>
                   <div class="card-footer bg-transparent border-top-0 py-2">
@@ -598,7 +610,7 @@
                   </div>
                 </div>
               </div>
-              <!-- Card 7: Từ chối Khẩn cấp -->
+              <!-- Card 7: Không Tham Gia Khẩn cấp -->
               <div class="col">
                 <div class="card h-100 border-start border-0 border-4 border-danger shadow-sm">
                   <div class="card-body d-flex align-items-center">
@@ -607,7 +619,7 @@
                     </div>
                     <div>
                       <h4 id="emergency-declined-count" class="mb-0 fw-bold text-dark">0</h4>
-                      <p class="card-text mb-0 text-muted small">Từ chối</p>
+                      <p class="card-text mb-0 text-muted small">Không tham gia</p>
                     </div>
                   </div>
                   <div class="card-footer bg-transparent border-top-0 py-2">
@@ -1162,7 +1174,7 @@
 
                 <button class="btn btn-danger btn-sm fw-bold" onclick="submitIncidentResponse('decline')">
 
-                  <i class='bx bx-x'></i> TỪ CHỐI
+                  <i class='bx bx-x'></i> KHÔNG THỂ THAM GIA
 
                 </button>
 
@@ -1214,7 +1226,7 @@
 
                   <div class="d-flex justify-content-between">
 
-                    <span class="text-danger"><i class='bx bx-x-circle'></i> Từ chối/Chờ:</span>
+                    <span class="text-danger"><i class='bx bx-x-circle'></i> Không tham gia/Chờ:</span>
 
                     <strong id="dossier-stat-declined">0</strong>
                   </div>

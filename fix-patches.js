@@ -8,27 +8,10 @@
   'use strict';
 
   // ============================================================
-  // PATCH 1: Các hàm helper bị thiếu
-  // ============================================================
-
-  /** Trả về UUID của user đang đăng nhập */
-  window.getCurrentUserId = function () {
-    return window.userSession?.id || null;
-  };
-
-  /** Kiểm tra có phải admin không */
-  window.isUserAdmin = function () {
-    const role = (window.userSession?.role || '').toLowerCase().trim();
-    return role === 'admin';
-  };
-
-  /** Kiểm tra có phải manager trở lên không */
-  window.isUserManager = function () {
-    const role = (window.userSession?.role || '').toLowerCase().trim();
-    return role === 'admin' || role === 'manager';
-  };
-
-
+  // PATCH 1: (đã gỡ) getCurrentUserId/isUserAdmin/isUserManager giờ chỉ định
+  // nghĩa duy nhất trong auth-helpers.js — trước đây fix-patches.js load SAU
+  // auth-helpers.js nên ghi đè mất bản getCurrentUserId đầy đủ hơn (có fallback
+  // đọc localStorage khi window.userSession chưa kịp khôi phục sau F5).
   // ============================================================
   // PATCH 4: submitIncidentResponse – đánh dấu thông báo đã đọc
   // sau khi người dùng phản hồi
@@ -51,41 +34,18 @@
     if (typeof showLoadingSpinner === 'function') showLoadingSpinner();
 
     try {
-      // 1. Lấy incident hiện tại
-      const { data: inc, error: fetchErr } = await window.supabaseClient
-        .from('incidents')
-        .select('members, declined_members')
-        .eq('id', window.selectedIncidentId)
-        .single();
-      if (fetchErr) throw fetchErr;
-
-      let confirmedArr = (inc.members || '')
-        .split(';')
-        .map((e) => e.trim().toLowerCase())
-        .filter(Boolean);
-      let declinedArr = (inc.declined_members || '')
-        .split(';')
-        .map((e) => e.trim().toLowerCase())
-        .filter(Boolean);
-
-      if (actionType === 'confirm') {
-        if (!confirmedArr.includes(myEmail)) confirmedArr.push(myEmail);
-        declinedArr = declinedArr.filter((e) => e !== myEmail);
-      } else {
-        if (!declinedArr.includes(myEmail)) declinedArr.push(myEmail);
-        confirmedArr = confirmedArr.filter((e) => e !== myEmail);
-      }
-
-      // 2. Cập nhật incident
-      const { error: updateErr } = await window.supabaseClient
-        .from('incidents')
-        .update({
-          members: confirmedArr.join(';'),
-          declined_members: declinedArr.join(';'),
-          confirmations: confirmedArr.length,
-        })
-        .eq('id', window.selectedIncidentId);
-      if (updateErr) throw updateErr;
+      // 1-2. Cập nhật thành viên qua RPC atomic (tránh mất dữ liệu khi 2 người
+      // xác nhận/từ chối cùng lúc — xem
+      // supabase/migrations/20260917000000_atomic_incident_membership.sql)
+      const { error: rpcErr } = await window.supabaseClient.rpc(
+        'update_incident_membership',
+        {
+          p_incident_id: window.selectedIncidentId,
+          p_email: myEmail,
+          p_action: actionType, // 'confirm' | 'decline'
+        }
+      );
+      if (rpcErr) throw rpcErr;
 
       // 3. *** ĐÁNH DẤU THÔNG BÁO ĐÃ ĐỌC ***
       await window.supabaseClient
@@ -104,7 +64,7 @@
               incident_id: window.selectedIncidentId,
               user_id: myUserId,
               action_type:
-                actionType === 'confirm' ? 'Thành viên' : 'Đã từ chối',
+                actionType === 'confirm' ? 'Thành viên' : 'Không thể tham gia',
               updated_at: new Date().toISOString(),
             },
             { onConflict: 'incident_id,user_id' }
@@ -116,7 +76,7 @@
         showToast(
           actionType === 'confirm'
             ? '✅ Đã xác nhận tham gia!'
-            : '❌ Đã từ chối tham gia!',
+            : '❌ Không thể tham gia!',
           'success'
         );
 

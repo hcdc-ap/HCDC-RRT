@@ -372,6 +372,17 @@ window.RealtimeManager = {
             if (typeof window.enterDashboard === 'function') {
               window.enterDashboard();
             }
+            // Refresh trang "Theo dõi sự kiện" nếu đang mở — forceFetch=true vì
+            // renderTrackingPage() mặc định chỉ tải lại khi appState.trackingIncidents
+            // rỗng, nên nếu không ép tải lại, sự kiện mới kích hoạt/vừa đóng sẽ
+            // không hiện ra cho tới khi người dùng F5 lại trang.
+            if (
+              document.getElementById('page-tracking')?.style.display !==
+                'none' &&
+              typeof window.renderTrackingPage === 'function'
+            ) {
+              window.renderTrackingPage(true);
+            }
           }
         )
         .subscribe();
@@ -389,6 +400,13 @@ window.RealtimeManager = {
             // Refresh dashboard khi có thay đổi
             if (typeof window.enterDashboard === 'function') {
               window.enterDashboard();
+            }
+            if (
+              document.getElementById('page-tracking')?.style.display !==
+                'none' &&
+              typeof window.renderTrackingPage === 'function'
+            ) {
+              window.renderTrackingPage(true);
             }
           }
         )
@@ -1905,7 +1923,7 @@ document.addEventListener('DOMContentLoaded', function () {
         else $('#aarModal').modal('hide');
 
         if (typeof window.renderTrackingPage === 'function')
-          window.renderTrackingPage();
+          window.renderTrackingPage(true);
       } catch (err) {
         console.error('Lỗi gửi AAR:', err);
         showToast('Gửi AAR thất bại: ' + err.message, 'error');
@@ -3285,7 +3303,7 @@ document.addEventListener('DOMContentLoaded', function () {
               <i class='bx bx-check-circle'></i> TÔI THAM GIA
             </button>
             <button onclick="submitRosterResponse('${assignmentId}', 'declined')" class="btn btn-outline-danger btn-lg px-4">
-              <i class='bx bx-x-circle'></i> TỪ CHỐI
+              <i class='bx bx-x-circle'></i> BÁO BẬN
             </button>
           </div>
           <div id="response-loading" class="mt-3 text-muted" style="display:none">
@@ -3335,7 +3353,7 @@ document.addEventListener('DOMContentLoaded', function () {
       showToast(
         actionStatus === 'confirmed'
           ? 'Đã xác nhận tham gia! ✅'
-          : 'Đã từ chối lịch trực! ❌',
+          : 'Đã báo bận lịch trực! ❌',
         'success'
       );
 
@@ -4001,10 +4019,12 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   });
   // ========================================================================
-  // AUTO-REFRESH KPI (Mỗi 30 giây)
+  // AUTO-REFRESH KPI (Mỗi 30 giây, tạm dừng khi tab bị ẩn để đỡ tốn
+  // request/pin khi người dùng chuyển sang tab khác)
   // ========================================================================
   if (window._kpiInterval) clearInterval(window._kpiInterval);
   window._kpiInterval = setInterval(() => {
+    if (document.hidden) return;
     if (typeof window.updateKpiCards === 'function') {
       window.updateKpiCards();
     }
@@ -4325,11 +4345,15 @@ document.addEventListener('DOMContentLoaded', function () {
           if (typeof window.enterDashboard === 'function')
             window.enterDashboard();
           // Cập nhật lại UI Tracking nếu đang mở
+          // forceFetch=true: bắt buộc tải lại từ DB — nếu không, hàm này thấy
+          // window.appState.trackingIncidents đã có sẵn dữ liệu (từ lần mở trang
+          // trước) nên bỏ qua việc tải mới, khiến sự kiện vừa kích hoạt/thay đổi
+          // không hiện ra cho tới khi F5 lại trang.
           if (
             document.getElementById('page-tracking')?.style.display !== 'none'
           ) {
             if (typeof window.renderTrackingPage === 'function')
-              window.renderTrackingPage();
+              window.renderTrackingPage(true);
           }
         }
       )
@@ -4344,7 +4368,7 @@ document.addEventListener('DOMContentLoaded', function () {
         (payload) => {
           console.log('⚡ Roster update detected:', payload);
           if (typeof window.renderTrackingPage === 'function')
-            window.renderTrackingPage();
+            window.renderTrackingPage(true);
         }
       )
       .subscribe();
@@ -4371,10 +4395,30 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     memberListEl.innerHTML = '';
-    const invitedEmails = (inc.initial_selected_members || '')
-      .split(';')
-      .map((s) => s.trim())
-      .filter(Boolean);
+    const splitEmails = (s) =>
+      (s || '')
+        .split(';')
+        .map((e) => e.trim())
+        .filter(Boolean);
+
+    // Nhân sự THAY THẾ được thêm vào sau, không nằm trong danh sách mời ban đầu
+    // (initial_selected_members) — nếu chỉ duyệt danh sách mời gốc thì họ sẽ
+    // không bao giờ hiện ra dù đã xác nhận/từ chối thật. Gộp thêm mọi email
+    // đang có trong members/declined_members để không bỏ sót ai.
+    const seenEmails = new Set();
+    const invitedEmails = [];
+    [
+      ...splitEmails(inc.initial_selected_members),
+      ...splitEmails(inc.members),
+      ...splitEmails(inc.declined_members),
+    ].forEach((email) => {
+      const key = email.toLowerCase();
+      if (!seenEmails.has(key)) {
+        seenEmails.add(key);
+        invitedEmails.push(email);
+      }
+    });
+
     const confirmedStr = (inc.members || '').toLowerCase();
     const declinedStr = (inc.declined_members || '').toLowerCase();
 
@@ -4419,7 +4463,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
       const statusConfig = {
         CONFIRMED: { badge: 'bg-success', text: 'Xác nhận', icon: 'bx-check' },
-        DECLINED: { badge: 'bg-danger', text: 'Từ chối', icon: 'bx-x' },
+        DECLINED: { badge: 'bg-danger', text: 'Không tham gia', icon: 'bx-x' },
         PENDING: { badge: 'bg-secondary', text: 'Chờ...', icon: 'bx-loader' },
       };
       const st = statusConfig[status];
@@ -4465,7 +4509,7 @@ document.addEventListener('DOMContentLoaded', function () {
       panels[1].innerHTML = `
             <h5>📊 Thống kê Phản hồi</h5>
             <div class="d-flex justify-content-between mb-1 text-success"><span><i class='bx bx-check-circle'></i> Xác nhận:</span> <strong>${countConfirmed}</strong></div>
-            <div class="d-flex justify-content-between mb-1 text-danger"><span><i class='bx bx-x-circle'></i> Từ chối:</span> <strong>${countDeclined}</strong></div>
+            <div class="d-flex justify-content-between mb-1 text-danger"><span><i class='bx bx-x-circle'></i> Không tham gia:</span> <strong>${countDeclined}</strong></div>
             <div class="d-flex justify-content-between text-secondary border-top pt-2"><span><i class='bx bx-time'></i> Chưa trả lời:</span> <strong>${countPending}</strong></div>
         `;
     }
@@ -7324,7 +7368,7 @@ document.addEventListener('DOMContentLoaded', function () {
           invitedCount > 0 ? `/${invitedCount}` : ''
         } phản hồi<br>
                       <span style="color:#16a34a;" title="Xác nhận tham gia">✅ ${confirmedCount}</span> ·
-                      <span style="color:#dc2626;" title="Từ chối">❌ ${declinedCount}</span> ·
+                      <span style="color:#dc2626;" title="Không tham gia">❌ ${declinedCount}</span> ·
                       <span style="color:#d97706;" title="Chưa phản hồi">⏳ ${pendingCount}</span>
                    </small>
               </div>
@@ -7545,12 +7589,26 @@ document.addEventListener('DOMContentLoaded', function () {
       const memberListEl = document.getElementById('dossier-member-list');
       if (memberListEl) {
         memberListEl.innerHTML = '';
-        const invitedStr = inc.initial_selected_members || '';
         const confirmedStr = (inc.members || '').toLowerCase();
-        const invitedEmails = invitedStr
-          .split(';')
-          .map((s) => s.trim())
-          .filter((s) => s);
+        const splitEmailsFallback = (s) =>
+          (s || '')
+            .split(';')
+            .map((e) => e.trim())
+            .filter(Boolean);
+        // Gộp cả nhân sự thay thế (không nằm trong initial_selected_members)
+        const seenFallback = new Set();
+        const invitedEmails = [];
+        [
+          ...splitEmailsFallback(inc.initial_selected_members),
+          ...splitEmailsFallback(inc.members),
+          ...splitEmailsFallback(inc.declined_members),
+        ].forEach((email) => {
+          const key = email.toLowerCase();
+          if (!seenFallback.has(key)) {
+            seenFallback.add(key);
+            invitedEmails.push(email);
+          }
+        });
 
         invitedEmails.forEach((email) => {
           const displayName = getName(email);
@@ -7776,7 +7834,7 @@ document.addEventListener('DOMContentLoaded', function () {
           actionBar.innerHTML = `
           <div>
             <h5 style="margin:0; color:#666; font-size:16px;">
-              <i class='bx bx-x-circle'></i> BẠN ĐÃ TỪ CHỐI
+              <i class='bx bx-x-circle'></i> BẠN KHÔNG THỂ THAM GIA
             </h5>
             <p style="margin:0; font-size:13px; color:#666;">
               Hệ thống đã ghi nhận phản hồi của bạn.
@@ -7805,7 +7863,7 @@ document.addEventListener('DOMContentLoaded', function () {
               <i class='bx bx-check'></i> XÁC NHẬN
             </button>
             <button class="btn btn-danger btn-sm fw-bold" onclick="submitIncidentResponse('decline')">
-              <i class='bx bx-x'></i> TỪ CHỐI
+              <i class='bx bx-x'></i> KHÔNG THỂ THAM GIA
             </button>
           </div>
           `;
@@ -8674,7 +8732,7 @@ document.addEventListener('DOMContentLoaded', function () {
             const ACTION_UI = {
               deployed: { label: 'Tham gia', cls: 'bg-success' },
               replaced: { label: 'Được thay thế', cls: 'bg-secondary' },
-              declined: { label: 'Đã từ chối', cls: 'bg-danger' },
+              declined: { label: 'Không thể tham gia', cls: 'bg-danger' },
             };
             const aUI = ACTION_UI[h.action_type] || {
               label: h.action_type || 'Khác',
@@ -8693,7 +8751,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
             let actionBadge;
             if (h.action_type === 'declined') {
-              actionBadge = '<span class="badge bg-danger">❌ Từ chối</span>';
+              actionBadge = '<span class="badge bg-danger">❌ Không thể tham gia</span>';
             } else if (!isParticipated) {
               actionBadge =
                 '<span class="badge bg-warning text-dark">⏳ Chờ xác nhận</span>';
@@ -10362,7 +10420,7 @@ document.addEventListener('DOMContentLoaded', function () {
               <div>
                 <strong>Cần bổ sung thay thế ${
                   declinedArr.length
-                } nhân sự đã từ chối:</strong><br/>
+                } nhân sự không thể tham gia:</strong><br/>
                 <small>${declinedArr.join(', ')}</small>
               </div>
             </div>
@@ -10373,7 +10431,7 @@ document.addEventListener('DOMContentLoaded', function () {
               <i class='bx bxs-info-circle fs-4 me-2'></i>
               <div>
                 <strong>Sự kiện đang diễn ra ổn định.</strong><br/>
-                <small>Hiện chưa có nhân sự nào từ chối. Lệnh này sẽ tăng cường thêm quân số.</small>
+                <small>Hiện chưa có nhân sự nào báo không thể tham gia. Lệnh này sẽ tăng cường thêm quân số.</small>
               </div>
             </div>
           `;
@@ -10469,7 +10527,7 @@ document.addEventListener('DOMContentLoaded', function () {
             : 0;
 
           if (declinedCount > 0) {
-            details = `[THAY THẾ NHÂN SỰ] Điều động bổ sung thay thế cho ${declinedCount} chuyên viên đã từ chối tham gia sự kiện: ${eventName}`;
+            details = `[THAY THẾ NHÂN SỰ] Điều động bổ sung thay thế cho ${declinedCount} chuyên viên không thể tham gia sự kiện: ${eventName}`;
           } else {
             details = `[TĂNG CƯỜNG QUÂN SỐ] Điều động bổ sung thêm lực lượng cho sự kiện: ${eventName}`;
           }
@@ -11128,7 +11186,7 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
       case 'Confirmed':
         return 'Đã xác nhận';
       case 'Rejected':
-        return 'Đã từ chối';
+        return 'Không thể tham gia';
       default:
         return status;
     }
@@ -13933,7 +13991,7 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
             statusHtml = `<span class="badge bg-success-subtle text-success" style="font-size:11px;"><i class='bx bx-check'></i> Đã nhận</span>`;
             confirmedCount++;
           } else if (status === 'declined') {
-            statusHtml = `<span class="badge bg-danger-subtle text-danger" style="font-size:11px;">Đã từ chối</span>`;
+            statusHtml = `<span class="badge bg-danger-subtle text-danger" style="font-size:11px;">Báo bận</span>`;
             opacity = '0.6';
           } else {
             statusHtml = `<span class="badge bg-warning-subtle text-warning" style="font-size:11px;"><i class='bx bx-time'></i> Chưa phản hồi</span>`;
@@ -14321,7 +14379,7 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
         const stdReason =
           actionType === 'confirm'
             ? 'Xác nhận tham gia (trong app)'
-            : 'Đã từ chối tham gia (trong app)';
+            : 'Không thể tham gia (trong app)';
 
         // Cập nhật bản ghi điều động có sẵn; nếu chưa có thì tạo mới
         const { data: updated, error: updErr } = await window.supabaseClient
@@ -14347,7 +14405,7 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
       showToast(
         actionType === 'confirm'
           ? 'Đã xác nhận tham gia!'
-          : 'Đã từ chối tham gia!',
+          : 'Không thể tham gia!',
         'success'
       );
 

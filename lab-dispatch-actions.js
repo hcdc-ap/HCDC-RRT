@@ -11,7 +11,7 @@
 //         + gửi thông báo cho admin qua bảng notifications (hệ thống sẵn có)
 //   • Admin (role='admin'):
 //       - Thấy các đề xuất đang chờ (status='suggested') → "Duyệt" (→ dispatched)
-//         hoặc "Từ chối" (→ cancelled)
+//         hoặc "Không duyệt" (→ cancelled)
 //       - Nút "Chốt điều phối mẫu" → ghi thẳng status='dispatched' (trừ công suất)
 //       - Xem "Lịch sử điều phối mẫu hôm nay" + "Hủy" lệnh vừa chốt (→ cancelled)
 //
@@ -455,7 +455,7 @@
   };
 
   // --------------------------------------------------------------------------
-  // ADMIN: DUYỆT / TỪ CHỐI ĐỀ XUẤT CỦA ĐỘI TRƯỞNG
+  // ADMIN: DUYỆT / KHÔNG DUYỆT ĐỀ XUẤT CỦA ĐỘI TRƯỞNG
   // (hiển thị trong panel "Đề xuất đang chờ" — gọi từ showPendingSuggestions)
   // --------------------------------------------------------------------------
   window.approveSuggestion = async function (logId, action) {
@@ -472,7 +472,7 @@
 
       if (window.showToast)
         window.showToast(
-          action === 'approve' ? 'Đã duyệt đề xuất' : 'Đã từ chối đề xuất',
+          action === 'approve' ? 'Đã duyệt đề xuất' : 'Không duyệt đề xuất',
           'success'
         );
 
@@ -1209,7 +1209,7 @@
         inquiry_sent: 'Đang chờ phản hồi',
         accepted_full: 'Đồng ý 100%',
         accepted_partial: 'Nhận 1 phần / Lệch',
-        rejected: 'Từ chối / Quá tải',
+        rejected: 'Không nhận / Quá tải',
         dispatched: 'Đã chốt lệnh',
         completed: 'Hoàn thành',
         cancelled: 'Đã hủy',
@@ -1745,14 +1745,14 @@
             } else if (displayStatus === 'rejected') {
               if (window.showToast)
                 window.showToast(
-                  `🔔 ${labData.lab_name} đã từ chối nhận mẫu.`,
+                  `🔔 ${labData.lab_name} không thể tiếp nhận mẫu.`,
                   'error'
                 );
               if (cardEl) {
                 cardEl.style.opacity = '0.6';
                 cardEl.style.backgroundColor = '#fef2f2';
               }
-              slotEl.innerHTML = `<span class="badge bg-danger w-100 py-2"><i class='bx bx-block'></i> TỪ CHỐI / QUÁ TẢI</span>`;
+              slotEl.innerHTML = `<span class="badge bg-danger w-100 py-2"><i class='bx bx-block'></i> KHÔNG NHẬN / QUÁ TẢI</span>`;
             }
           }
 
@@ -1829,7 +1829,7 @@
               btnHtml = `<button class="btn btn-warning btn-sm w-100 text-dark disabled"><i class='bx bx-adjust'></i> Nhận ${record.accepted_sample_count}/${record.requested_sample_count}</button>`;
             }
           } else if (displayStatus === 'rejected') {
-            btnHtml = `<button class="btn btn-danger btn-sm w-100 disabled"><i class='bx bx-block'></i> Đã từ chối</button>`;
+            btnHtml = `<button class="btn btn-danger btn-sm w-100 disabled"><i class='bx bx-block'></i> Không nhận</button>`;
           } else if (displayStatus === 'dispatched') {
             btnHtml = `<button class="btn btn-primary btn-sm w-100 disabled"><i class='bx bx-check'></i> Đã chốt lệnh</button>`;
           }

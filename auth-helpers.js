@@ -12,6 +12,14 @@ window.isUserAdmin = function () {
 };
 
 /**
+ * Kiểm tra có phải manager trở lên không
+ */
+window.isUserManager = function () {
+  const role = (window.userSession?.role || '').toLowerCase().trim();
+  return role === 'admin' || role === 'manager';
+};
+
+/**
  * Kiểm tra user có role cụ thể không
  */
 window.hasRole = function (requiredRole) {
