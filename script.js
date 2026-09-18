@@ -487,10 +487,32 @@ window.onInitialDataSuccess = function (appStateData) {
 };
 
 // ========================================================================
+// HELPER: LOẠI TÀI KHOẢN LIMS KHỎI DANH SÁCH NGƯỜI DÙNG RRT
+// ========================================================================
+// Bảng profiles dùng chung với LIMS: các role sau chỉ thuộc về LIMS và
+// không thuộc phạm vi quản lý của RRT, phải loại khỏi mọi màn hình/
+// truy vấn danh sách người dùng, KPI, export... của RRT.
+window.LIMS_ONLY_ROLES = ['lab_admin', 'hcdc_admin'];
+
+window.excludeLimsProfiles = function (dataArray) {
+  if (!Array.isArray(dataArray)) return [];
+  return dataArray.filter(
+    (item) =>
+      !window.LIMS_ONLY_ROLES.includes(
+        String(item?.role || '')
+          .toLowerCase()
+          .trim()
+      )
+  );
+};
+
+// ========================================================================
 // HELPER: LỌC DỮ LIỆU THEO ROLE (User/Admin)
 // ========================================================================
 window.filterDataByRole = function (dataArray) {
   if (!Array.isArray(dataArray)) return [];
+
+  dataArray = window.excludeLimsProfiles(dataArray);
 
   const userRole = (window.userSession?.role || '').toLowerCase();
   const userId = window.userSession?.id || window.userSession?.user?.id;
@@ -602,7 +624,8 @@ window.enterDashboard = async function () {
             .from('profiles')
             .select(
               'id, email, full_name, role, team, position, deployment_status, approval_status, workplace_ma_xa, fax'
-            );
+            )
+            .not('role', 'in', `(${window.LIMS_ONLY_ROLES.join(',')})`);
 
           // FIX: User thường chỉ lấy profile của chính mình
           if (!isAdmin && currentUserId) {
@@ -2840,6 +2863,7 @@ document.addEventListener('DOMContentLoaded', function () {
         await window.supabaseClient
           .from('profiles')
           .select('*')
+          .not('role', 'in', `(${window.LIMS_ONLY_ROLES.join(',')})`)
           .order('updated_at', { ascending: false });
 
       if (profileErr) throw profileErr;
@@ -2953,6 +2977,7 @@ document.addEventListener('DOMContentLoaded', function () {
             .select(
               'id, email, full_name, role, team, position, deployment_status, approval_status, updated_at, workplace_ma_xa, fax'
             )
+            .not('role', 'in', `(${window.LIMS_ONLY_ROLES.join(',')})`)
             .order('updated_at', { ascending: false });
 
           if (isWardAdmin && myMaXa) {
@@ -3394,7 +3419,8 @@ document.addEventListener('DOMContentLoaded', function () {
       // Load users
       const { data: users } = await supabaseClient
         .from('profiles')
-        .select('id, email, full_name, team, position');
+        .select('id, email, full_name, team, position')
+        .not('role', 'in', `(${window.LIMS_ONLY_ROLES.join(',')})`);
 
       // Load training
       await window.loadTrainingData();
@@ -3736,7 +3762,8 @@ document.addEventListener('DOMContentLoaded', function () {
       // ===========================================
       let profileQuery = window.supabaseClient
         .from('profiles')
-        .select('id, email, full_name, workplace_ma_xa');
+        .select('id, email, full_name, workplace_ma_xa')
+        .not('role', 'in', `(${window.LIMS_ONLY_ROLES.join(',')})`);
 
       // WARD ADMIN: Chỉ kéo danh sách lính của phường mình
       if (isWardAdmin && myMaXa) {
@@ -4088,6 +4115,7 @@ document.addEventListener('DOMContentLoaded', function () {
               await supabaseClient
                 .from('profiles')
                 .select('*')
+                .not('role', 'in', `(${window.LIMS_ONLY_ROLES.join(',')})`)
                 .order('full_name', { ascending: true });
             if (profilesErr) throw profilesErr;
             if (!profilesData || profilesData.length === 0) {
@@ -4530,7 +4558,10 @@ document.addEventListener('DOMContentLoaded', function () {
       // BƯỚC 1: TẢI ĐỘC LẬP 2 BẢNG (Tránh lỗi Join của Supabase)
       // ==========================================
       const [profilesRes, qualRes] = await Promise.all([
-        supabaseClient.from('profiles').select('*'),
+        supabaseClient
+          .from('profiles')
+          .select('*')
+          .not('role', 'in', `(${window.LIMS_ONLY_ROLES.join(',')})`),
         supabaseClient.from('rrt_qualifications').select('*'),
       ]);
 
@@ -5861,7 +5892,10 @@ document.addEventListener('DOMContentLoaded', function () {
       if (typeof showLoadingSpinner === 'function') showLoadingSpinner(true);
 
       const [profilesRes, qualRes] = await Promise.all([
-        supabaseClient.from('profiles').select('*'),
+        supabaseClient
+          .from('profiles')
+          .select('*')
+          .not('role', 'in', `(${window.LIMS_ONLY_ROLES.join(',')})`),
         supabaseClient.from('rrt_qualifications').select('*'),
       ]);
       if (profilesRes.error) throw profilesRes.error;
@@ -11771,7 +11805,8 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
     try {
       const { data } = await window.supabaseClient
         .from('profiles')
-        .select('id, full_name, username, email, team, position, role');
+        .select('id, full_name, username, email, team, position, role')
+        .not('role', 'in', `(${window.LIMS_ONLY_ROLES.join(',')})`);
       return data || [];
     } catch (e) {
       console.error('[training] Không lấy được danh sách người dùng:', e);
@@ -15522,7 +15557,8 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
         .from('profiles')
         .select(
           'email, full_name, team, department, ma_xa, latitude, longitude, ward, workplace_ma_xa, fax'
-        );
+        )
+        .not('role', 'in', `(${window.LIMS_ONLY_ROLES.join(',')})`);
 
       window.globalUserMap = new Map();
 
