@@ -659,6 +659,26 @@
     const trafficNote = `<div class="alert alert-info py-1 px-2 mb-2"><small><i class='bx bx-info-circle'></i>
     Thời gian, quãng đường được tính bằng thuật toán phân tích dữ liệu giao thông thời gian thực & bản đồ API OSM</small></div>`;
 
+    // Dữ liệu PXN tự khai trên LIMS: cho nhân viên thấy vì sao PXN bị loại / còn ít chỗ
+    const lims = meta && meta.limsOverlay;
+    let limsNote = '';
+    if (lims && lims.applied && lims.excluded && lims.excluded.length) {
+      const items = lims.excluded
+        .map(
+          (x) =>
+            `<li><b>${esc(x.lab_name || '')}</b>${
+              x.reason ? ' — ' + esc(x.reason) : ''
+            }${x.until ? ' (đến ' + esc(x.until) + ')' : ''}</li>`
+        )
+        .join('');
+      limsNote = `<div class="alert alert-warning py-1 px-2 mb-2"><small>
+        <i class='bx bx-block'></i> ${lims.excluded.length} PXN phù hợp nhưng <b>tự báo tạm ngưng</b> trên LIMS nên không được đề xuất:
+        <ul class="mb-0 ps-3">${items}</ul></small></div>`;
+    } else if (lims && !lims.applied) {
+      limsNote = `<div class="text-muted mb-1"><small><i class='bx bx-info-circle'></i>
+        Chưa đối chiếu được trạng thái/tải PXN tự khai trên LIMS — hãy gọi xác nhận PXN trước khi gửi mẫu.</small></div>`;
+    }
+
     if (!ranked.length) {
       const ttNames = (S.testTypeIds || [])
         .map((id) => _testTypes.find((t) => t.id === id)?.name)
@@ -676,6 +696,7 @@
        <div id="disp-pending"></div>
        ${dayWarnHtml}
        ${trafficNote}
+       ${limsNote}
         <div class="alert alert-warning">
           <i class='bx bx-error'></i> <strong>Không tìm thấy Phòng xét nghiệm phù hợp</strong> cho "${esc(
             tt?.name || ''
@@ -741,7 +762,15 @@
             ? `<span class="badge bg-secondary">Cấp năng lực ${lab.capability_tier}</span>`
             : '';
 
-        const warnHtml = '';
+        const limsBadges =
+          (lab.lims_status === 'han_che'
+            ? `<span class="badge bg-warning text-dark" title="PXN tự báo trên LIMS${
+                lab.lims_reason ? ': ' + esc(lab.lims_reason) : ''
+              }">PXN báo: hạn chế</span>`
+            : '') +
+          (lab.lims_extra_used > 0
+            ? `<span class="badge bg-light text-dark border" title="Đã gồm số mẫu PXN tự khai đang xử lý trên LIMS">+${lab.lims_extra_used} mẫu PXN tự khai</span>`
+            : '');
 
         const contactHtml =
           lab.head_name || lab.head_phone
@@ -800,7 +829,7 @@
                     <small class="text-muted d-block">${esc(
                       lab.level || ''
                     )} · ${esc(lab.address || '')}</small>
-                    <div class="mt-1 d-flex flex-wrap gap-1">${qsmBadge} ${netBadge}</div>
+                    <div class="mt-1 d-flex flex-wrap gap-1">${qsmBadge} ${netBadge} ${limsBadges}</div>
                   </div>
                   <div class="text-end flex-shrink-0 ms-2">
                     <div class="mb-1"><span class="badge bg-light text-dark" style="font-size:.95em;">
@@ -892,6 +921,7 @@
     el.innerHTML = `
       <div id="disp-pending"></div>
       ${trafficNote}
+      ${limsNote}
       <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-1">
         <small class="text-muted">Tìm thấy ${
           ranked.length

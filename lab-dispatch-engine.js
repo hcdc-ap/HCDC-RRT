@@ -11,6 +11,7 @@
 //   • Chấm điểm 5 CHIỀU: Gần + Trống + Nhanh + Chất lượng(QMS) + Mạng lưới(tier)
 //   • Giữ cờ cảnh báo từ RPC (warn_qsm/warn_capacity/warn_turnaround) cho UI
 //   • Thêm preset 'quality' (ưu tiên chất lượng)
+//   • Lớp chồng dữ liệu LIMS (tải/tạm ngưng do PXN tự khai) — best-effort, xem fetchLimsOverlay
 //
 // NHÚNG: <script src="lab-dispatch-engine.js"></script>  (sau lab-admin.js)
 //
@@ -281,6 +282,109 @@
   };
 
   // --------------------------------------------------------------------------
+  // LỚP CHỒNG DỮ LIỆU LIMS (best-effort, không bao giờ làm hỏng điều phối)
+  //   • Cộng số mẫu PXN tự khai (lims_lab_daily_load, ngày giờ VN) vào used_today
+  //   • Loại PXN tự báo "tạm ngưng" còn hiệu lực; "hạn chế" giữ lại + gắn cờ
+  //   Lỗi/quá hạn 3s → bỏ qua, kết quả y như trước khi có lớp này.
+  // --------------------------------------------------------------------------
+  const LIMS_OVERLAY_TIMEOUT_MS = 3000;
+
+  function vnToday() {
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Ho_Chi_Minh',
+    }).format(new Date());
+  }
+
+  async function fetchLimsOverlay() {
+    const today = vnToday();
+    const sb = window.supabaseClient;
+    let timer;
+    const timeout = new Promise((_, rej) => {
+      timer = setTimeout(
+        () => rej(new Error('quá thời gian chờ')),
+        LIMS_OVERLAY_TIMEOUT_MS
+      );
+    });
+    try {
+      const [stRes, loadRes] = await Promise.race([
+        Promise.all([
+          sb
+            .from('lims_lab_operating_status')
+            .select('lab_id, status, reason, effective_until')
+            .neq('status', 'hoat_dong'),
+          sb
+            .from('lims_lab_daily_load')
+            .select('lab_id, test_type_id, samples')
+            .eq('load_date', today),
+        ]),
+        timeout,
+      ]);
+      if (stRes.error) throw stRes.error;
+      if (loadRes.error) throw loadRes.error;
+
+      const status = new Map();
+      (stRes.data || []).forEach((o) => {
+        if (o.effective_until && o.effective_until < today) return;
+        status.set(o.lab_id, o);
+      });
+      const load = new Map();
+      const loadedLabs = new Set();
+      (loadRes.data || []).forEach((r) => {
+        load.set(`${r.lab_id}|${r.test_type_id}`, r.samples || 0);
+        loadedLabs.add(r.lab_id);
+      });
+      return { today, status, load, loadedLabs };
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  function applyLimsOverlay(candidates, ov, sampleCount, includeFull) {
+    const kept = [];
+    const excluded = [];
+    let adjusted = 0;
+
+    candidates.forEach((c) => {
+      const st = ov.status.get(c.lab_id);
+      if (st && st.status === 'tam_ngung') {
+        excluded.push({
+          lab_id: c.lab_id,
+          lab_name: c.lab_name,
+          reason: st.reason || '',
+          until: st.effective_until || null,
+        });
+        return;
+      }
+
+      const extra = ov.load.get(`${c.lab_id}|${c.matched_test_type_id}`) || 0;
+      const out = {
+        ...c,
+        lims_extra_used: extra,
+        lims_status: st ? st.status : null,
+        lims_reason: st ? st.reason || '' : '',
+      };
+      if (extra > 0) {
+        adjusted++;
+        out.used_today = (c.used_today ?? 0) + extra;
+        out.remaining_today = (c.remaining_today ?? 0) - extra;
+        out.is_enough = out.remaining_today >= sampleCount;
+        out.warn_capacity = !out.is_enough;
+        if (c.is_enough && !out.is_enough && c.match_score != null)
+          out.match_score = Number(c.match_score) - 10;
+      }
+      if (!includeFull && !out.is_enough) return;
+      kept.push(out);
+    });
+
+    kept.sort((a, b) => {
+      const d = (Number(b.match_score) || 0) - (Number(a.match_score) || 0);
+      if (d !== 0) return d;
+      return (a.straight_km ?? Infinity) - (b.straight_km ?? Infinity);
+    });
+    return { kept, excluded, adjusted };
+  }
+
+  // --------------------------------------------------------------------------
   // HÀM CHÍNH — tìm PXN tốt nhất
   //   opts: {
   //     testTypeId, sampleCount, originLat, originLng,
@@ -324,6 +428,21 @@
 
     const weights = customWeights || PRESETS[preset] || PRESETS.balanced;
 
+    // [0] Lớp chồng LIMS (best-effort): lỗi → bỏ qua, điều phối chạy như cũ
+    let overlay = null;
+    let overlayError = null;
+    try {
+      overlay = await fetchLimsOverlay();
+    } catch (e) {
+      overlayError = e?.message || String(e);
+      console.warn('[dispatch] Bỏ qua dữ liệu LIMS:', overlayError);
+    }
+    // Lấy dư để bù số PXN sẽ bị loại/đầy sau khi chồng dữ liệu
+    const rpcLimit = overlay
+      ? candidateLimit +
+        Math.min(60, overlay.status.size + overlay.loadedLabs.size)
+      : candidateLimit;
+
     // [1] DB lọc BSL CỨNG + năng lực + công suất, trả ~N PXN kèm QMS/tier/đầu mối
     const { data: candidates, error } = await window.supabaseClient.rpc(
       'find_candidate_labs',
@@ -332,7 +451,7 @@
         p_sample_count: sampleCount,
         p_lat: originLat,
         p_lng: originLng,
-        p_limit: candidateLimit,
+        p_limit: rpcLimit,
         p_include_full: includeFull,
         p_min_bsl: minBsl,
         p_min_qsm: minQsm,
@@ -345,6 +464,24 @@
       (c) => !excludeLabIds.includes(c.lab_id)
     );
 
+    let limsInfo = { applied: false, error: overlayError };
+    if (overlay) {
+      try {
+        const r = applyLimsOverlay(list, overlay, sampleCount, includeFull);
+        list = r.kept;
+        limsInfo = {
+          applied: true,
+          date: overlay.today,
+          excluded: r.excluded,
+          adjusted: r.adjusted,
+        };
+      } catch (e) {
+        console.warn('[dispatch] Bỏ qua dữ liệu LIMS:', e);
+        limsInfo = { applied: false, error: e?.message || String(e) };
+      }
+    }
+    list = list.slice(0, candidateLimit);
+
     const meta = {
       totalCandidates: candidates?.length || 0,
       afterExclude: list.length,
@@ -352,6 +489,7 @@
       preset: customWeights ? 'custom' : preset,
       criteria: { minBsl, minQsm, maxTurnaround },
       osrmFailures: 0,
+      limsOverlay: limsInfo,
     };
 
     if (list.length === 0) return { ranked: [], top: [], meta };
