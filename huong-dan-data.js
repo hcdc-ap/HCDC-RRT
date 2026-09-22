@@ -3,13 +3,78 @@
 // Cấu trúc: { t:'p'|'steps'|'list'|'note'|'table', ... } — xem huong-dan-engine.js.
 // Quy ước trong chuỗi text: **đậm**, [[Tên nút/mục]] hiển thị dạng nhãn nút.
 // ============================================================================
+// Vẽ sơ đồ luồng dạng "1 nguồn → nhiều kênh → 1 đích" bằng SVG thuần, không phụ thuộc thư viện ngoài.
+function escXml(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+  });
+}
+function flowDiagram(opts) {
+  var W = 760;
+  var n = opts.channels.length;
+  // Tự xuống dòng phần phụ đề theo bề rộng khối (ước lượng ~6.3px/ký tự ở cỡ chữ 11.5px).
+  function wrap(text, boxW) {
+    if (!text) return [];
+    var maxChars = Math.max(10, Math.floor((boxW - 20) / 6.3));
+    var words = String(text).split(' ');
+    var lines = [], cur = '';
+    words.forEach(function (w) {
+      var next = cur ? cur + ' ' + w : w;
+      if (next.length > maxChars && cur) { lines.push(cur); cur = w; }
+      else { cur = next; }
+    });
+    if (cur) lines.push(cur);
+    return lines.slice(0, 3);
+  }
+  var chH = 64, gap = 16;
+  var H = Math.max(210, n * chH + (n - 1) * gap + 40);
+  var srcW = 180, srcH = 84, srcX = 8, srcY = (H - srcH) / 2;
+  var chW = 244, chX = 262;
+  var dstW = 214, dstH = 96, dstX = W - dstW - 8, dstY = (H - dstH) / 2;
+  var top = (H - (n * chH + (n - 1) * gap)) / 2;
+
+  function rectNode(x, y, w, h, fill, title, sub) {
+    var subLines = wrap(sub, w);
+    var lineH = 14;
+    var blockH = 17 + subLines.length * lineH;
+    var titleY = y + (h - blockH) / 2 + 9;
+    var out = '<rect x="' + x + '" y="' + y + '" width="' + w + '" height="' + h + '" rx="12" fill="' + fill + '"></rect>' +
+      '<text x="' + (x + w / 2) + '" y="' + titleY + '" text-anchor="middle" class="node-title">' + escXml(title) + '</text>';
+    subLines.forEach(function (line, i) {
+      out += '<text x="' + (x + w / 2) + '" y="' + (titleY + 20 + i * lineH) + '" text-anchor="middle" class="node-sub">' + escXml(line) + '</text>';
+    });
+    return out;
+  }
+  function edgePath(x1, y1, x2, y2) {
+    var midX = (x1 + x2) / 2;
+    return '<path class="edge" marker-end="url(#gd-arrow)" d="M ' + x1 + ' ' + y1 + ' C ' + midX + ' ' + y1 + ', ' + midX + ' ' + y2 + ', ' + (x2 - 9) + ' ' + y2 + '"></path>';
+  }
+
+  var nodes = rectNode(srcX, srcY, srcW, srcH, '#004e57', opts.source.title, opts.source.sub);
+  var edges = '';
+  for (var i = 0; i < n; i++) {
+    var cy = top + i * (chH + gap);
+    var c = opts.channels[i];
+    nodes += rectNode(chX, cy, chW, chH, c.color, c.title, c.sub);
+    edges += edgePath(srcX + srcW, srcY + srcH / 2, chX, cy + chH / 2);
+    edges += edgePath(chX + chW, cy + chH / 2, dstX, dstY + dstH / 2);
+  }
+  nodes += rectNode(dstX, dstY, dstW, dstH, '#1f2a30', opts.dest.title, opts.dest.sub);
+
+  return '<svg class="flow-diagram" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="' + escXml(opts.ariaLabel || '') + '">' +
+    '<defs><marker id="gd-arrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" class="edge-arrow"></path></marker></defs>' +
+    edges + nodes + '</svg>';
+}
+
 window.RRT_GUIDE = {
   version: 'Cập nhật ngày 22/09/2026',
   title: 'Hướng dẫn sử dụng hệ thống RRT-HCDC',
+  // Khóa vai trò dùng nội bộ cho tab/URL — KHÔNG dùng đúng tên role trong CSDL (admin/ward_admin/user)
+  // để tránh lộ giá trị kỹ thuật ra tài liệu công khai.
   roles: [
-    { role: 'admin', label: 'Quản trị RRT (thành phố)' },
-    { role: 'ward_admin', label: 'Quản trị tuyến cơ sở' },
-    { role: 'user', label: 'Nhân viên RRT' },
+    { role: 'hcdc', label: 'Quản trị RRT (HCDC)' },
+    { role: 'tuyen-co-so', label: 'Quản trị tuyến cơ sở' },
+    { role: 'nhan-vien', label: 'Nhân viên RRT' },
   ],
 
   // ---- Các mục CHUNG cho cả 3 vai trò, hiện đầu tiên trong mọi tab ----
@@ -25,10 +90,21 @@ window.RRT_GUIDE = {
           title: 'Ba loại tài khoản',
           head: ['Vai trò', 'Ai dùng', 'Phạm vi xem/làm được'],
           rows: [
-            ['**Quản trị RRT** (`admin`)', 'Cán bộ HCDC quản lý toàn mạng lưới RRT thành phố', 'Xem và quản lý toàn bộ nhân sự, sự kiện, lịch trực, vật tư, phòng xét nghiệm trên toàn thành phố.'],
-            ['**Quản trị tuyến cơ sở** (`ward_admin`)', 'Người phụ trách đội RRT của một phường/xã/đặc khu', 'Chỉ xem và quản lý nhân sự, lịch trực, sự kiện **cùng nơi công tác**. Không thấy Vật tư và Phòng xét nghiệm.'],
-            ['**Nhân viên RRT** (`user`)', 'Thành viên đội RRT thường', 'Chỉ xem hồ sơ, lịch, thông báo, kết quả đào tạo **của chính mình**; xác nhận tham gia khi được điều động.'],
+            ['**Quản trị RRT (HCDC)**', 'Cán bộ HCDC quản lý toàn mạng lưới RRT thành phố', 'Xem và quản lý toàn bộ nhân sự, sự kiện, lịch trực, vật tư, phòng xét nghiệm trên toàn thành phố.'],
+            ['**Quản trị tuyến cơ sở**', 'Người phụ trách đội RRT của một xã/phường/đặc khu', 'Chỉ xem và quản lý nhân sự, lịch trực, sự kiện **cùng nơi công tác**. Không thấy Vật tư và Phòng xét nghiệm.'],
+            ['**Nhân viên RRT**', 'Thành viên đội RRT thường', 'Chỉ xem hồ sơ, lịch, thông báo, kết quả đào tạo **của chính mình**; xác nhận tham gia khi được điều động.'],
           ],
+        },
+        {
+          t: 'html',
+          title: 'Phạm vi xem/quản lý theo vai trò',
+          html:
+            '<div class="scope-funnel">' +
+            '<div class="bar l1"><div class="t">Quản trị RRT (HCDC)</div><div class="d">Toàn bộ nhân sự, sự kiện, lịch trực trên thành phố</div></div>' +
+            '<div class="bar l2"><div class="t">Quản trị tuyến cơ sở</div><div class="d">Chỉ nhân sự và sự kiện cùng một xã/phường/đặc khu</div></div>' +
+            '<div class="bar l3"><div class="t">Nhân viên RRT</div><div class="d">Chỉ hồ sơ, lịch, thông báo của chính mình</div></div>' +
+            '</div>',
+          caption: 'Vòng ngoài xem được cả vòng trong: Quản trị RRT (HCDC) thấy mọi thứ Quản trị tuyến cơ sở thấy, và Quản trị tuyến cơ sở thấy mọi thứ nhân viên trong xã/phường mình thấy.',
         },
         {
           t: 'steps',
@@ -82,7 +158,7 @@ window.RRT_GUIDE = {
           head: ['Trạng thái', 'Ý nghĩa'],
           rows: [
             ['**Chờ duyệt**', 'Hồ sơ mới nộp hoặc vừa sửa, đang chờ Quản trị xem xét.'],
-            ['**Yêu cầu sửa**', 'Quản trị RRT thành phố yêu cầu bổ sung/chỉnh sửa trước khi duyệt.'],
+            ['**Yêu cầu sửa**', 'Quản trị RRT (HCDC) yêu cầu bổ sung/chỉnh sửa trước khi duyệt.'],
             ['**Đã duyệt**', 'Hồ sơ hợp lệ, được tính vào danh sách nhân sự sẵn sàng điều động.'],
           ],
         },
@@ -90,7 +166,66 @@ window.RRT_GUIDE = {
         { t: 'p', text: '**Điều phối mẫu xét nghiệm**: khi sự kiện cần gửi mẫu đi xét nghiệm, Quản trị dùng công cụ tìm phòng xét nghiệm (PXN) phù hợp nhất theo khoảng cách, công suất còn trống, thời gian trả kết quả và chất lượng, rồi gửi yêu cầu và chốt lệnh điều phối.' },
         {
           t: 'note', kind: 'info', title: 'Cấp năng lực và ATSH của phòng xét nghiệm',
-          text: 'Mỗi PXN có **Cấp năng lực** (1–5, hiển thị bằng màu marker trên Bản đồ: đỏ = cấp 5 cao nhất, cam = 4, vàng = 3, xanh dương = 2, xám xanh = 1, xám nhạt = chưa phân hạng) và **Cấp an toàn sinh học (ATSH/BSL)** — PXN có ATSH thấp hơn yêu cầu sẽ không bao giờ được đề xuất, dù ở chế độ điều phối nào.',
+          text: 'Mỗi PXN có **Cấp năng lực** (1–5) và **Cấp an toàn sinh học (ATSH/BSL)** — PXN có ATSH thấp hơn yêu cầu sẽ không bao giờ được đề xuất, dù ở chế độ điều phối nào. Trên Bản đồ, marker mỗi PXN tô theo màu cấp năng lực:',
+        },
+        {
+          t: 'html',
+          html:
+            '<div class="tier-legend">' +
+            '<span class="item"><span class="dot" style="background:#dc2626"></span>Cấp 5 — cao nhất</span>' +
+            '<span class="item"><span class="dot" style="background:#ea580c"></span>Cấp 4</span>' +
+            '<span class="item"><span class="dot" style="background:#f59e0b"></span>Cấp 3</span>' +
+            '<span class="item"><span class="dot" style="background:#0ea5e9"></span>Cấp 2</span>' +
+            '<span class="item"><span class="dot" style="background:#94a3b8"></span>Cấp 1</span>' +
+            '<span class="item"><span class="dot" style="background:#cbd5e1"></span>Chưa phân hạng</span>' +
+            '<span class="item"><span class="dot" style="background:#9ca3af"></span>Tạm ngừng hoạt động</span>' +
+            '</div>',
+        },
+      ],
+    },
+    {
+      id: 'kenh-thong-bao',
+      title: 'Kênh nhận thông báo và xác nhận',
+      summary: 'Kích hoạt khẩn cấp, phân công lịch trực, điều động thay thế… đều gửi đồng thời qua ứng dụng, Telegram và Email — phản hồi ở kênh nào cũng được ghi nhận.',
+      blocks: [
+        { t: 'p', text: 'Khi hệ thống cần bạn xác nhận điều gì đó (kích hoạt khẩn cấp, phân công ca trực, điều động thay thế…), thông báo được gửi **cùng lúc qua 3 kênh** — bạn không cần mở ứng dụng mới biết và phản hồi được:' },
+        {
+          t: 'html',
+          html: flowDiagram({
+            ariaLabel: 'Sơ đồ: thông báo gửi qua ứng dụng, Telegram và Email; phản hồi ở kênh nào cũng được ghi nhận và đồng bộ sang các kênh còn lại',
+            source: { title: 'Hệ thống tạo thông báo', sub: 'kích hoạt, phân công, điều động...' },
+            channels: [
+              { title: 'Trong ứng dụng', sub: 'Theo dõi sự kiện, Tin nhắn', color: '#006a75' },
+              { title: 'Telegram', sub: 'tin nhắn riêng (nếu đã liên kết)', color: '#229ED9' },
+              { title: 'Email', sub: 'có nút bấm xác nhận ngay', color: '#8b5cf6' },
+            ],
+            dest: { title: 'Bạn phản hồi', sub: 'ở BẤT KỲ kênh nào — kênh còn lại tự cập nhật theo' },
+          }),
+        },
+        {
+          t: 'list',
+          items: [
+            '**Trong ứng dụng**: vào trang **Theo dõi sự kiện** (với kích hoạt khẩn cấp) hoặc **Lịch trực**, bấm nút xác nhận/báo bận trên màn hình.',
+            '**Telegram**: nếu đã liên kết, bạn nhận tin nhắn riêng kèm 2 nút bấm ngay trong Telegram, không cần mở ứng dụng. Có thêm một nhóm Telegram chung để chỉ huy theo dõi tình hình phản hồi.',
+            '**Email**: email nhận được có 2 nút **Xác nhận tham gia** / **Báo không thể tham gia** — bấm là ghi nhận ngay, không cần đăng nhập vào ứng dụng.',
+          ],
+        },
+        {
+          t: 'note', kind: 'tip',
+          text: 'Chỉ cần phản hồi một lần, ở một kênh bất kỳ — hệ thống tự đồng bộ, không cần lặp lại ở kênh khác.',
+        },
+        {
+          t: 'steps',
+          title: 'Liên kết Telegram (khuyến nghị)',
+          items: [
+            'Mở Telegram, tìm bot của hệ thống HCDC-RRT (hỏi Quản trị RRT nếu bạn chưa có đường dẫn/tên bot).',
+            'Bấm **Start** hoặc gõ `/start`.',
+            'Gõ đúng **địa chỉ email đăng nhập** của bạn và gửi. Bot xác nhận "HỒ SƠ HỢP LỆ" kèm tên bạn là liên kết thành công.',
+          ],
+        },
+        {
+          t: 'note', kind: 'info',
+          text: 'Không liên kết Telegram vẫn dùng hệ thống bình thường — bạn vẫn nhận được qua ứng dụng và Email. Telegram chỉ giúp phản hồi nhanh hơn khi đang di chuyển.',
         },
       ],
     },
@@ -116,8 +251,8 @@ window.RRT_GUIDE = {
 
   // ---- Nội dung riêng theo từng vai trò ----
   perRole: {
-    admin: {
-      title: 'Hướng dẫn sử dụng dành cho Quản trị RRT (thành phố)',
+    hcdc: {
+      title: 'Hướng dẫn sử dụng dành cho Quản trị RRT (HCDC)',
       audience: 'Cán bộ HCDC quản lý mạng lưới RRT trên toàn thành phố.',
       groupLabel: 'Dành cho Quản trị RRT',
       sections: [
@@ -142,7 +277,7 @@ window.RRT_GUIDE = {
               items: [
                 'Dùng ô [[Lọc]] để tìm nhanh, [[Xóa lọc]] để về danh sách đầy đủ.',
                 'Ở cột **Phê duyệt** của hồ sơ cần xử lý, chọn trạng thái mới trong danh sách sổ xuống: **Chờ duyệt** / **Yêu cầu sửa** / **Đã duyệt**. Hệ thống lưu ngay khi chọn.',
-                'Bấm biểu tượng mắt ở cột **Hành động** để xem chi tiết hồ sơ; biểu tượng thùng rác để xóa hồ sơ (chỉ Quản trị RRT thành phố có nút xóa).',
+                'Bấm biểu tượng mắt ở cột **Hành động** để xem chi tiết hồ sơ; biểu tượng thùng rác để xóa hồ sơ (chỉ Quản trị RRT (HCDC) có nút xóa).',
               ],
             },
             {
@@ -184,7 +319,19 @@ window.RRT_GUIDE = {
             },
             {
               t: 'note', kind: 'info',
-              text: 'Nhân sự được điều động sẽ nhận thông báo và xác nhận tham gia tại trang **Theo dõi sự kiện** (không phải tại trang Tin nhắn) — xem mục "Theo dõi sự kiện" bên dưới.',
+              text: 'Bấm **☑️ XÁC NHẬN** là gửi ngay lập tức, cùng lúc qua 3 kênh — không cần làm thêm gì để "kích hoạt" Telegram hay Email, hệ thống tự gửi:',
+            },
+            {
+              t: 'html',
+              html:
+                '<div class="channel-badges">' +
+                '<span class="channel-badge app">📱 Trong ứng dụng</span>' +
+                '<span class="channel-badge tele">✈️ Telegram</span>' +
+                '<span class="channel-badge mail">✉️ Email</span>' +
+                '</div>',
+            },
+            {
+              t: 'p', text: 'Nhân sự nhận được xác nhận tham gia tại trang **Theo dõi sự kiện** (không phải tại trang Tin nhắn) — hoặc phản hồi trực tiếp qua nút trong Telegram/Email nếu đã liên kết. Xem chi tiết 3 kênh ở mục "Kênh nhận thông báo và xác nhận" phía trên.',
             },
             {
               t: 'p', text: 'Nếu một sự kiện đang có người báo không thể tham gia, khi chọn **➕ Bổ sung nhân sự** hệ thống sẽ cảnh báo để mời người thay thế.',
@@ -212,7 +359,7 @@ window.RRT_GUIDE = {
             },
             {
               t: 'note', kind: 'tip',
-              text: 'Là Quản trị RRT thành phố, bạn thấy mọi sự kiện trên toàn thành phố, không bị giới hạn theo địa bàn.',
+              text: 'Là Quản trị RRT (HCDC), bạn thấy mọi sự kiện trên toàn thành phố, không bị giới hạn theo địa bàn.',
             },
           ],
         },
@@ -245,13 +392,13 @@ window.RRT_GUIDE = {
                 'Bấm biểu tượng thùng rác trên một khóa để xóa khóa học đó.',
               ],
             },
-            { t: 'p', text: 'Là Quản trị RRT thành phố, bạn xem và chấm được mọi khóa học, mọi học viên trên toàn thành phố.' },
+            { t: 'p', text: 'Là Quản trị RRT (HCDC), bạn xem và chấm được mọi khóa học, mọi học viên trên toàn thành phố.' },
           ],
         },
         {
           id: 'vat-tu',
           title: 'Vật tư',
-          summary: 'Quản lý kho vật tư và lịch sử xuất/nhập (chỉ Quản trị RRT thành phố).',
+          summary: 'Quản lý kho vật tư và lịch sử xuất/nhập (chỉ Quản trị RRT (HCDC)).',
           blocks: [
             { t: 'p', text: 'Có 2 tab: **📦 Kho Hiện tại** và **📜 Lịch sử giao dịch**.' },
             {
@@ -264,7 +411,7 @@ window.RRT_GUIDE = {
             },
             {
               t: 'note', kind: 'info',
-              text: 'Trang này chỉ hiện với Quản trị RRT thành phố — Quản trị tuyến cơ sở và Nhân viên RRT không thấy mục này trong menu.',
+              text: 'Trang này chỉ hiện với Quản trị RRT (HCDC) — Quản trị tuyến cơ sở và Nhân viên RRT không thấy mục này trong menu.',
             },
           ],
         },
@@ -306,7 +453,7 @@ window.RRT_GUIDE = {
         {
           id: 'phong-xet-nghiem',
           title: 'Phòng Xét nghiệm — quản trị danh mục',
-          summary: 'Quản lý danh mục phòng xét nghiệm, năng lực và danh mục kỹ thuật (chỉ Quản trị RRT thành phố).',
+          summary: 'Quản lý danh mục phòng xét nghiệm, năng lực và danh mục kỹ thuật (chỉ Quản trị RRT (HCDC)).',
           blocks: [
             { t: 'p', text: 'Đây là trang quản trị **danh mục** PXN (không phải nơi gửi mẫu — gửi mẫu thực hiện ở nút [[Xét nghiệm]]/[[Tìm Phòng Xét nghiệm]], xem mục "Điều phối mẫu xét nghiệm").' },
             {
@@ -350,13 +497,32 @@ window.RRT_GUIDE = {
               ],
             },
             {
+              t: 'note', kind: 'info',
+              text: 'Bấm [[Gửi]] là hệ thống **tự động liên hệ đầu mối PXN** — bạn không cần tự gọi điện, nhắn Zalo hay soạn email riêng:',
+            },
+            {
+              t: 'html',
+              html: flowDiagram({
+                ariaLabel: 'Sơ đồ: yêu cầu điều phối mẫu gửi tới phòng xét nghiệm qua Email và Telegram, PXN phản hồi rồi trạng thái tự cập nhật trên thẻ',
+                source: { title: 'Bạn bấm Gửi', sub: 'yêu cầu điều phối mẫu' },
+                channels: [
+                  { title: 'Email', sub: 'gửi đầu mối PXN, có nút phản hồi', color: '#8b5cf6' },
+                  { title: 'Telegram', sub: 'nếu PXN đã liên kết bot', color: '#229ED9' },
+                ],
+                dest: { title: 'PXN phản hồi', sub: 'trạng thái tự cập nhật trên thẻ' },
+              }),
+            },
+            {
+              t: 'p', text: 'PXN bấm nút trong email hoặc trong Telegram để báo **nhận** hoặc **không nhận** — không cần đăng nhập gì thêm. Số điện thoại đầu mối trên mỗi thẻ vẫn hiển thị để bạn gọi trực tiếp khi cần gấp, nhưng không bắt buộc.',
+            },
+            {
               t: 'steps',
               title: 'Bước 3 — Chốt lệnh khi PXN phản hồi',
               items: [
                 'Trạng thái mỗi thẻ tự cập nhật khi PXN phản hồi: **Đang chờ PXN...** khi chưa có phản hồi.',
                 'Khi PXN đồng ý nhận đủ mẫu: bấm nút xanh lá **Chốt điều phối (Đủ mẫu)**, xác nhận trong hộp thoại hiện ra.',
                 'Khi PXN chỉ nhận được một phần: bấm nút vàng **Chốt (n mẫu)**.',
-                'Nếu PXN từ chối, thẻ chuyển màu đỏ **Không nhận**. Lệnh đã chốt có thể hủy nếu cần.',
+                'Nếu PXN từ chối, thẻ chuyển màu đỏ **Không nhận**. Lệnh đã chốt có thể hủy nếu cần — khi đó PXN nhận được email báo hủy.',
               ],
             },
             {
@@ -370,15 +536,15 @@ window.RRT_GUIDE = {
           title: 'Tin nhắn',
           summary: 'Thông báo hệ thống gửi riêng cho bạn.',
           blocks: [
-            { t: 'p', text: 'Danh sách thông báo của chính bạn (mỗi tài khoản chỉ thấy thông báo của mình, kể cả Quản trị RRT thành phố). Dòng chưa đọc tô nền vàng — bấm [[Đánh dấu đã đọc]] để chuyển thành đã đọc.' },
+            { t: 'p', text: 'Danh sách thông báo của chính bạn (mỗi tài khoản chỉ thấy thông báo của mình, kể cả Quản trị RRT (HCDC)). Dòng chưa đọc tô nền vàng — bấm [[Đánh dấu đã đọc]] để chuyển thành đã đọc.' },
           ],
         },
       ],
     },
 
-    ward_admin: {
+    'tuyen-co-so': {
       title: 'Hướng dẫn sử dụng dành cho Quản trị tuyến cơ sở',
-      audience: 'Người phụ trách đội RRT của một phường/xã/đặc khu.',
+      audience: 'Người phụ trách đội RRT của một xã/phường/đặc khu.',
       groupLabel: 'Dành cho Quản trị tuyến cơ sở',
       sections: [
         {
@@ -386,13 +552,13 @@ window.RRT_GUIDE = {
           title: 'Dashboard',
           summary: 'Tổng quan lịch trực, kích hoạt khẩn cấp, hồ sơ và thống kê — trong phạm vi đơn vị bạn phụ trách.',
           blocks: [
-            { t: 'p', text: 'Giao diện giống Quản trị RRT thành phố (thẻ số liệu, hồ sơ gần đây, việc cần làm, biểu đồ thống kê), nhưng số liệu chỉ tính trong phạm vi nhân sự cùng nơi công tác với bạn.' },
+            { t: 'p', text: 'Giao diện giống Quản trị RRT (HCDC) (thẻ số liệu, hồ sơ gần đây, việc cần làm, biểu đồ thống kê), nhưng số liệu chỉ tính trong phạm vi nhân sự cùng nơi công tác với bạn.' },
           ],
         },
         {
           id: 'bieu-mau-rrt',
           title: 'Biểu mẫu RRT — duyệt hồ sơ nhân sự',
-          summary: 'Duyệt hồ sơ RRT của nhân sự cùng phường/xã/đặc khu.',
+          summary: 'Duyệt hồ sơ RRT của nhân sự cùng xã/phường/đặc khu.',
           blocks: [
             {
               t: 'steps',
@@ -404,14 +570,14 @@ window.RRT_GUIDE = {
             },
             {
               t: 'note', kind: 'info',
-              text: 'Khác với Quản trị RRT thành phố, bạn **không có** lựa chọn "Yêu cầu sửa" và **không có** nút xóa hồ sơ — chỉ duyệt hoặc để chờ.',
+              text: 'Khác với Quản trị RRT (HCDC), bạn **không có** lựa chọn "Yêu cầu sửa" và **không có** nút xóa hồ sơ — chỉ duyệt hoặc để chờ.',
             },
           ],
         },
         {
           id: 'lich-truc',
           title: 'Lịch trực',
-          summary: 'Xếp ca trực cho đội thuộc phường/xã/đặc khu của bạn.',
+          summary: 'Xếp ca trực cho đội thuộc xã/phường/đặc khu của bạn.',
           blocks: [
             {
               t: 'steps',
@@ -427,7 +593,7 @@ window.RRT_GUIDE = {
           title: 'Kích hoạt khẩn cấp',
           summary: 'Triệu tập nhân sự thuộc đơn vị bạn khi có tình huống khẩn cấp.',
           blocks: [
-            { t: 'p', text: 'Danh sách nhân sự để chọn chỉ gồm người cùng phường/xã/đặc khu với bạn.' },
+            { t: 'p', text: 'Danh sách nhân sự để chọn chỉ gồm người cùng xã/phường/đặc khu với bạn.' },
             {
               t: 'steps',
               items: [
@@ -438,7 +604,19 @@ window.RRT_GUIDE = {
             },
             {
               t: 'note', kind: 'warn',
-              text: 'Nếu tài khoản của bạn chưa được gán đúng phường/xã/đặc khu, danh sách nhân sự sẽ trống — liên hệ Quản trị RRT thành phố để cập nhật nơi công tác cho tài khoản.',
+              text: 'Nếu tài khoản của bạn chưa được gán đúng xã/phường/đặc khu, danh sách nhân sự sẽ trống — liên hệ Quản trị RRT (HCDC) để cập nhật nơi công tác cho tài khoản.',
+            },
+            {
+              t: 'html',
+              html:
+                '<div class="channel-badges">' +
+                '<span class="channel-badge app">📱 Trong ứng dụng</span>' +
+                '<span class="channel-badge tele">✈️ Telegram</span>' +
+                '<span class="channel-badge mail">✉️ Email</span>' +
+                '</div>',
+            },
+            {
+              t: 'p', text: 'Bấm **☑️ XÁC NHẬN** là hệ thống gửi ngay qua cả 3 kênh trên, không cần thao tác thêm. Xem chi tiết ở mục "Kênh nhận thông báo và xác nhận" phía trên.',
             },
           ],
         },
@@ -466,10 +644,10 @@ window.RRT_GUIDE = {
           title: 'Thành viên',
           summary: 'Hồ sơ năng lực, đội và vị trí công tác của nhân sự thuộc đơn vị bạn.',
           blocks: [
-            { t: 'p', text: 'Chỉ thấy nhân sự cùng phường/xã/đặc khu. Cột **Đội** và **Vị trí** vẫn chỉnh sửa được bằng sổ xuống.' },
+            { t: 'p', text: 'Chỉ thấy nhân sự cùng xã/phường/đặc khu. Cột **Đội** và **Vị trí** vẫn chỉnh sửa được bằng sổ xuống.' },
             {
               t: 'note', kind: 'info',
-              text: 'Danh sách **Vị trí** của bạn không có lựa chọn "Đội trưởng" để gán mới — nếu một người đã là Đội trưởng từ trước, vị trí đó vẫn giữ nguyên và hiện trong danh sách, nhưng bạn không đổi ai khác thành Đội trưởng được. Cần đổi Đội trưởng thì liên hệ Quản trị RRT thành phố.',
+              text: 'Danh sách **Vị trí** của bạn không có lựa chọn "Đội trưởng" để gán mới — nếu một người đã là Đội trưởng từ trước, vị trí đó vẫn giữ nguyên và hiện trong danh sách, nhưng bạn không đổi ai khác thành Đội trưởng được. Cần đổi Đội trưởng thì liên hệ Quản trị RRT (HCDC).',
             },
           ],
         },
@@ -478,7 +656,7 @@ window.RRT_GUIDE = {
           title: 'Đào tạo',
           summary: 'Xem khóa học và kết quả của học viên thuộc đơn vị bạn.',
           blocks: [
-            { t: 'p', text: 'Bạn chỉ thấy các khóa học có học viên thuộc đơn vị mình, và chỉ thấy học viên cùng đơn vị. Kết quả hiển thị dạng chữ, **không chỉnh sửa được** — việc tạo khóa học và chấm điểm do Quản trị RRT thành phố thực hiện.' },
+            { t: 'p', text: 'Bạn chỉ thấy các khóa học có học viên thuộc đơn vị mình, và chỉ thấy học viên cùng đơn vị. Kết quả hiển thị dạng chữ, **không chỉnh sửa được** — việc tạo khóa học và chấm điểm do Quản trị RRT (HCDC) thực hiện.' },
           ],
         },
         {
@@ -495,7 +673,7 @@ window.RRT_GUIDE = {
           title: 'Bản đồ',
           summary: 'Xem vị trí nhân sự đơn vị bạn, sự kiện và mạng lưới phòng xét nghiệm.',
           blocks: [
-            { t: 'p', text: 'Lớp **Thành viên** chỉ hiện người cùng phường/xã/đặc khu với bạn. Lớp **Phòng Xét Nghiệm**, **Sự kiện**, **Dân số** hiển thị như Quản trị RRT thành phố.' },
+            { t: 'p', text: 'Lớp **Thành viên** chỉ hiện người cùng xã/phường/đặc khu với bạn. Lớp **Phòng Xét Nghiệm**, **Sự kiện**, **Dân số** hiển thị như Quản trị RRT (HCDC).' },
             { t: 'p', text: 'Bấm [[Tìm Phòng Xét nghiệm]] để mở nhanh công cụ điều phối mẫu ngay từ bản đồ.' },
           ],
         },
@@ -504,10 +682,10 @@ window.RRT_GUIDE = {
           title: 'Điều phối mẫu xét nghiệm',
           summary: 'Tìm phòng xét nghiệm phù hợp và gửi yêu cầu nhận mẫu cho sự kiện của đơn vị bạn.',
           blocks: [
-            { t: 'p', text: 'Thao tác giống hệt Quản trị RRT thành phố: mở từ nút [[Xét nghiệm]] trong một sự kiện hoặc [[Tìm Phòng Xét nghiệm]] trên Bản đồ, chọn tiêu chí, xem xếp hạng PXN, gửi yêu cầu và chốt lệnh khi PXN phản hồi.' },
+            { t: 'p', text: 'Thao tác giống hệt Quản trị RRT (HCDC): mở từ nút [[Xét nghiệm]] trong một sự kiện hoặc [[Tìm Phòng Xét nghiệm]] trên Bản đồ, chọn tiêu chí, xem xếp hạng PXN, gửi yêu cầu và chốt lệnh khi PXN phản hồi. Bấm [[Gửi]] là hệ thống tự liên hệ đầu mối PXN qua **Email** và **Telegram** — bạn không cần tự gọi hay nhắn riêng.' },
             {
               t: 'note', kind: 'tip',
-              text: 'Xem đầy đủ các bước tại mục "Điều phối mẫu xét nghiệm" trong tab Quản trị RRT (thành phố) — quy trình giống hệt, chỉ khác là bạn thực hiện cho sự kiện thuộc đơn vị mình.',
+              text: 'Xem đầy đủ các bước và sơ đồ kênh liên hệ PXN tại mục "Điều phối mẫu xét nghiệm" trong tab Quản trị RRT (HCDC) — quy trình giống hệt, chỉ khác là bạn thực hiện cho sự kiện thuộc đơn vị mình.',
             },
           ],
         },
@@ -522,7 +700,7 @@ window.RRT_GUIDE = {
       ],
     },
 
-    user: {
+    'nhan-vien': {
       title: 'Hướng dẫn sử dụng dành cho Nhân viên RRT',
       audience: 'Thành viên đội RRT.',
       groupLabel: 'Dành cho Nhân viên RRT',
@@ -567,6 +745,10 @@ window.RRT_GUIDE = {
                 'Thanh cảnh báo vàng **"YÊU CẦU TỪ HỆ THỐNG — Bạn được điều động tham gia sự kiện này. Vui lòng phản hồi ngay!"** sẽ hiện ở đầu trang.',
                 'Bấm [[XÁC NHẬN]] nếu bạn tham gia được, hoặc [[KHÔNG THỂ THAM GIA]] nếu không thể. Chọn xong là ghi nhận ngay, không cần bước nào thêm.',
               ],
+            },
+            {
+              t: 'note', kind: 'tip', title: 'Không mở được ứng dụng? Phản hồi qua Telegram hoặc Email cũng được',
+              text: 'Kích hoạt khẩn cấp luôn gửi thêm qua Telegram (nếu bạn đã liên kết — xem mục "Kênh nhận thông báo và xác nhận" ở đầu tài liệu) và Email. Bấm nút xác nhận ngay trong tin nhắn Telegram hoặc trong email — không cần đăng nhập ứng dụng, hệ thống vẫn ghi nhận như bấm trong ứng dụng.',
             },
             { t: 'p', text: 'Trong lúc sự kiện diễn ra, bạn có thể xem Nhật ký, gửi tin nhắn trao đổi trong nhóm sự kiện và đính kèm file như các thành viên khác.' },
           ],

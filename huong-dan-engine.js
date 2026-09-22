@@ -44,6 +44,7 @@
       case 'list': return [b.title || '', ...b.items].join(' ');
       case 'note': return (b.title || '') + ' ' + b.text;
       case 'table': return [b.title || '', ...b.head, ...b.rows.flat()].join(' ');
+      case 'html': return (b.title || '') + ' ' + (b.caption || '');
       default: return '';
     }
   }
@@ -91,6 +92,10 @@
           '<div class="tablewrap"><table class="guide-table"><thead><tr>' + head +
           '</tr></thead><tbody>' + rows + '</tbody></table></div></div>';
       }
+      case 'html':
+        // Markup do chính tài liệu này tự soạn (sơ đồ minh họa, thang màu...), không phải dữ liệu người dùng — an toàn để chèn thẳng.
+        return '<div class="block">' + (b.title ? '<h4>' + escHtml(b.title) + '</h4>' : '') +
+          b.html + (b.caption ? '<p class="diagram-caption">' + escHtml(b.caption) + '</p>' : '') + '</div>';
       default:
         return '';
     }
