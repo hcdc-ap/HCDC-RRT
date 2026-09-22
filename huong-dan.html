@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hướng dẫn sử dụng · RRT-HCDC</title>
+<meta name="description" content="Hướng dẫn sử dụng hệ thống RRT-HCDC cho Quản trị thành phố, Quản trị tuyến cơ sở và Nhân viên RRT.">
+<link rel="icon" type="image/png" href="https://github.com/hcdc-ap/images-host/blob/main/images/productivity.png?raw=true">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Ubuntu:wght@400;500;700&family=Be+Vietnam+Pro:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css" rel="stylesheet">
+<style>
+  :root{
+    --brand:#006a75;
+    --brand-dark:#004e57;
+    --brand-light:#e6f3f4;
+    --accent:#f26522;
+    --accent-light:#fef0e8;
+    --ink:#1f2a30;
+    --muted:#5b6b72;
+    --line:#e2e8ea;
+    --bg:#f4f7f7;
+    --card:#ffffff;
+    --tip-bg:#ecfaf3; --tip-line:#b8ebd2; --tip-ink:#0d5c3c;
+    --warn-bg:#fff6e8; --warn-line:#ffdfa6; --warn-ink:#8a5b06;
+    --info-bg:#eef5fb; --info-line:#c7e0f4; --info-ink:#12507e;
+    --radius:14px;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;overflow-x:hidden;}
+  body{
+    font-family:'Be Vietnam Pro','Ubuntu',sans-serif;
+    background:var(--bg);
+    color:var(--ink);
+    -webkit-font-smoothing:antialiased;
+  }
+  a{color:var(--brand);}
+  .topbar{
+    position:sticky; top:0; z-index:40;
+    background:var(--card);
+    border-bottom:1px solid var(--line);
+    display:flex; align-items:center; gap:14px;
+    padding:12px 20px;
+    flex-wrap:wrap;
+  }
+  .topbar .brandmark{
+    display:flex; align-items:center; gap:8px;
+    font-weight:700; color:var(--brand); font-size:15px;
+    white-space:nowrap;
+  }
+  .topbar .brandmark i{font-size:20px;}
+  .roletabs{
+    display:inline-flex; gap:2px; background:var(--bg);
+    border:1px solid var(--line); padding:3px; border-radius:11px;
+    max-width:100%; overflow-x:auto; -webkit-overflow-scrolling:touch;
+  }
+  .roletabs button{
+    border:0; background:transparent; padding:8px 14px;
+    font-size:13.5px; font-weight:600; color:var(--muted);
+    border-radius:8px; cursor:pointer; font-family:inherit;
+    white-space:nowrap;
+  }
+  .roletabs button.active{background:var(--card); color:var(--brand); box-shadow:0 1px 3px rgba(0,0,0,.08);}
+  .searchwrap{position:relative; flex:1; min-width:200px; max-width:360px;}
+  .searchwrap i{position:absolute; left:12px; top:50%; transform:translateY(-50%); color:#98a6ac; font-size:16px;}
+  .searchwrap input{
+    width:100%; padding:9px 12px 9px 36px; border-radius:10px;
+    border:1px solid var(--line); font-size:13.5px; font-family:inherit;
+    background:var(--bg);
+  }
+  .searchwrap input:focus{outline:2px solid var(--brand); outline-offset:-1px; background:var(--card);}
+  .printbtn{
+    margin-left:auto; display:flex; align-items:center; gap:6px;
+    border:1px solid var(--line); background:var(--card); color:var(--ink);
+    padding:9px 14px; border-radius:10px; font-size:13.5px; font-weight:600;
+    cursor:pointer; font-family:inherit; white-space:nowrap;
+  }
+  .printbtn:hover{border-color:var(--brand); color:var(--brand);}
+
+  .layout{
+    max-width:1180px; margin:0 auto; padding:24px 20px 80px;
+    display:grid; grid-template-columns:250px minmax(0,1fr); gap:28px;
+    align-items:start;
+  }
+  nav.toc{position:sticky; top:74px; max-height:calc(100vh - 96px); overflow-y:auto; padding-bottom:20px;}
+  nav.toc .toc-label{
+    display:flex; align-items:center; gap:6px;
+    font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.06em;
+    color:var(--muted); margin:0 0 8px 4px;
+  }
+  nav.toc ol{list-style:none; margin:0; padding:0; font-size:13.8px;}
+  nav.toc li{margin:1px 0;}
+  nav.toc a{
+    display:block; padding:7px 10px; border-radius:8px; color:var(--muted);
+    text-decoration:none; line-height:1.35;
+  }
+  nav.toc a:hover{background:var(--brand-light); color:var(--brand-dark);}
+  nav.toc a.current{background:var(--brand-light); color:var(--brand-dark); font-weight:600;}
+  nav.toc .num{color:#a7b3b8; margin-right:5px; font-variant-numeric:tabular-nums;}
+  nav.toc .toc-status{margin:10px 6px 0; font-size:12px; color:var(--muted);}
+  nav.toc .toc-group-title{
+    margin:16px 4px 4px; font-size:11px; font-weight:700; text-transform:uppercase;
+    letter-spacing:.05em; color:#b8c2c6;
+  }
+  nav.toc .toc-group-title:first-child{margin-top:0;}
+
+  article{min-width:0;}
+  .cover{
+    background:var(--card); border:1px solid var(--line); border-radius:18px;
+    padding:26px 28px; margin-bottom:30px; box-shadow:0 1px 2px rgba(16,24,28,.04);
+  }
+  .cover .eyebrow{
+    font-size:11.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase;
+    color:var(--brand);
+  }
+  .cover h1{margin:6px 0 6px; font-size:26px; font-weight:700; letter-spacing:-.01em;}
+  .cover .audience{margin:0; color:var(--muted); font-size:14.5px;}
+  .cover .version{margin:5px 0 0; color:#93a2a8; font-size:12.5px;}
+
+  section.guide-section{
+    background:var(--card); border:1px solid var(--line); border-radius:var(--radius);
+    padding:22px 26px 26px; margin-bottom:18px; scroll-margin-top:74px;
+    box-shadow:0 1px 2px rgba(16,24,28,.03);
+  }
+  section.guide-section.is-hidden{display:none;}
+  section.guide-section h2{
+    display:flex; align-items:baseline; gap:8px; margin:0 0 4px;
+    font-size:19px; font-weight:700; letter-spacing:-.005em;
+    border-bottom:1px solid var(--line); padding-bottom:12px;
+  }
+  section.guide-section h2 .num{color:var(--brand); font-variant-numeric:tabular-nums; font-size:16px;}
+  section.guide-section .summary{
+    margin:12px 0 16px; color:var(--muted); font-size:14px;
+  }
+  .block{margin:14px 0;}
+  .block:first-of-type{margin-top:0;}
+  .block p{margin:0; font-size:14.8px; line-height:1.68; color:#34424a;}
+  .block h4{margin:0 0 8px; font-size:13.5px; font-weight:700; color:var(--ink);}
+  .steps{list-style:none; margin:0; padding:0; counter-reset:step;}
+  .steps li{
+    display:flex; gap:11px; margin:0 0 10px; font-size:14.8px; line-height:1.62; color:#34424a;
+  }
+  .steps li .n{
+    flex:0 0 auto; width:24px; height:24px; border-radius:50%;
+    background:var(--brand); color:#fff; font-size:12px; font-weight:700;
+    display:flex; align-items:center; justify-content:center; margin-top:1px;
+  }
+  ul.plain{margin:0; padding-left:20px; font-size:14.8px; line-height:1.62; color:#34424a;}
+  ul.plain li{margin:0 0 6px;}
+  .note{
+    border-radius:12px; padding:12px 15px; font-size:14px; line-height:1.6;
+  }
+  .note .note-title{display:flex; align-items:center; gap:7px; font-weight:700; margin:0 0 4px;}
+  .note.tip{background:var(--tip-bg); border:1px solid var(--tip-line); color:var(--tip-ink);}
+  .note.warn{background:var(--warn-bg); border:1px solid var(--warn-line); color:var(--warn-ink);}
+  .note.info{background:var(--info-bg); border:1px solid var(--info-line); color:var(--info-ink);}
+  table.guide-table{width:100%; border-collapse:collapse; font-size:13.6px;}
+  table.guide-table th{
+    background:var(--bg); text-align:left; font-size:11.5px; text-transform:uppercase;
+    letter-spacing:.03em; color:var(--muted); padding:8px 10px; border-bottom:2px solid var(--line);
+  }
+  table.guide-table td{padding:9px 10px; border-bottom:1px solid var(--line); vertical-align:top; color:#34424a;}
+  table.guide-table td:first-child{font-weight:600; color:var(--ink); white-space:nowrap;}
+  .tablewrap{overflow-x:auto; border:1px solid var(--line); border-radius:10px;}
+  .btnlabel{
+    display:inline-block; background:var(--bg); border:1px solid var(--line);
+    border-radius:6px; padding:1px 7px; font-size:.92em; font-weight:600; color:var(--ink);
+  }
+  kbd{background:var(--bg); border:1px solid var(--line); border-radius:5px; padding:1px 6px; font-size:.9em;}
+
+  .empty-state{padding:40px 10px; text-align:center; color:var(--muted);}
+
+  @media (max-width: 900px){
+    .layout{grid-template-columns:1fr; padding-top:16px;}
+    nav.toc{position:static; max-height:none; border-bottom:1px solid var(--line); padding-bottom:14px; margin-bottom:6px;}
+  }
+  @media print{
+    .topbar, nav.toc{display:none !important;}
+    body{background:#fff;}
+    .layout{grid-template-columns:1fr; max-width:100%; padding:0;}
+    section.guide-section.is-hidden{display:block !important;}
+    section.guide-section{box-shadow:none; border:none; border-bottom:1px solid #ddd; border-radius:0; page-break-inside:avoid;}
+    .cover{border:none; box-shadow:none; padding:0 0 16px;}
+  }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brandmark"><i class='bx bxs-hot'></i> RRT-HCDC</div>
+  <div class="roletabs" id="roletabs" role="tablist" aria-label="Chọn hướng dẫn theo vai trò"></div>
+  <div class="searchwrap">
+    <i class='bx bx-search'></i>
+    <input id="guide-search" type="search" placeholder="Tìm trong hướng dẫn..." aria-label="Tìm trong hướng dẫn">
+  </div>
+  <button class="printbtn" id="btn-print"><i class='bx bx-printer'></i> In / lưu PDF</button>
+</header>
+
+<div class="layout">
+  <nav class="toc" aria-label="Mục lục">
+    <p class="toc-label"><i class='bx bx-list-ul'></i> Mục lục</p>
+    <ol id="toc-list"></ol>
+    <p class="toc-status" id="toc-status" role="status"></p>
+  </nav>
+  <article>
+    <div class="cover">
+      <p class="eyebrow">RRT-HCDC · Hướng dẫn sử dụng</p>
+      <h1 id="doc-title">Hướng dẫn sử dụng</h1>
+      <p class="audience" id="doc-audience"></p>
+      <p class="version" id="doc-version"></p>
+    </div>
+    <div id="sections"></div>
+    <div class="empty-state" id="empty-state" style="display:none;">Không có mục nào khớp với từ khóa tìm kiếm.</div>
+  </article>
+</div>
+
+<script src="huong-dan-data.js"></script>
+<script src="huong-dan-engine.js"></script>
+</body>
+</html>
