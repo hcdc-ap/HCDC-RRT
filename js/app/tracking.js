@@ -333,7 +333,12 @@ document.addEventListener('DOMContentLoaded', function () {
           btnReport.style.display = 'none';
         }
       } else {
-        btnReport.style.display = 'inline-block';
+        // Lập báo cáo tình hình: HCDC, tuyến cơ sở của phường/xã sự kiện,
+        // hoặc Đội trưởng (Leader) — khớp RLS bảng incident_reports
+        const isLeader =
+          String(window.userSession?.position || '').toLowerCase() === 'leader';
+        btnReport.style.display =
+          window.canManageIncident?.(inc) || isLeader ? 'inline-block' : 'none';
       }
     }
 

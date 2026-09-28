@@ -96,3 +96,16 @@ npm run test:rls     # cần Postgres cục bộ (PGHOST/PGUSER/PGPASSWORD); CI 
    trả policy về như cũ.
 
 Khóa một tài khoản: `UPDATE profiles SET registration_status = 'rejected' WHERE email = '...';`
+
+### Bổ sung sau khi áp (29/09/2026)
+
+Áp theo thứ tự trong SQL Editor (mỗi file một transaction, chạy lại được):
+
+1. `20260929010000_rrt_rls_fix_self_profile.sql` — **vá bảo mật**: email người
+   dùng lấy từ `auth.users` (trước đó đổi email hồ sơ là đọc được thông báo người
+   khác); tài khoản đã duyệt không tự đổi nơi công tác (tuyến cơ sở không tự
+   chuyển sang phường khác).
+2. `20260929020000_rrt_leader_reports.sql` — Đội trưởng (Leader) đang tham gia
+   sự kiện được lập báo cáo tình hình.
+
+File rollback hoàn tác cả 3 migration.

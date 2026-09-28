@@ -315,4 +315,22 @@ SELECT rrt_test.allowed('ward A: sửa hồ sơ nhân sự (kèm email khác)',
 SELECT rrt_test.eq('ward A: không đổi được email nhân sự (tránh mượn email người ngoài phường)',
   (SELECT count(*) FROM public.profiles WHERE id = '00000000-0000-0000-0000-000000000002' AND email = 's2@t.vn'), 1);
 
+-- ============================================================================
+\echo '--- Đội trưởng (Leader) lập báo cáo tình hình ---'
+RESET ROLE;
+UPDATE public.profiles SET position = 'Leader' WHERE id = '00000000-0000-0000-0000-0000000000c1';
+SET ROLE authenticated;
+SELECT rrt_test.login('00000000-0000-0000-0000-0000000000c1');
+SELECT rrt_test.allowed('Leader h1: lập báo cáo sự kiện A mình tham gia',
+  $$INSERT INTO public.incident_reports (incident_id, report_type, cases_new) VALUES ('10000000-0000-0000-0000-00000000000a', 'Tiến độ', 2) RETURNING id$$);
+SELECT rrt_test.denied('Leader h1: không lập báo cáo sự kiện B không tham gia',
+  $$INSERT INTO public.incident_reports (incident_id, report_type) VALUES ('10000000-0000-0000-0000-00000000000b', 'x')$$);
+SELECT rrt_test.denied('Leader h1: không sửa báo cáo',
+  $$UPDATE public.incident_reports SET cases_new = 99 WHERE incident_id = '10000000-0000-0000-0000-00000000000a'$$);
+SELECT rrt_test.denied('Leader h1: không sửa phương án (IAP)',
+  $$UPDATE public.incident_plans SET summary = 'x' WHERE incident_id = '10000000-0000-0000-0000-00000000000a'$$);
+SELECT rrt_test.login('00000000-0000-0000-0000-000000000001');
+SELECT rrt_test.denied('s1 (không phải Leader): không lập báo cáo',
+  $$INSERT INTO public.incident_reports (incident_id, report_type) VALUES ('10000000-0000-0000-0000-00000000000a', 'x')$$);
+
 RESET ROLE;

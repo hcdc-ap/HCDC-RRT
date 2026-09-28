@@ -80,6 +80,19 @@ let objectiveCounter = 0; // Bộ đếm để tạo ID tạm cho các mục ti�
 // 1. MỞ MODAL & LOAD DỮ LIỆU IAP (LUÔN CẬP NHẬT VERSION MỚI NHẤT)
 // ========================================================================
 
+// Quyền sửa phương án/hồ sơ sự kiện — khớp RLS rrt_can_manage_incident
+// (supabase/migrations/20260929000000_rrt_rls_roles.sql): Quản trị HCDC, hoặc
+// tuyến cơ sở của đúng phường/xã sự kiện.
+window.canManageIncident = function (inc) {
+  const me = window.userSession || {};
+  const role = String(me.role || '').toLowerCase();
+  if (role === 'admin' || role === 'super_admin') return true;
+  if (role !== 'ward_admin') return false;
+  // Một số danh sách không tải cột ma_xa → để database quyết định khi lưu
+  if (!inc || !('ma_xa' in inc)) return true;
+  return !!inc.ma_xa && String(inc.ma_xa) === String(me.workplace_ma_xa || '');
+};
+
 window.openIAPModal = async function (incidentId) {
   if (!incidentId) {
     if (typeof showToast === 'function')
@@ -238,6 +251,11 @@ window.openIAPModal = async function (incidentId) {
       .removeClass('bg-warning bg-success')
       .addClass(incData.status === 'closed' ? 'bg-success' : 'bg-warning');
     $('#modal-incident-plan').data('id', incidentId);
+
+    // Nhân viên / Đội trưởng: chỉ xem phương án
+    const canEdit = window.canManageIncident(incData);
+    $('#modal-incident-plan').data('readonly', !canEdit);
+    $('#btn-save-iap').toggle(canEdit);
 
     // Mở modal an toàn
     const modalEl = document.getElementById('modal-incident-plan');
@@ -602,6 +620,8 @@ window.submitIAP = async function () {
   const incidentId = $('#modal-incident-plan').data('id');
   if (!incidentId)
     return showToast('Lỗi: Không xác định được sự kiện.', 'error');
+  if ($('#modal-incident-plan').data('readonly'))
+    return showToast('Chỉ HCDC và tuyến cơ sở được sửa phương án.', 'warning');
 
   showLoadingSpinner();
 
