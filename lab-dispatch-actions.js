@@ -170,6 +170,20 @@
 
   // Gửi notification cho toàn bộ admin (dùng bảng notifications sẵn có)
   async function _notifyAdmins(message, incidentId) {
+    // Ưu tiên hàm phía server: tuyến cơ sở / Đội trưởng không đọc được danh
+    // sách Quản trị HCDC (migration 20260929030000_rrt_dispatch_suggest.sql)
+    const msg = '[Điều phối Phòng Xét nghiệm] ' + message;
+    const { error: rpcErr } = await window.supabaseClient.rpc('rrt_notify_admins', {
+      p_message: msg,
+      p_incident_id: incidentId || null,
+    });
+    if (!rpcErr) return;
+    const rpcMissing =
+      rpcErr.code === 'PGRST202' || /could not find the function/i.test(rpcErr.message || '');
+    if (!rpcMissing) {
+      console.warn('[notifyAdmins] không gửi được thông báo:', rpcErr.message);
+      return;
+    }
     try {
       const { data: admins } = await window.supabaseClient
         .from('profiles')

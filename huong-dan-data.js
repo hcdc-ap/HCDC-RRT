@@ -67,7 +67,7 @@ function flowDiagram(opts) {
 }
 
 window.RRT_GUIDE = {
-  version: 'Cập nhật ngày 22/09/2026',
+  version: 'Cập nhật ngày 29/09/2026',
   title: 'Hướng dẫn sử dụng hệ thống RRT-HCDC',
   // Khóa vai trò dùng nội bộ cho tab/URL — KHÔNG dùng đúng tên role trong CSDL (admin/ward_admin/user)
   // để tránh lộ giá trị kỹ thuật ra tài liệu công khai.
@@ -112,20 +112,32 @@ window.RRT_GUIDE = {
           items: [
             'Mở trang đăng nhập, nhập **Email đăng nhập** và **Mật khẩu**, bấm [[Đăng nhập]].',
             'Chưa có tài khoản? Bấm [[Đăng ký]] ở cuối form, điền Tên người dùng, Đơn vị công tác, Email, Số điện thoại, Mật khẩu, đồng ý điều khoản rồi bấm [[Đăng ký]].',
-            'Sau khi đăng ký, hệ thống tạo tài khoản với vai trò **Nhân viên RRT** và trạng thái hồ sơ **Chờ duyệt**. Vào ngay trang **Biểu mẫu RRT**, bấm [[Biểu mẫu RRT]] để điền đầy đủ hồ sơ năng lực (kỹ năng, học vấn, ngoại ngữ…) rồi nộp.',
+            'Sau khi đăng ký, hệ thống tạo tài khoản với vai trò **Nhân viên RRT** ở trạng thái **Chờ duyệt**. Đăng nhập, vào trang **Biểu mẫu RRT**, bấm [[Biểu mẫu RRT]] để điền đầy đủ hồ sơ năng lực (kỹ năng, học vấn, ngoại ngữ…) rồi nộp.',
+            'Ở mục **6. Đơn vị công tác**, cán bộ tuyến cơ sở chọn **Trạm Y tế Phường/Xã/ Đặc khu** hoặc **UBND Phường/Xã/ Đặc khu**, rồi chọn đúng **Phường/Xã/Đặc khu nơi bạn đang công tác**. Nhờ đó Quản trị tuyến cơ sở của phường/xã bạn mới thấy và duyệt được hồ sơ.',
+            'Chờ Quản trị tuyến cơ sở (hoặc Quản trị RRT HCDC) duyệt. Khi được duyệt, tài khoản mới dùng được đầy đủ chức năng theo vai trò.',
           ],
         },
         {
+          t: 'note', kind: 'warn', title: 'Tài khoản đang chờ duyệt',
+          text: 'Khi chưa được duyệt, đăng nhập sẽ thấy thông báo **"Tài khoản đang chờ duyệt"** và chỉ xem/sửa được **hồ sơ của chính mình**; các trang khác trống — đây là bình thường, không phải lỗi. Nếu chờ lâu, kiểm tra lại đã chọn đúng **Đơn vị công tác** và **Phường/Xã** chưa, rồi báo Quản trị tuyến cơ sở.',
+        },
+        {
           t: 'note', kind: 'warn', title: 'Hồ sơ luôn cần được duyệt lại',
-          text: 'Mỗi lần nộp hoặc sửa hồ sơ, trạng thái phê duyệt tự động chuyển về **Chờ duyệt** — Quản trị RRT/Quản trị tuyến cơ sở cần duyệt lại thì hồ sơ mới có hiệu lực.',
+          text: 'Mỗi lần nộp hoặc sửa hồ sơ, trạng thái phê duyệt tự động chuyển về **Chờ duyệt** — Quản trị RRT/Quản trị tuyến cơ sở cần duyệt lại thì hồ sơ mới có hiệu lực. Trong lúc chờ duyệt lại, tài khoản **đã được duyệt trước đó vẫn dùng bình thường**.',
         },
         {
           t: 'steps',
           title: 'Quên mật khẩu',
           items: [
-            'Ở màn hình đăng nhập, chọn mục khôi phục tài khoản, nhập **Email** rồi bấm [[Gửi liên kết]].',
-            'Kiểm tra email nhận mã **OTP**. Nhập **Email**, **Mã OTP** (6 số), **Mật khẩu mới** và **Xác nhận mật khẩu** (đủ chữ hoa/thường/số/ký tự đặc biệt, 8–32 ký tự), bấm [[Xác nhận]].',
+            'Ở màn hình đăng nhập, bấm [[Quên mật khẩu?]], nhập **Email** đăng nhập rồi bấm [[Gửi liên kết]] — **chỉ bấm một lần**.',
+            'Mở hộp thư, tìm email khôi phục mật khẩu **mới nhất** (xem cả thư mục Spam/Quảng cáo) và bấm vào liên kết trong email.',
+            'Trình duyệt mở lại trang RRT với form **Đặt lại mật khẩu**. Nhập **Mật khẩu mới** và **Xác nhận mật khẩu** (8–32 ký tự, có chữ hoa, chữ thường, số và ký tự đặc biệt), bấm [[Xác nhận]].',
+            'Thấy thông báo **"Đổi mật khẩu thành công"** là xong — đăng nhập lại bằng mật khẩu mới.',
           ],
+        },
+        {
+          t: 'note', kind: 'warn', title: 'Liên kết khôi phục chỉ dùng được 1 lần',
+          text: 'Mỗi lần bấm [[Gửi liên kết]], liên kết trong các email trước sẽ **hết hiệu lực**; mỗi liên kết chỉ dùng được **một lần**. Nếu thấy báo **"Liên kết … đã hết hạn hoặc đã được sử dụng"**, hãy gửi lại và chỉ mở **email mới nhất**. Hệ thống giới hạn số email gửi mỗi giờ — nếu không nhận được email, đợi vài phút rồi thử lại, không bấm gửi liên tục.',
         },
       ],
     },
@@ -245,6 +257,10 @@ window.RRT_GUIDE = {
           t: 'note', kind: 'warn',
           text: 'Sau khi đổi mật khẩu thành công, hệ thống tự động đăng xuất sau vài giây — đăng nhập lại bằng mật khẩu mới.',
         },
+        {
+          t: 'note', kind: 'info', title: 'Những thông tin bạn không tự đổi được',
+          text: '**Email** và **Đơn vị công tác / Phường-Xã nơi công tác** gắn với quyền truy cập dữ liệu, nên sau khi tài khoản được duyệt bạn **không tự đổi được** (sửa trên form sẽ không được lưu). Khi chuyển công tác hoặc đổi email, liên hệ Quản trị RRT (HCDC).',
+        },
       ],
     },
   ],
@@ -279,6 +295,10 @@ window.RRT_GUIDE = {
                 'Ở cột **Phê duyệt** của hồ sơ cần xử lý, chọn trạng thái mới trong danh sách sổ xuống: **Chờ duyệt** / **Yêu cầu sửa** / **Đã duyệt**. Hệ thống lưu ngay khi chọn.',
                 'Bấm biểu tượng mắt ở cột **Hành động** để xem chi tiết hồ sơ; biểu tượng thùng rác để xóa hồ sơ (chỉ Quản trị RRT (HCDC) có nút xóa).',
               ],
+            },
+            {
+              t: 'note', kind: 'info', title: 'Duyệt hồ sơ lần đầu = mở tài khoản',
+              text: 'Với người vừa đăng ký, chọn **Đã duyệt** lần đầu cũng đồng thời **mở tài khoản** (trước đó họ chỉ xem được hồ sơ của mình). Chuyển công tác, đổi email, gán Đội trưởng: chỉ Quản trị RRT (HCDC) thực hiện.',
             },
             {
               t: 'note', kind: 'tip',
@@ -351,6 +371,7 @@ window.RRT_GUIDE = {
                 'Xem/viết **Nhật ký** hoạt động, gửi tin nhắn trao đổi trong nhóm sự kiện, đính kèm file.',
                 'Bấm [[Xét nghiệm]] để mở công cụ điều phối mẫu tới phòng xét nghiệm (xem mục riêng bên dưới).',
                 'Bấm [[Phương án (IAP)]] để lập/xem phương án ứng phó của sự kiện.',
+                'Bấm [[Lập báo cáo]] để gửi báo cáo tình hình (ca mới, nghi ngờ, tử vong…). Đội trưởng của sự kiện cũng lập được báo cáo.',
                 'Bấm [[Yêu cầu hỗ trợ SOS]] khi cần chi viện gấp: chọn loại hỗ trợ (Nhân lực/Vật tư/Phương tiện/Khác) rồi [[XÁC NHẬN]].',
                 'Theo dõi thẻ **📊 Thống kê Phản hồi** để biết đã có bao nhiêu người xác nhận / chưa phản hồi.',
                 'Dùng cụm nút thay quân khi sự kiện đang chạy: 🧑‍🤝‍🧑 **Người** (thay một người) hoặc 👩‍👩‍👦‍👦 **Đội** (thay nguyên đội).',
@@ -526,6 +547,10 @@ window.RRT_GUIDE = {
               ],
             },
             {
+              t: 'note', kind: 'info', title: 'Đề xuất từ tuyến cơ sở / Đội trưởng',
+              text: 'Quản trị tuyến cơ sở và Đội trưởng không tự chốt được — họ bấm [[Đề xuất lên điều phối]], bạn nhận thông báo **[Điều phối Phòng Xét nghiệm]** trong **Tin nhắn**, rồi mở công cụ điều phối của sự kiện đó để gửi yêu cầu và chốt như trên.',
+            },
+            {
               t: 'note', kind: 'tip',
               text: 'Bấm [[Lịch sử điều phối mẫu hôm nay]] trong hộp thoại (theo từng sự kiện) hoặc [[Lịch sử điều phối mẫu]] ở trang Phòng Xét nghiệm (toàn thành phố) để tra cứu và xuất Excel.',
             },
@@ -572,6 +597,10 @@ window.RRT_GUIDE = {
               t: 'note', kind: 'info',
               text: 'Khác với Quản trị RRT (HCDC), bạn **không có** lựa chọn "Yêu cầu sửa" và **không có** nút xóa hồ sơ — chỉ duyệt hoặc để chờ.',
             },
+            {
+              t: 'note', kind: 'warn', title: 'Duyệt người mới đăng ký',
+              text: 'Chọn **Đã duyệt** cho người mới đăng ký là **mở tài khoản** cho họ. Bạn chỉ thấy người đăng ký đã khai **Đơn vị công tác** là Trạm Y tế/UBND Phường-Xã và chọn đúng **phường/xã của bạn** — không thấy ai đó thì nhắc họ kiểm tra lại mục 6 trong Biểu mẫu RRT. Chỉ duyệt người bạn biết chắc là nhân sự của đơn vị.',
+            },
           ],
         },
         {
@@ -586,6 +615,10 @@ window.RRT_GUIDE = {
                 'Bấm [[Tạo yêu cầu Thay thế]] để thay người vắng mặt trong ca trực, làm theo từng bước của trình hướng dẫn.',
               ],
             },
+            {
+              t: 'note', kind: 'info',
+              text: 'Bạn chỉ phân công được nhân sự thuộc phường/xã mình, và chỉ sửa/xóa được ca trực **do chính bạn tạo**.',
+            },
           ],
         },
         {
@@ -593,7 +626,7 @@ window.RRT_GUIDE = {
           title: 'Kích hoạt khẩn cấp',
           summary: 'Triệu tập nhân sự thuộc đơn vị bạn khi có tình huống khẩn cấp.',
           blocks: [
-            { t: 'p', text: 'Danh sách nhân sự để chọn chỉ gồm người cùng xã/phường/đặc khu với bạn.' },
+            { t: 'p', text: 'Danh sách nhân sự để chọn chỉ gồm người cùng xã/phường/đặc khu với bạn. Dùng bộ lọc **Đội** / **Vị trí** để lọc nhanh. Chỉ HCDC mới điều động được người ngoài phường/xã của bạn — cần chi viện thì dùng [[Yêu cầu hỗ trợ SOS]] trong sự kiện.' },
             {
               t: 'steps',
               items: [
@@ -632,8 +665,9 @@ window.RRT_GUIDE = {
               items: [
                 'Viết Nhật ký, gửi tin nhắn nhóm sự kiện, đính kèm file.',
                 'Bấm [[Xét nghiệm]] để điều phối mẫu tới PXN (xem mục riêng bên dưới).',
-                'Bấm [[Phương án (IAP)]] và [[Đánh giá (AAR)]] để lập phương án và báo cáo sau hành động.',
-                'Dùng cụm nút 🧑‍🤝‍🧑 **Người** / 👩‍👩‍👦‍👦 **Đội** để thay quân khi sự kiện đang chạy.',
+                'Bấm [[Phương án (IAP)]] và [[Đánh giá (AAR)]] để lập phương án và báo cáo sau hành động; bấm [[Lập báo cáo]] để gửi báo cáo tình hình. Bạn chỉ **sửa** được các mục này với sự kiện **thuộc phường/xã mình**; sự kiện khác chỉ xem.',
+                'Dùng cụm nút 🧑‍🤝‍🧑 **Người** / 👩‍👩‍👦‍👦 **Đội** để thay quân khi sự kiện đang chạy (chỉ thay bằng nhân sự phường/xã mình).',
+                'Không xóa được sự kiện — chỉ Quản trị RRT (HCDC) xóa.',
                 'Bấm [[Yêu cầu hỗ trợ SOS]] khi cần chi viện gấp.',
               ],
             },
@@ -662,10 +696,9 @@ window.RRT_GUIDE = {
         {
           id: 'thu-vien',
           title: 'Thư viện',
-          summary: 'Tra cứu và đăng tải tài liệu dùng chung.',
+          summary: 'Tra cứu tài liệu dùng chung.',
           blocks: [
-            { t: 'p', text: 'Lọc theo danh mục để tìm tài liệu.' },
-            { t: 'steps', items: ['Bấm [[Đăng tải]] để thêm tài liệu mới (Tải lên File hoặc Liên kết URL), điền thông tin rồi [[XÁC NHẬN]].'] },
+            { t: 'p', text: 'Lọc theo danh mục để tìm và tải tài liệu. Việc đăng tải tài liệu mới do Quản trị RRT (HCDC) thực hiện — cần bổ sung tài liệu thì gửi cho HCDC.' },
           ],
         },
         {
@@ -680,12 +713,21 @@ window.RRT_GUIDE = {
         {
           id: 'dieu-phoi-mau',
           title: 'Điều phối mẫu xét nghiệm',
-          summary: 'Tìm phòng xét nghiệm phù hợp và gửi yêu cầu nhận mẫu cho sự kiện của đơn vị bạn.',
+          summary: 'Tìm phòng xét nghiệm phù hợp cho sự kiện của đơn vị bạn và đề xuất để HCDC chốt điều phối.',
           blocks: [
-            { t: 'p', text: 'Thao tác giống hệt Quản trị RRT (HCDC): mở từ nút [[Xét nghiệm]] trong một sự kiện hoặc [[Tìm Phòng Xét nghiệm]] trên Bản đồ, chọn tiêu chí, xem xếp hạng PXN, gửi yêu cầu và chốt lệnh khi PXN phản hồi. Bấm [[Gửi]] là hệ thống tự liên hệ đầu mối PXN qua **Email** và **Telegram** — bạn không cần tự gọi hay nhắn riêng.' },
+            { t: 'p', text: 'Mở từ nút [[Xét nghiệm]] trong một sự kiện hoặc [[Tìm Phòng Xét nghiệm]] trên Bản đồ. Nhập tiêu chí và xem xếp hạng PXN **giống hệt** Quản trị RRT (HCDC) — xem Bước 1, Bước 2 ở mục "Điều phối mẫu xét nghiệm" trong tab Quản trị RRT (HCDC).' },
             {
-              t: 'note', kind: 'tip',
-              text: 'Xem đầy đủ các bước và sơ đồ kênh liên hệ PXN tại mục "Điều phối mẫu xét nghiệm" trong tab Quản trị RRT (HCDC) — quy trình giống hệt, chỉ khác là bạn thực hiện cho sự kiện thuộc đơn vị mình.',
+              t: 'steps',
+              title: 'Đề xuất PXN cho HCDC',
+              items: [
+                'Trên thẻ PXN bạn chọn, bấm [[Đề xuất lên điều phối]], ghi chú thêm nếu cần rồi xác nhận.',
+                'Thẻ chuyển sang nhãn **Đã đề xuất**; Quản trị RRT (HCDC) nhận thông báo **[Điều phối Phòng Xét nghiệm]** ngay.',
+                'HCDC xem xét, gửi yêu cầu tới PXN và chốt lệnh điều phối. Khi chốt xong, thành viên sự kiện nhận thông báo kết quả.',
+              ],
+            },
+            {
+              t: 'note', kind: 'info',
+              text: 'Việc gửi yêu cầu tới PXN và chốt điều phối do HCDC thực hiện; bạn và Đội trưởng chỉ **đề xuất**. Mẫu cần gửi gấp thì đề xuất xong gọi thêm cho HCDC.',
             },
           ],
         },
@@ -732,6 +774,22 @@ window.RRT_GUIDE = {
           ],
         },
         {
+          id: 'lich-truc',
+          title: 'Lịch trực — nhận/báo bận ca trực',
+          summary: 'Phản hồi ca trực được phân công ngay trên Dashboard.',
+          blocks: [
+            { t: 'p', text: 'Khi được phân công ca trực, trên **Dashboard** mục thông báo hiện dòng **Lịch trực [tên đội]** kèm ngày và nhãn **Chờ xác nhận**.' },
+            {
+              t: 'steps',
+              items: [
+                'Bấm [[Phản hồi ngay]] trên dòng lịch trực đó.',
+                'Chọn nhận ca hoặc báo bận trong hộp thoại **Phản hồi Lịch trực định kỳ**. Nhận xong, dòng chuyển sang **Đã nhận**.',
+              ],
+            },
+            { t: 'p', text: 'Bạn xem được lịch trực của **đội mình** và danh sách người trực cùng ca, nhưng chỉ trả lời được ca **của chính mình**.' },
+          ],
+        },
+        {
           id: 'theo-doi-su-kien',
           title: 'Theo dõi sự kiện — xác nhận tham gia',
           summary: 'Nơi bạn xác nhận tham gia hoặc báo không thể tham gia khi được điều động.',
@@ -750,7 +808,11 @@ window.RRT_GUIDE = {
               t: 'note', kind: 'tip', title: 'Không mở được ứng dụng? Phản hồi qua Telegram hoặc Email cũng được',
               text: 'Kích hoạt khẩn cấp luôn gửi thêm qua Telegram (nếu bạn đã liên kết — xem mục "Kênh nhận thông báo và xác nhận" ở đầu tài liệu) và Email. Bấm nút xác nhận ngay trong tin nhắn Telegram hoặc trong email — không cần đăng nhập ứng dụng, hệ thống vẫn ghi nhận như bấm trong ứng dụng.',
             },
-            { t: 'p', text: 'Trong lúc sự kiện diễn ra, bạn có thể xem Nhật ký, gửi tin nhắn trao đổi trong nhóm sự kiện và đính kèm file như các thành viên khác.' },
+            { t: 'p', text: 'Trong lúc sự kiện diễn ra, bạn có thể xem Nhật ký, gửi tin nhắn trao đổi trong nhóm sự kiện và đính kèm file như các thành viên khác. Nút [[Phương án (IAP)]] mở ở chế độ **chỉ xem**.' },
+            {
+              t: 'note', kind: 'info', title: 'Đội trưởng',
+              text: 'Nếu bạn là **Đội trưởng** và đang tham gia sự kiện, bạn thấy thêm nút [[Lập báo cáo]] để gửi báo cáo tình hình (ca mới, nghi ngờ, tử vong…). Báo cáo đã gửi không sửa/xóa được — cần điều chỉnh thì gửi báo cáo mới. Trong công cụ [[Xét nghiệm]] của sự kiện, Đội trưởng bấm [[Đề xuất lên điều phối]] để đề xuất phòng xét nghiệm cho HCDC chốt.',
+            },
           ],
         },
         {
@@ -766,7 +828,7 @@ window.RRT_GUIDE = {
           title: 'Thư viện',
           summary: 'Tra cứu và tải tài liệu dùng chung: SOP, biểu mẫu, hướng dẫn chuyên môn.',
           blocks: [
-            { t: 'p', text: 'Lọc theo danh mục và tải tài liệu về dùng. Bạn không có nút [[Đăng tải]] — chỉ Quản trị RRT/Quản trị tuyến cơ sở mới đăng tài liệu mới.' },
+            { t: 'p', text: 'Lọc theo danh mục và tải tài liệu về dùng. Bạn không có nút [[Đăng tải]] — chỉ Quản trị RRT (HCDC) đăng tài liệu mới.' },
           ],
         },
         {

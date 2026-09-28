@@ -1,7 +1,7 @@
 -- HOÀN TÁC migration 20260929000000_rrt_rls_roles.sql: trả policy RRT về như
 -- ảnh chụp schema 20260928000000_remote_schema.sql. CHỈ dùng khi migration mới
 -- làm hỏng chức năng — trạng thái cũ có lỗ hổng (xem đầu file migration).
--- Hoàn tác luôn các migration bổ sung 20260929010000_*, 20260929020000_*.
+-- Hoàn tác luôn các migration bổ sung 20260929010000_*, 20260929020000_*, 20260929030000_*.
 -- Không hoàn tác cột registration_status đã được điền 'approved' (vô hại).
 BEGIN;
 
@@ -203,6 +203,8 @@ DROP FUNCTION IF EXISTS public.rrt_notifications_guard();
 DROP FUNCTION IF EXISTS public.rrt_can_manage_schedule(uuid);
 DROP FUNCTION IF EXISTS public.rrt_email_in_managed_incident(text, uuid);
 DROP FUNCTION IF EXISTS public.rrt_is_me(text);
+DROP POLICY IF EXISTS rrt_insert_suggestion ON public.lab_dispatch_log;
+DROP FUNCTION IF EXISTS public.rrt_notify_admins(text, uuid);
 DROP FUNCTION IF EXISTS public.rrt_is_leader();
 DROP FUNCTION IF EXISTS public.rrt_can_view_schedule(uuid);
 DROP FUNCTION IF EXISTS public.rrt_can_view_schedule_row(uuid, text, uuid);
