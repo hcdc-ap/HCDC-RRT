@@ -636,9 +636,12 @@ window.initMiniMap = async function () {
     attribution: '&copy; OpenStreetMap',
   }).addTo(miniMap);
 
-  miniMarker = L.marker([defaultLat, defaultLng], { draggable: true }).addTo(
-    miniMap
-  );
+  // autoPan: kéo ghim tới mép thì bản đồ tự dịch theo, ghim không bị kéo mất
+  // ra ngoài khung bản đồ
+  miniMarker = L.marker([defaultLat, defaultLng], {
+    draggable: true,
+    autoPan: true,
+  }).addTo(miniMap);
 
   // Điền mặc định tọa độ tâm ban đầu
   document.getElementById('incidentLat').value = defaultLat;
@@ -661,6 +664,10 @@ window.initMiniMap = async function () {
 
   // 2. Xử lý sự kiện kéo ghim
   miniMarker.on('dragend', function (e) {
+    // Lỡ thả ghim ra ngoài khung nhìn: đưa bản đồ về chỗ ghim
+    if (!miniMap.getBounds().contains(miniMarker.getLatLng())) {
+      miniMap.panTo(miniMarker.getLatLng());
+    }
     const position = miniMarker.getLatLng();
 
     // Điền tọa độ thực
