@@ -365,4 +365,31 @@ SELECT rrt_test.denied('s1 (không phải Leader): không đề xuất PXN',
 SELECT rrt_test.denied('s1: không gọi được rrt_notify_admins',
   $$SELECT public.rrt_notify_admins('spam', NULL)$$);
 
+-- ============================================================================
+\echo '--- Mã action_token gửi PXN bị ẩn ---'
+RESET ROLE;
+INSERT INTO public.lab_dispatch_log (id, lab_id, incident_id, status, action_token)
+  VALUES ('50000000-0000-0000-0000-000000000001', gen_random_uuid(), '10000000-0000-0000-0000-00000000000b', 'inquiry_sent', 'TOKEN-BI-MAT');
+SET ROLE authenticated;
+SELECT rrt_test.login('00000000-0000-0000-0000-000000000001');
+SELECT rrt_test.denied('s1: không đọc được action_token',
+  $$SELECT action_token FROM public.lab_dispatch_log$$);
+SELECT rrt_test.denied('s1: select * cũng bị chặn (lộ token)',
+  $$SELECT * FROM public.lab_dispatch_log$$);
+SELECT rrt_test.allowed('s1: vẫn đọc được các cột khác (trạng thái điều phối)',
+  $$SELECT id, lab_id, status FROM public.lab_dispatch_log WHERE id = '50000000-0000-0000-0000-000000000001'$$);
+SELECT rrt_test.denied('s1: không dò token bằng điều kiện WHERE',
+  $$SELECT id FROM public.lab_dispatch_log WHERE action_token = 'TOKEN-BI-MAT'$$);
+SELECT rrt_test.login('00000000-0000-0000-0000-00000000000a');
+SELECT rrt_test.denied('admin: cũng không đọc token qua API (chỉ Edge Function)',
+  $$SELECT action_token FROM public.lab_dispatch_log$$);
+SELECT rrt_test.allowed('admin: vẫn gửi yêu cầu PXN kèm token (ghi được)',
+  $$INSERT INTO public.lab_dispatch_log (lab_id, status, action_token, dispatched_by) VALUES (gen_random_uuid(), 'inquiry_sent', 'TOKEN-MOI', auth.uid()) RETURNING id$$);
+SELECT rrt_test.allowed('admin: cập nhật trạng thái lệnh điều phối',
+  $$UPDATE public.lab_dispatch_log SET status = 'cancelled' WHERE id = '50000000-0000-0000-0000-000000000001'$$);
+SELECT rrt_test.login('00000000-0000-0000-0000-0000000000a1');
+SELECT rrt_test.denied('ward A: đề xuất không được tự gắn token',
+  $$INSERT INTO public.lab_dispatch_log (lab_id, incident_id, status, dispatched_by, action_token)
+    VALUES (gen_random_uuid(), '10000000-0000-0000-0000-00000000000a', 'suggested', auth.uid(), 'TOKEN-TU-CHE')$$);
+
 RESET ROLE;

@@ -109,3 +109,12 @@ Khóa một tài khoản: `UPDATE profiles SET registration_status = 'rejected' 
    sự kiện được lập báo cáo tình hình.
 
 File rollback hoàn tác cả 3 migration.
+
+### Ẩn mã gửi phòng xét nghiệm (`20260929040000_rrt_hide_dispatch_token.sql`)
+
+Trước đây mọi tài khoản đăng nhập đọc được `lab_dispatch_log.action_token` — mã
+trong link gửi PXN — nên có thể phản hồi "nhận/không nhận mẫu" thay PXN. Migration
+bỏ quyền đọc riêng cột này (Edge Function dùng service_role, không ảnh hưởng).
+Truy vấn `select('*')` trên bảng này sẽ lỗi quyền — phải liệt kê cột
+(`tests/structure.test.js` kiểm tra tự động cho app RRT). **App LIMS** nếu đọc
+`lab_dispatch_log` bằng `select('*')` cần đổi tương tự trước khi áp.
