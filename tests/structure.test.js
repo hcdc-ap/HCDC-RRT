@@ -77,3 +77,24 @@ test('thư viện CDN: cố định phiên bản; file từ jsdelivr/unpkg/code.
     }
   }
 });
+
+test("lab_dispatch_log: không select('*') / .select() — cột action_token bị ẩn", () => {
+  // migration 20260929040000_rrt_hide_dispatch_token.sql: tài khoản đăng nhập
+  // không có quyền đọc action_token, nên select('*') (và .select() rỗng sau
+  // insert) sẽ bị lỗi quyền. Phải liệt kê cột.
+  const files = [
+    ...fs.readdirSync(path.join(ROOT, 'js/app')).map((f) => 'js/app/' + f),
+    ...fs.readdirSync(ROOT).filter((f) => f.endsWith('.js')),
+  ].filter((f) => f.endsWith('.js'));
+  for (const f of files) {
+    const src = fs.readFileSync(path.join(ROOT, f), 'utf8');
+    for (const m of src.matchAll(/from\(\s*['"]lab_dispatch_log['"]\s*\)/g)) {
+      // xét chuỗi lệnh đến dấu ';' kế tiếp
+      const stmt = src.slice(m.index, src.indexOf(';', m.index));
+      assert.ok(
+        !/\.select\(\s*\)/.test(stmt) && !/\.select\(\s*['"`]\s*\*/.test(stmt),
+        `${f}: truy vấn lab_dispatch_log dùng select('*') hoặc .select() rỗng`
+      );
+    }
+  }
+});

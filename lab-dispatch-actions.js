@@ -40,6 +40,13 @@
 
   let _role = { isAdmin: false, isLeader: false, userId: null, checked: false };
 
+  // Mọi cột của lab_dispatch_log TRỪ action_token (bị ẩn khỏi tài khoản đăng
+  // nhập — migration 20260929040000): dùng thay cho select('*')
+  const DISPATCH_COLS =
+    'id, lab_id, incident_id, test_type_id, sample_count, dispatch_date, status, ' +
+    'dispatched_by, note, created_at, requested_sample_count, accepted_sample_count, ' +
+    'pathogens, accepted_pathogens, accepted_test_types, token_expires_at, requested_test_types';
+
   // --------------------------------------------------------------------------
   // XÁC ĐỊNH QUYỀN NGƯỜI DÙNG (cache trong phiên)
   // --------------------------------------------------------------------------
@@ -143,7 +150,7 @@
             note: note || null,
           },
         ])
-        .select()
+        .select('id')
         .single();
       if (error) throw error;
 
@@ -515,7 +522,7 @@
       let q = window.supabaseClient
         .from('lab_dispatch_log')
         .select(
-          '*, laboratories(name), test_types(name), profiles:dispatched_by(full_name)'
+          DISPATCH_COLS + ', laboratories(name), test_types(name), profiles:dispatched_by(full_name)'
         )
         .eq('status', 'suggested')
         .order('created_at', { ascending: false });
@@ -588,7 +595,7 @@
       let q = window.supabaseClient
         .from('lab_dispatch_log')
         .select(
-          '*, laboratories(name), test_types(name), incidents(event_name)'
+          DISPATCH_COLS + ', laboratories(name), test_types(name), incidents(event_name)'
         )
         .eq('dispatch_date', st.date)
         .order('created_at', { ascending: false });
@@ -1724,7 +1731,9 @@
     try {
       const { data, error } = await window.supabaseClient
         .from('lab_dispatch_log')
-        .select('*')
+        // Liệt kê cột: action_token bị ẩn khỏi tài khoản đăng nhập
+        // (migration 20260929040000) nên select('*') sẽ lỗi quyền
+        .select('id, lab_id, status, requested_sample_count, accepted_sample_count, created_at')
         .eq('incident_id', S.incidentId)
         .order('created_at', { ascending: false });
       if (error || !data) return;
