@@ -18,6 +18,7 @@ trong `index.html`.
 | `training.js` | Khóa đào tạo, hồ sơ đào tạo, chọn đối tượng |
 | `logistics-library.js` | Vật tư và thư viện tài liệu |
 | `roster.js` | Lịch trực, wizard thay người, tạo ca |
+| `incident-response.js` | Thành viên xác nhận/từ chối tham gia sự kiện (RPC atomic, tự quay về cách cũ nếu DB chưa có RPC) |
 | `map.js` | Bản đồ RRT (choropleth, dân số, thành viên, sự cố) |
 | `dossier-chat.js` | Tin nhắn/file trong hồ sơ sự kiện, nhật ký, AAR |
 | `field-ops.js` | SOS, luân chuyển đội, báo cáo nhanh, modal báo cáo |
@@ -48,5 +49,10 @@ trong `index.html`.
   nếu dùng `rrtShared.X` mà không file nào đăng ký.
 - Hàm cục bộ trong closure **không** gọi được từ `onclick="..."` trong HTML;
   phải gán lên `window` (ví dụ `window.openImageModal` trong `dossier-chat.js`).
+- **Không ghi đè hàm từ file khác** (như `fix-patches.js` trước đây): các hàm
+  gán trong closure `DOMContentLoaded` chạy SAU mọi script, nên bản vá nạp ở
+  load-time bị ghi đè ngược lại mà không ai biết. Sửa thẳng vào hàm gốc.
+- Dữ liệu nhúng vào `onclick="f('${…}')"` dùng `jsAttr(…)`; object nhúng vào
+  `onclick='f(${…})'` dùng `jsonAttr(…)` (xem `utils/escape.js`).
 - File mới: thêm `<script src="js/app/<file>.js">` vào `index.html` (test cấu
   trúc sẽ báo nếu quên).

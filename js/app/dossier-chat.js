@@ -21,6 +21,30 @@ document.addEventListener('DOMContentLoaded', function () {
   };
 
   // 2. Hàm gửi tin nhắn hoặc báo cáo
+  // Mô tả 1 dòng deployment_history cho AAR. Giá trị action_type hợp lệ theo
+  // CHECK của DB: mobilize / deployed / active / replace_in (+ declined do app
+  // ghi khi thành viên từ chối). 'replaced' là giá trị cũ, giữ để đọc dữ liệu cũ.
+  function describeDeployment(d, action, userName) {
+    const other = d.replaced_profile?.full_name || d.replaced_by || '?';
+    switch (action) {
+      case 'deployed':
+      case 'mobilize':
+      case 'active':
+        return { text: `🟢 Điều động: ${userName}`, icon: '<span class="text-success">🟢</span>' };
+      case 'replace_in':
+      case 'replaced':
+        return { text: `🔄 Thay thế: ${userName} → ${other}`, icon: '<span class="text-primary">🔄</span>' };
+      case 'declined':
+        return { text: `🔴 Không tham gia: ${userName}`, icon: '<span class="text-danger">🔴</span>' };
+      case 'added':
+        return { text: `➕ Bổ sung: ${userName}`, icon: '<span class="text-info">➕</span>' };
+      case 'removed':
+        return { text: `➖ Rút quân: ${userName}`, icon: '<span class="text-danger">➖</span>' };
+      default:
+        return { text: `• ${userName}: ${action}`, icon: '•' };
+    }
+  }
+
   window.sendDossierMessage = async function (type) {
     const input = document.getElementById('inp-chat');
     if (!input) return;
@@ -369,7 +393,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 <a href="${
                   log.attachment_url
                 }" target="_blank" onclick="openImageModal('${
-                log.attachment_url
+                jsAttr(log.attachment_url)
               }'); return false;">
                   <img src="${log.attachment_url}" 
                        style="max-width: 250px; border-radius: 8px; cursor: zoom-in; display: block;"
@@ -662,29 +686,16 @@ document.addEventListener('DOMContentLoaded', function () {
         const action = d.action_type || 'deployed';
         const reason = d.reason ? ` - ${d.reason}` : '';
 
-        let actionText = '',
-          htmlIcon = '';
-        if (action === 'deployed') {
-          actionText = `🟢 Điều động: ${userName}`;
-          htmlIcon = '<span class="text-success">🟢</span>';
-        } else if (action === 'replaced') {
-          const replacer =
-            d.replaced_profile?.full_name || d.replaced_by || '?';
-          actionText = `🔄 Thay thế: ${userName} → ${replacer}`;
-          htmlIcon = '<span class="text-primary">🔄</span>';
-        } else if (action === 'added') {
-          actionText = `➕ Bổ sung: ${userName}`;
-          htmlIcon = '<span class="text-info">➕</span>';
-        } else if (action === 'removed') {
-          actionText = `➖ Rút quân: ${userName}`;
-          htmlIcon = '<span class="text-danger">➖</span>';
-        } else {
-          actionText = `• ${userName}: ${action}`;
-          htmlIcon = '•';
-        }
+        const { text: actionText, icon: htmlIcon } = describeDeployment(
+          d,
+          action,
+          userName
+        );
 
         textSummary += `${idx + 1}. [${time}] ${actionText}${reason}\n`;
-        htmlSummary += `<li>${htmlIcon} [${time}] <b>${actionText}</b> <i>${reason}</i></li>`;
+        htmlSummary += `<li>${htmlIcon} [${time}] <b>${window.escapeHtml(
+          actionText
+        )}</b> <i>${window.escapeHtml(reason)}</i></li>`;
       });
       htmlSummary += `</ul></div>`;
     }
@@ -1113,26 +1124,7 @@ document.addEventListener('DOMContentLoaded', function () {
           const action = d.action_type || 'deployed';
           const reason = d.reason ? ` - ${d.reason}` : '';
 
-          let actionText = '';
-          switch (action) {
-            case 'deployed':
-              actionText = `🟢 Điều động: ${userName}`;
-              break;
-            case 'replaced': {
-              const replacer =
-                d.replaced_profile?.full_name || d.replaced_by || '?';
-              actionText = `🔄 Thay thế: ${userName} → ${replacer}`;
-              break;
-            }
-            case 'added':
-              actionText = `➕ Bổ sung: ${userName}`;
-              break;
-            case 'removed':
-              actionText = `➖ Rút quân: ${userName}`;
-              break;
-            default:
-              actionText = `• ${userName}: ${action}`;
-          }
+          const actionText = describeDeployment(d, action, userName).text;
 
           aarSummary += `${idx + 1}. [${time}] ${actionText}${reason}\n`;
         });

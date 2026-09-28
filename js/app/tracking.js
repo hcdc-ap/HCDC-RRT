@@ -174,7 +174,7 @@ document.addEventListener('DOMContentLoaded', function () {
       container.insertAdjacentHTML(
         'beforeend',
         `
-          <div class="${cardClass}" onclick="openDossierView('${incString}')" style="cursor:pointer;">
+          <div class="${cardClass}" onclick="openDossierView('${jsAttr(incString)}')" style="cursor:pointer;">
               <span class="${badgeClass}">${statusText}</span>
               <h5 style="margin: 0 0 10px 0; font-weight: bold; color: #333; padding-right: 90px;">${rrtShared.escapeHtml(
                 eventName
@@ -607,7 +607,7 @@ document.addEventListener('DOMContentLoaded', function () {
                         </h5>
                         <small>Sự kiện này đang chờ Admin kích hoạt khẩn cấp.</small>
                     </div>
-                    <button class="btn btn-danger fw-bold" onclick="activateIncident('${inc.id}')">
+                    <button class="btn btn-danger fw-bold" onclick="activateIncident('${jsAttr(inc.id)}')">
                         <i class='bx bxs-bolt-circle'></i> KÍCH HOẠT KHẨN CẤP
                     </button>
                 </div>
@@ -776,22 +776,6 @@ document.addEventListener('DOMContentLoaded', function () {
     html += `</div>`;
     return html;
   }
-  // 3. Chuyển Tab trong Dossier
-  window.switchDossierTab = function (tabId, btn) {
-    // Ẩn tất cả tab content
-    document
-      .querySelectorAll('#tracking-view-dossier .tab-pane')
-      .forEach((el) => el.classList.remove('active'));
-    // Bỏ active tất cả nút
-    document
-      .querySelectorAll('#tracking-view-dossier .tab-btn')
-      .forEach((el) => el.classList.remove('active'));
-
-    // Hiện tab được chọn
-    document.getElementById(tabId).classList.add('active');
-    btn.classList.add('active');
-  };
-
   // 4. Gắn sự kiện tìm kiếm (Live Search)
   document
     .getElementById('tracking-search-input')
@@ -835,9 +819,8 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   };
 
-  // 3. Chuyển Tab trong giao diện Dossier (Nhật ký / AAR)
   // ==========================================
-  // 1. HÀM CHUYỂN TAB ĐÃ CẬP NHẬT ĐÚNG ID
+  // CHUYỂN TAB TRONG DOSSIER (Nhật ký / AAR)
   // ==========================================
   window.switchDossierTab = function (tabId, btnElement) {
     const dossierView = document.getElementById('tracking-view-dossier');
@@ -959,7 +942,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     ${
                       isRead
                         ? `<span class="badge bg-success"><i class='bx bxs-check-circle'></i> Đã đọc</span>`
-                        : `<button class="btn btn-sm btn-outline-primary" onclick="markAsRead('${item.id}', this)">
+                        : `<button class="btn btn-sm btn-outline-primary" onclick="markAsRead('${jsAttr(item.id)}', this)">
                              <i class='bx bxs-envelope'></i> Đánh dấu đã đọc
                            </button>`
                     }
@@ -1100,7 +1083,7 @@ document.addEventListener('DOMContentLoaded', function () {
           </div>
           <div style="font-size:.7em;color:gray;" class="mb-1">${dateStr}</div>
           <button class="btn btn-sm btn-outline-danger"
-                  onclick="window.markNotificationAsRead('${n.id}',this)">
+                  onclick="window.markNotificationAsRead('${jsAttr(n.id)}',this)">
             <i class='bx bxs-envelope'></i> Đánh dấu đã đọc
           </button>
         </div>`;

@@ -183,6 +183,9 @@ window.rrtShared = window.rrtShared || {};
         }
       );
 
+      // Mọi ghi dữ liệu vào các bảng đang cache sẽ tự xóa cache (utils/query-cache.js)
+      window.QueryCache?.bindClient(window.supabaseClient);
+
       console.log('✅ Supabase singleton initialized:', {
         url: SUPABASE_URL.replace(/\/\/[^.]+/, '//***'),
         key: SUPABASE_ANON_KEY.substring(0, 10) + '...',
@@ -344,11 +347,26 @@ window.handleSuccessfulAuth = function () {
     console.log('   -> Entering dashboard...');
     window.enterDashboard(); // Gọi không await để không block event handler
   }
+  // Đảm bảo dashboard của user thường được render sau khi có dữ liệu
+  setTimeout(async () => {
+    if (!window.isUserAdmin() && typeof window.renderUserDashboard === 'function') {
+      await window.renderUserDashboard();
+    }
+  }, 1500);
 };
 // --- KẾT THÚC handleSuccessfulAuth ---
 // ========================================================================
 // REALTIME MANAGER - QUẢN LÝ KẾT NỐI REALTIME
 // ========================================================================
+// Vẽ lại dashboard (không điều hướng) nếu người dùng đang xem trang này.
+// Trước đây gọi enterDashboard() — hàm này thoát ngay khi app đã khởi tạo nên
+// dashboard không bao giờ được làm mới từ realtime.
+function refreshDashboardIfVisible() {
+  const page = document.getElementById('page-dashboard');
+  if (!page || page.style.display === 'none') return;
+  window.renderDashboard?.(false); // tự chọn giao diện admin/user
+}
+
 window.RealtimeManager = {
   subscriptions: {
     incidents: null,
@@ -375,10 +393,8 @@ window.RealtimeManager = {
           { event: '*', schema: 'public', table: 'incidents' },
           (payload) => {
             console.log('⚡ Realtime: Incidents updated', payload);
-            // Refresh dashboard khi có thay đổi
-            if (typeof window.enterDashboard === 'function') {
-              window.enterDashboard();
-            }
+            window.QueryCache?.invalidate('incidents');
+            refreshDashboardIfVisible();
             // Refresh trang "Theo dõi sự kiện" nếu đang mở — forceFetch=true vì
             // renderTrackingPage() mặc định chỉ tải lại khi appState.trackingIncidents
             // rỗng, nên nếu không ép tải lại, sự kiện mới kích hoạt/vừa đóng sẽ
@@ -404,10 +420,7 @@ window.RealtimeManager = {
           { event: '*', schema: 'public', table: 'roster_assignments' },
           (payload) => {
             console.log('⚡ Realtime: Roster Assignments updated', payload);
-            // Refresh dashboard khi có thay đổi
-            if (typeof window.enterDashboard === 'function') {
-              window.enterDashboard();
-            }
+            refreshDashboardIfVisible();
             if (
               document.getElementById('page-tracking')?.style.display !==
                 'none' &&
@@ -640,7 +653,7 @@ window.enterDashboard = async function () {
             .eq('status', 'active');
           if (error) throw error;
           return data;
-        }),
+        }, 2 * 60 * 1000),
 
       // Training courses - cache 10 phút
       () =>
@@ -650,7 +663,7 @@ window.enterDashboard = async function () {
             .select('id, course_name, training_date, location, status');
           if (error) throw error;
           return data;
-        }),
+        }, 10 * 60 * 1000),
 
       // Deployment history - gần nhất 50 bản ghi, cache 3 phút
       () =>
@@ -664,7 +677,7 @@ window.enterDashboard = async function () {
             .limit(50);
           if (error) throw error;
           return data;
-        }),
+        }, 3 * 60 * 1000),
 
       // Notifications cho user hiện tại - không cache (luôn tươi)
       async () => {
@@ -801,10 +814,12 @@ window.logout = async function () {
   }
 
   // ✅ 6. Redirect về login (GIỮ NGUYÊN window.go — đúng cơ chế app)
+  // Trang đăng nhập nằm ngay trong index.html (không có login.html) — nếu
+  // router chưa sẵn sàng thì tải lại trang, app sẽ tự hiện màn hình đăng nhập.
   if (typeof window.go === 'function') {
     window.go('login');
   } else {
-    window.location.href = '/login.html';
+    window.location.reload();
   }
 };
 // ========================================================================
@@ -904,12 +919,13 @@ document.addEventListener('DOMContentLoaded', function () {
   /* =========================
        1. Auto-fill Remember Me
     ========================== */
-  const savedUsername = localStorage.getItem('rememberUsername');
-  const savedPassword = localStorage.getItem('rememberPassword');
-
-  if (savedUsername && savedPassword) {
-    document.getElementById('login-user').value = savedUsername;
-    document.getElementById('login-password').value = savedPassword;
+  // Chỉ ghi nhớ EMAIL. Trước đây mật khẩu được lưu dạng văn bản thuần trong
+  // localStorage (bất kỳ script nào trên trang đều đọc được) — xóa bản cũ nếu
+  // còn. Phiên đăng nhập đã được Supabase tự lưu và làm mới token.
+  localStorage.removeItem('rememberPassword');
+  const savedEmail = localStorage.getItem('rememberEmail');
+  if (savedEmail) {
+    document.getElementById('login-user').value = savedEmail;
     document.getElementById('remember-me')?.setAttribute('checked', true);
   }
 
@@ -936,10 +952,8 @@ document.addEventListener('DOMContentLoaded', function () {
     // Lưu remember nếu cần
     if (remember?.checked) {
       localStorage.setItem('rememberEmail', email);
-      localStorage.setItem('rememberPassword', password);
     } else {
       localStorage.removeItem('rememberEmail');
-      localStorage.removeItem('rememberPassword');
     }
 
     try {
@@ -984,4 +998,37 @@ document.addEventListener('DOMContentLoaded', function () {
       if (typeof showLoading === 'function') showLoading(false);
     }
   };
+});
+
+// ========================================================================
+// UI GUARDS (trước đây ở fix-patches.js)
+// ========================================================================
+// Đảm bảo tab Bản đồ luôn hiển thị
+document.addEventListener('DOMContentLoaded', function () {
+  setTimeout(function () {
+    const menuMap = document.getElementById('menu-map');
+    if (menuMap) {
+      menuMap.style.display = '';
+      menuMap.style.visibility = 'visible';
+    }
+  }, 500);
+});
+// Fix cảnh báo "Blocked aria-hidden" của Bootstrap modal
+// Nguyên nhân: nút trong modal còn giữ focus khi modal đóng
+document.addEventListener('hide.bs.modal', function (event) {
+  // Nếu phần tử đang focus nằm trong modal sắp đóng → bỏ focus trước
+  if (event.target.contains(document.activeElement)) {
+    document.activeElement.blur();
+  }
+});
+// Dọn backdrop kẹt cho MỌI modal động trong app
+document.addEventListener('hidden.bs.modal', function () {
+  setTimeout(() => {
+    if (!document.querySelector('.modal.show')) {
+      document.querySelectorAll('.modal-backdrop').forEach((b) => b.remove());
+      document.body.classList.remove('modal-open');
+      document.body.style.overflow = '';
+      document.body.style.paddingRight = '';
+    }
+  }, 150);
 });

@@ -111,8 +111,8 @@
       headPhone: lab.head_phone || null,
       headEmail: lab.head_email || null,
     };
-    // Nhúng dưới dạng chuỗi JSON đã escape nháy đơn để đặt trong onclick='...'
-    return JSON.stringify(payload).replace(/'/g, '&#39;');
+    // Nhúng làm literal JS trong onclick='...' (utils/escape.js)
+    return window.jsonAttr(payload);
   }
 
   // --------------------------------------------------------------------------
@@ -530,12 +530,12 @@
           </div>
           <div class="btn-group btn-group-sm flex-shrink-0">
             <button class="btn btn-success" onclick="window.approveSuggestion('${
-              s.id
+              jsAttr(s.id)
             }','approve')">
               <i class='bx bx-check'></i> Duyệt
             </button>
             <button class="btn btn-outline-danger" onclick="window.approveSuggestion('${
-              s.id
+              jsAttr(s.id)
             }','reject')">
               <i class='bx bx-x'></i>
             </button>
@@ -961,7 +961,7 @@
                 incidentId: d.incident_id,
                 logId: d.id,
               };
-              const finalPayload = JSON.stringify(pObj).replace(/'/g, '&#39;');
+              const finalPayload = window.jsonAttr(pObj);
 
               // ĐÃ SỬA: Chống rớt dòng và ép nhỏ ô input lại
               actionBtns += `
@@ -969,7 +969,7 @@
                   <input type="number" id="chot-qty-${d.id}" class="form-control text-center fw-bold text-primary px-1" 
                          value="${d.accQty}" min="1" max="${d.accQty}" title="SL thực tế" style="max-width: 55px;">
                   <button class="btn btn-success px-2" style="white-space: nowrap;" 
-                          onclick='window.submitCustomDispatch(${finalPayload}, "chot-qty-${d.id}")' title="Chốt điều phối">
+                          onclick='window.submitCustomDispatch(${finalPayload}, "chot-qty-${jsAttr(d.id)}")' title="Chốt điều phối">
                     <i class='bx bx-check'></i> Chốt
                   </button>
                 </div>`;
@@ -996,7 +996,7 @@
               cxCls = 'btn-outline-danger';
             }
             if (cxLabel) {
-              actionBtns += `<button class="btn btn-sm ${cxCls} w-100" onclick="window.cancelDispatch('${d.id}')">
+              actionBtns += `<button class="btn btn-sm ${cxCls} w-100" onclick="window.cancelDispatch('${jsAttr(d.id)}')">
                             <i class='bx ${cxIcon}'></i> ${cxLabel}
                           </button>`;
             }
@@ -1552,7 +1552,7 @@
       if (window.showToast)
         window.showToast('Lỗi gửi yêu cầu: ' + e.message, 'error');
       if (slot) {
-        slot.innerHTML = `<button class="btn btn-outline-warning btn-sm w-100 shadow-sm" onclick="window.sendSingleInquiry('${labId}')">
+        slot.innerHTML = `<button class="btn btn-outline-warning btn-sm w-100 shadow-sm" onclick="window.sendSingleInquiry('${jsAttr(labId)}')">
                             <i class='bx bx-mail-send'></i> Gửi lại yêu cầu
                           </button>`;
       }
@@ -1612,7 +1612,7 @@
           if (slotEl && labData) {
             const S = window._getDispatchState?.();
             const approvePayload = (qty) =>
-              JSON.stringify({
+              window.jsonAttr({
                 source: 'dashboard',
                 logId: newData.id,
                 labId: labData.lab_id,
@@ -1628,7 +1628,7 @@
                 headEmail: labData.head_email,
                 km: labData.route?.km || '?',
                 minutes: labData.route?.minutes || '?',
-              }).replace(/'/g, '&#39;');
+              });
 
             let displayStatus = newData.status;
             if (

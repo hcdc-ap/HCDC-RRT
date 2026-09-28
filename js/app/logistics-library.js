@@ -101,7 +101,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
         const rowStyle = isExp ? 'style="background-color: #fff5f5;"' : '';
         const btnAction = isAdmin
-          ? `<button class="btn btn-sm btn-outline-primary" onclick="window.openTransModal('${item.id}')"><i class='bx bx-transfer'></i> Điều phối</button>`
+          ? `<button class="btn btn-sm btn-outline-primary" onclick="window.openTransModal('${jsAttr(item.id)}')"><i class='bx bx-transfer'></i> Điều phối</button>`
           : '';
 
         container.insertAdjacentHTML(
@@ -517,14 +517,11 @@ document.addEventListener('DOMContentLoaded', function () {
           ? `
               <div class="lib-admin-tools" style="position: absolute; top: 10px; right: 10px;">
                   <button class="btn btn-sm btn-warning" onclick="window.openLibModal('${
-                    doc.id
+                    jsAttr(doc.id)
                   }')" title="Sửa"><i class='bx bx-edit'></i></button>
                   <button class="btn btn-sm btn-danger" onclick="window.deleteLibDoc('${
-                    doc.id
-                  }', '${title.replace(
-              /'/g,
-              "\\'"
-            )}', event)" title="Xóa"><i class='bx bx-trash'></i></button>
+                    jsAttr(doc.id)
+                  }', '${jsAttr(title)}', event)" title="Xóa"><i class='bx bx-trash'></i></button>
               </div>
           `
           : '';

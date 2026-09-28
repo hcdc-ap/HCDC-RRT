@@ -11,7 +11,6 @@ const globals = require('globals');
 
 const APP_FILES = [
   'auth-helpers.js',
-  'fix-patches.js',
   'team-response-stats.js',
   'huong-dan-data.js',
   'huong-dan-engine.js',
@@ -84,7 +83,12 @@ module.exports = [
     },
   },
   {
-    files: ['eslint.config.js', 'tests/**/*.js'],
+    files: ['eslint.config.js', 'tests/**/*.js', 'tools/**/*.js'],
     languageOptions: { ecmaVersion: 2022, sourceType: 'commonjs', globals: globals.node },
+  },
+  {
+    // callback của page.evaluate() chạy trong trình duyệt
+    files: ['tests/e2e/**/*.js'],
+    languageOptions: { globals: { ...globals.node, ...globals.browser } },
   },
 ];

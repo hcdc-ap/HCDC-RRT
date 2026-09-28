@@ -111,7 +111,7 @@ document.addEventListener('DOMContentLoaded', function () {
           ? `
            <select class="form-select form-select-sm update-status"
                data-report-id="${recordId}"
-               onchange="window.updateApprovalStatus('${recordId}', this.value)">
+               onchange="window.updateApprovalStatus('${jsAttr(recordId)}', this.value)">
                <option value="pending" ${
                  status === 'pending' ? 'selected' : ''
                }>Chờ duyệt</option>
@@ -126,7 +126,7 @@ document.addEventListener('DOMContentLoaded', function () {
           ? `
            <select class="form-select form-select-sm update-status"
                data-report-id="${recordId}"
-               onchange="window.updateApprovalStatus('${recordId}', this.value)">
+               onchange="window.updateApprovalStatus('${jsAttr(recordId)}', this.value)">
                <option value="pending" ${
                  status === 'pending' ? 'selected' : ''
                }>Chờ duyệt</option>
@@ -139,12 +139,12 @@ document.addEventListener('DOMContentLoaded', function () {
         // === Cột Actions ===
         const actions = isAdmin
           ? `<div class="d-flex justify-content-around">
-             <i class="bx bx-show bx-sm text-primary" onclick="viewReport('${recordId}')" style="cursor:pointer;" title="Xem/Sửa hồ sơ"></i>
-             <i class="bx bx-trash bx-sm text-danger" onclick="window.deleteProfile('${recordId}', '${
-              window.escapeHtml?.(profile.full_name) || profile.full_name
+             <i class="bx bx-show bx-sm text-primary" onclick="viewReport('${jsAttr(recordId)}')" style="cursor:pointer;" title="Xem/Sửa hồ sơ"></i>
+             <i class="bx bx-trash bx-sm text-danger" onclick="window.deleteProfile('${jsAttr(recordId)}', '${
+              jsAttr(profile.full_name)
             }')" style="cursor:pointer;" title="Xóa"></i>
            </div>`
-          : `<div class="text-center"><i class="bx bx-show bx-sm text-primary" onclick="viewReport('${recordId}')" style="cursor:pointer;" title="Xem hồ sơ"></i></div>`;
+          : `<div class="text-center"><i class="bx bx-show bx-sm text-primary" onclick="viewReport('${jsAttr(recordId)}')" style="cursor:pointer;" title="Xem hồ sơ"></i></div>`;
 
         // Xử lý an toàn các giá trị null/undefined
         const dateText =

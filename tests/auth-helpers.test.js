@@ -35,4 +35,7 @@ test('getCurrentUserId: ưu tiên session, fallback token Supabase trong localSt
   assert.equal(w.getCurrentUserId(), 'from-storage');
   w.localStorage.setItem('sb-abc-auth-token', '{not json');
   assert.equal(w.getCurrentUserId(), null);
+  // key thật mà js/app/core.js dùng khi tạo Supabase client
+  w.localStorage.setItem('your-app-name-auth-token', JSON.stringify({ user: { id: 'real-key' } }));
+  assert.equal(w.getCurrentUserId(), 'real-key');
 });

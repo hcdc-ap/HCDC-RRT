@@ -229,7 +229,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 <span>📨 KÍCH HOẠT KHẨN CẤP: ${
                   window.escapeHtml?.(i.event_name) || 'Sự kiện khẩn cấp'
                 }</span>
-                <button onclick="simulateSidebarClick('page-tracking'); setTimeout(() => openDossierView('${incidentData}'), 300);" class="btn btn-warning btn-sm fw-bold">
+                <button onclick="simulateSidebarClick('page-tracking'); setTimeout(() => openDossierView('${jsAttr(incidentData)}'), 300);" class="btn btn-warning btn-sm fw-bold">
                     Phản hồi ngay
                 </button>
             </div>`;
@@ -344,7 +344,7 @@ document.addEventListener('DOMContentLoaded', function () {
           if (!highlightClass)
             highlightClass = 'border-warning border-start border-4';
           // Truyền _myAssignmentId thay vì r.calendar
-          actionLink = ` <a href="#" onclick="openQuickResponseModal('${s._myAssignmentId}', '${dateStr}', '${s.team_name}')" class="text-decoration-none small ms-2 fw-bold text-primary fst-italic">
+          actionLink = ` <a href="#" onclick="openQuickResponseModal('${jsAttr(s._myAssignmentId)}', '${jsAttr(dateStr)}', '${jsAttr(s.team_name)}')" class="text-decoration-none small ms-2 fw-bold text-primary fst-italic">
           <i class='bx bx-edit'></i> Phản hồi ngay
         </a>`;
         } else {
@@ -390,10 +390,10 @@ document.addEventListener('DOMContentLoaded', function () {
           <p class="mb-4">Bạn có lịch trực vào ngày <strong>${dateStr}</strong>.<br>Vui lòng xác nhận khả năng tham gia của bạn.</p>
           
           <div class="d-grid gap-2 d-sm-flex justify-content-sm-center">
-            <button onclick="submitRosterResponse('${assignmentId}', 'confirmed')" class="btn btn-success btn-lg px-4 gap-3">
+            <button onclick="submitRosterResponse('${jsAttr(assignmentId)}', 'confirmed')" class="btn btn-success btn-lg px-4 gap-3">
               <i class='bx bx-check-circle'></i> TÔI THAM GIA
             </button>
-            <button onclick="submitRosterResponse('${assignmentId}', 'declined')" class="btn btn-outline-danger btn-lg px-4">
+            <button onclick="submitRosterResponse('${jsAttr(assignmentId)}', 'declined')" class="btn btn-outline-danger btn-lg px-4">
               <i class='bx bx-x-circle'></i> BÁO BẬN
             </button>
           </div>

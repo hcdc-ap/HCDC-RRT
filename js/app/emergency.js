@@ -121,7 +121,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
       alertTitle.innerHTML = `<i class='bx bx-calendar-check'></i> ĐỘI TRỰC HÔM NAY: <b>${onDutyTeam}</b>`;
       alertDesc.innerHTML = `<strong>Danh sách:</strong> ${memberNames}`;
-      alertAction.innerHTML = `<button class="btn btn-success btn-sm fw-bold" onclick="autoSelectTeam('${onDutyTeam}')"><i class='bx bx-check-double'></i> Chọn toàn bộ ${onDutyTeam}</button>`;
+      alertAction.innerHTML = `<button class="btn btn-success btn-sm fw-bold" onclick="autoSelectTeam('${jsAttr(onDutyTeam)}')"><i class='bx bx-check-double'></i> Chọn toàn bộ ${onDutyTeam}</button>`;
     } else {
       alertBox.className =
         'alert alert-warning d-flex align-items-center justify-content-between shadow-sm mb-4';
@@ -425,7 +425,7 @@ document.addEventListener('DOMContentLoaded', function () {
           (m.team
             ? ` <small style="opacity:.85">(${_escHtml(m.team)})</small>`
             : '') +
-          ` <a href="javascript:void(0)" onclick="removeSelectedMember('${emailAttr}')"` +
+          ` <a href="javascript:void(0)" onclick="removeSelectedMember('${jsAttr(emailAttr)}')"` +
           ` title="Bỏ chọn ${_escHtml(m.name)}"` +
           ` style="color:#fff;font-weight:700;text-decoration:none;line-height:1;">✕</a>` +
           `</span>`

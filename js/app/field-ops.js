@@ -182,7 +182,7 @@ document.addEventListener('DOMContentLoaded', function () {
           <div style="display:inline-block; background: #dc3545; color: white; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; margin-bottom: 8px;">
               YÊU CẦU HỖ TRỢ (SOS)
           </div>
-          <div style="font-weight: bold; font-size: 14px; color: #dc3545;">${type.toUpperCase()}</div>
+          <div style="font-weight: bold; font-size: 14px; color: #dc3545;">${window.escapeHtml(type.toUpperCase())}</div>
           <div style="margin-top: 5px;"><b>Chi tiết:</b> ${window.escapeHtml(
             qty
           )}</div>

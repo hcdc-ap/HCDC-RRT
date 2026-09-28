@@ -600,9 +600,6 @@ document.addEventListener('DOMContentLoaded', function () {
 
       // Chỉ thêm khối nếu thực sự có nhân sự trên bản đồ
       if (_activeDepts.length > 0) {
-        const _escAttr = (s) =>
-          String(s).replace(/'/g, "\\'").replace(/"/g, '&quot;');
-
         const _rows = _activeDepts
           .map((name) => {
             const color = industryColors[name] || '#FF5722';
@@ -611,7 +608,7 @@ document.addEventListener('DOMContentLoaded', function () {
               /"/g,
               '&quot;'
             )}"
-                  onclick="window.highlightDeptMarkers('${_escAttr(name)}')"
+                  onclick="window.highlightDeptMarkers('${jsAttr(name)}')"
                   style="display:flex;align-items:center;gap:6px;margin:1px 0;padding:2px 4px;
                          border-radius:4px;cursor:pointer;transition:background .15s;"
                   onmouseover="if(this.getAttribute('data-dept')!==window._highlightedDept)this.style.background='#f1f5f9'"

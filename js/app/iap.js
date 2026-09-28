@@ -81,127 +81,180 @@ let objectiveCounter = 0; // Bộ đếm để tạo ID tạm cho các mục ti�
 // ========================================================================
 
 window.openIAPModal = async function (incidentId) {
-  showLoadingSpinner();
-  $('#iapTabs button:first').tab('show');
-  $('#iap-activities-body').empty();
-  $('#iap-logistics-body').empty();
-  $('#iap-objectives-container').empty();
+  if (!incidentId) {
+    if (typeof showToast === 'function')
+      showToast('Lỗi: Thiếu ID sự kiện', 'error');
+    return;
+  }
+
+  if (typeof showLoadingSpinner === 'function') showLoadingSpinner();
+
+  // Reset form
+  try {
+    $('#iapTabs button:first').tab('show');
+  } catch (_) {}
+  $(
+    '#iap-objectives-container, #iap-logistics-body, #iap-activities-body'
+  ).empty();
 
   try {
-    const [incRes, planRes, assessRes, objRes, actRes, logRes] =
-      await Promise.all([
-        window.supabaseClient
-          .from('incidents')
-          .select('*')
-          .eq('id', incidentId)
-          .single(),
-        window.supabaseClient
-          .from('incident_plans')
-          .select('*')
-          .eq('incident_id', incidentId)
-          .order('updated_at', { ascending: false })
-          .limit(1),
-        window.supabaseClient
-          .from('incident_assessments')
-          .select('*')
-          .eq('incident_id', incidentId)
-          .limit(1),
-        window.supabaseClient
-          .from('incident_objectives')
-          .select('*')
-          .eq('incident_id', incidentId)
-          .order('created_at', { ascending: true }),
-        window.supabaseClient
-          .from('incident_activities')
-          .select('*')
-          .eq('incident_id', incidentId)
-          .order('created_at', { ascending: true }),
-        window.supabaseClient
-          .from('incident_logistics')
-          .select('*')
-          .eq('incident_id', incidentId),
-      ]);
+    // --- Bắt buộc: incidents ---
+    const { data: incData, error: incErr } = await window.supabaseClient
+      .from('incidents')
+      .select('*')
+      .eq('id', incidentId)
+      .maybeSingle();
+    if (incErr) throw incErr;
+    if (!incData) throw new Error('Không tìm thấy sự kiện: ' + incidentId);
 
-    if (incRes.error) throw incRes.error;
-
-    const incData = incRes?.data || {};
-    const planData = Array.isArray(planRes?.data)
-      ? planRes.data[0] || {}
-      : planRes?.data || {};
-    const assessData = Array.isArray(assessRes?.data)
-      ? assessRes.data[0] || {}
-      : assessRes?.data || {};
-
-    // Bắt mảng an toàn
-    const objectivesData = Array.isArray(objRes?.data) ? objRes.data : [];
-    const activitiesData = Array.isArray(actRes?.data) ? actRes.data : [];
-    const logisticsData = Array.isArray(logRes?.data) ? logRes.data : [];
-
-    let currentMeta = {};
+    // --- incident_plans (optional) ---
+    let planData = {};
     try {
-      const rawMeta = planData?.meta;
-      if (typeof rawMeta === 'string') currentMeta = JSON.parse(rawMeta);
-      else if (rawMeta) currentMeta = rawMeta;
+      const { data: planArr } = await window.supabaseClient
+        .from('incident_plans')
+        .select('*')
+        .eq('incident_id', incidentId)
+        .order('updated_at', { ascending: false })
+        .limit(1);
+      planData = planArr?.[0] || {};
     } catch (e) {
-      console.warn('Meta trống hoặc lỗi, dùng mặc định.');
+      console.warn('[IAP] incident_plans:', e.message);
     }
 
-    const currentApproval = currentMeta?.approval || {};
+    // --- incident_assessments (optional – bảng có thể chưa tồn tại) ---
+    let assessData = {};
+    try {
+      const { data: assessArr } = await window.supabaseClient
+        .from('incident_assessments')
+        .select('*')
+        .eq('incident_id', incidentId)
+        .limit(1);
+      assessData = assessArr?.[0] || {};
+    } catch (e) {
+      console.warn('[IAP] incident_assessments không khả dụng:', e.message);
+    }
+
+    // --- incident_objectives (optional) ---
+    let objectivesData = [];
+    try {
+      const { data: objArr } = await window.supabaseClient
+        .from('incident_objectives')
+        .select('*')
+        .eq('incident_id', incidentId)
+        .order('created_at', { ascending: true });
+      objectivesData = objArr || [];
+    } catch (e) {
+      console.warn('[IAP] incident_objectives:', e.message);
+    }
+
+    // --- incident_activities (optional) ---
+    let activitiesData = [];
+    try {
+      const { data: actArr } = await window.supabaseClient
+        .from('incident_activities')
+        .select('*')
+        .eq('incident_id', incidentId)
+        .order('created_at', { ascending: true });
+      activitiesData = actArr || [];
+    } catch (e) {
+      console.warn('[IAP] incident_activities:', e.message);
+    }
+
+    // --- incident_logistics (optional) ---
+    let logisticsData = [];
+    try {
+      const { data: logArr } = await window.supabaseClient
+        .from('incident_logistics')
+        .select('*')
+        .eq('incident_id', incidentId);
+      logisticsData = logArr || [];
+    } catch (e) {
+      console.warn('[IAP] incident_logistics:', e.message);
+    }
+
+    // Parse JSON fields
+    const safeParse = (val, fallback = {}) => {
+      if (!val) return fallback;
+      if (typeof val === 'object') return val;
+      try {
+        return JSON.parse(val);
+      } catch {
+        return fallback;
+      }
+    };
+
+    const meta = safeParse(planData.meta, {});
+    const currentApproval = meta?.approval || {};
     const nextVersion = (parseInt(currentApproval?.version) || 0) + 1;
 
-    // GOM SẴN HOẠT ĐỘNG VÀO TRONG MỤC TIÊU
-    let structuredObjectives = [];
-    if (objectivesData.length > 0) {
-      structuredObjectives = objectivesData.map((obj, index) => {
-        let childActs = activitiesData.filter(
-          (a) => String(a.objective_id) === String(obj.id)
+    // Ghép objectives + activities
+    const structuredObjectives = objectivesData.map((obj, idx) => {
+      let childActs = activitiesData.filter(
+        (a) => String(a.objective_id) === String(obj.id)
+      );
+      if (idx === 0) {
+        const orphans = activitiesData.filter(
+          (a) => !a.objective_id || a.objective_id === 'null'
         );
-
-        // Gom rác (những activity mất ID) vào mục tiêu đầu tiên
-        if (index === 0) {
-          const lostActs = activitiesData.filter(
-            (a) => !a.objective_id || String(a.objective_id) === 'null'
-          );
-          childActs = [...childActs, ...lostActs];
-        }
-
-        return {
-          id: obj.id,
-          content: obj.objective_text,
-          activities: childActs.map((a) => ({
-            id: a.id,
-            group: a.task_group,
-            content: a.content,
-            assignee: a.assignee_id,
-            deadline: a.deadline,
-            output: a.expected_output,
-            status: a.status === 'completed' ? 'Done' : 'Pending',
-          })),
-        };
-      });
-    }
+        childActs = [...childActs, ...orphans];
+      }
+      return {
+        id: obj.id,
+        content: obj.objective_text || '',
+        activities: childActs.map((a) => ({
+          id: a.id,
+          group: a.task_group,
+          content: a.content,
+          assignee: a.assignee_id,
+          deadline: a.deadline,
+          output: a.expected_output,
+          status: a.status === 'completed' ? 'Done' : 'Pending',
+        })),
+      };
+    });
 
     const formData = {
       incident: {
         id: incidentId,
-        name: incData?.event_name || 'Chưa có tên',
-        level: planData?.level || 'Đáp ứng',
-        summary: planData?.summary || '',
+        name: incData.event_name || 'Chưa có tên',
+        level: planData.level || 'Đáp ứng',
+        summary: planData.summary || '',
       },
       assessment: assessData,
-      meta: currentMeta,
-      objectives: structuredObjectives, // Đã đóng gói đẹp đẽ
+      meta: meta,
+      objectives: structuredObjectives,
       logistics: logisticsData,
     };
 
-    populateIAPForm(formData);
+    // Gọi hàm populate (iap.js)
+    if (typeof populateIAPForm === 'function') {
+      populateIAPForm(formData);
+    }
+
     $('#iap-version').val(nextVersion);
-    $('#modal-incident-plan').modal('show');
+    $('#plan-incident-title').text(incData.event_name || '');
+    $('#plan-status-badge')
+      .text(incData.status === 'closed' ? 'ĐÃ ĐÓNG' : 'ĐANG HOẠT ĐỘNG')
+      .removeClass('bg-warning bg-success')
+      .addClass(incData.status === 'closed' ? 'bg-success' : 'bg-warning');
+    $('#modal-incident-plan').data('id', incidentId);
+
+    // Mở modal an toàn
+    const modalEl = document.getElementById('modal-incident-plan');
+    if (modalEl) {
+      const existing = bootstrap.Modal?.getInstance(modalEl);
+      if (existing) existing.dispose();
+      document
+        .querySelectorAll('.modal-backdrop')
+        .forEach((el) => el.remove());
+      new bootstrap.Modal(modalEl, { backdrop: true, keyboard: true }).show();
+    }
   } catch (err) {
-    console.error('Lỗi tải IAP:', err);
-    showToast('Không thể tải dữ liệu IAP: ' + err.message, 'error');
+    console.error('[openIAPModal] Lỗi:', err);
+    if (typeof showToast === 'function')
+      showToast('Không thể mở IAP: ' + err.message, 'error');
   } finally {
-    hideLoadingSpinner();
+    if (typeof hideLoadingSpinner === 'function') hideLoadingSpinner();
   }
 };
 
@@ -321,7 +374,7 @@ function addObjectiveBlock(id = null, content = '', activities = []) {
                         </div>
                         <span class="ms-2 small fw-bold text-success" id="prog-text-${id}" style="min-width: 40px;">0%</span>
                     </div>
-                    <button class="btn btn-sm btn-success text-nowrap" onclick="addActivityRowToObj('${id}')">
+                    <button class="btn btn-sm btn-success text-nowrap" onclick="addActivityRowToObj('${jsAttr(id)}')">
                         <i class='bx bx-plus'></i> Thêm
                     </button>
                 </div>

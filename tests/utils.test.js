@@ -68,3 +68,74 @@ test('debounce: chỉ gọi 1 lần với tham số cuối', async (t) => {
   t.mock.timers.tick(1);
   assert.deepEqual(seen, [3]);
 });
+
+test('QueryCache: TTL riêng cho từng key', async () => {
+  const env = createBrowserEnv();
+  env.load('utils/query-cache.js');
+  const qc = env.window.QueryCache;
+  let calls = 0;
+  await qc.fetch('short', async () => ++calls, 1000);
+  qc.cache.get('short').timestamp -= 1001;
+  assert.equal(await qc.fetch('short', async () => ++calls, 1000), 2);
+});
+
+test('QueryCache.bindClient: ghi vào bảng đang cache thì tự xóa cache (trước và sau request)', async () => {
+  const env = createBrowserEnv();
+  env.load('utils/query-cache.js');
+  const qc = env.window.QueryCache;
+  // builder giả: lazy, chỉ có then(), các lệnh lọc trả về chính nó
+  const client = {
+    from(table) {
+      const b = { table };
+      for (const m of ['select', 'insert', 'update', 'upsert', 'delete', 'eq']) b[m] = () => b;
+      b.then = (ok, err) => Promise.resolve({ data: [], error: null }).then(ok, err);
+      return b;
+    },
+  };
+  qc.bindClient(client);
+  qc.bindClient(client); // gọi 2 lần không bọc chồng
+
+  const seed = () => {
+    qc.cache.set('incidents:active', { data: 1, timestamp: Date.now() });
+    qc.cache.set('profiles:admin', { data: 1, timestamp: Date.now() });
+  };
+  seed();
+  const pending = client.from('incidents').update({ status: 'closed' }).eq('id', 1);
+  assert.equal(qc.cache.has('incidents:active'), false);
+  assert.equal(qc.cache.has('profiles:admin'), true, 'bảng khác không bị ảnh hưởng');
+  qc.cache.set('incidents:active', { data: 'stale', timestamp: Date.now() }); // đọc xen giữa
+  await pending;
+  assert.equal(qc.cache.has('incidents:active'), false, 'xóa lại sau khi request xong');
+
+  seed();
+  await client.from('incidents').select('*');
+  assert.equal(qc.cache.has('incidents:active'), true, 'đọc dữ liệu không xóa cache');
+  await client.from('notifications').update({ is_read: true });
+  assert.equal(qc.cache.has('incidents:active'), true);
+});
+
+test('jsAttr / jsonAttr: an toàn trong onclick và trả lại đúng giá trị gốc', () => {
+  const env = createBrowserEnv();
+  env.load('utils/escape.js');
+  const { jsAttr, jsonAttr } = env.window;
+  const evil = [
+    `x'); alert(1); ('`,
+    `"><img src=x onerror=alert(1)>`,
+    `&#39;);alert(1);//`,
+    "a\\'b",
+    'line\nbreak\u2028\u2029',
+    'Khoa A & B <Cấp cứu> `tpl` ${x}',
+    "Chợ Rẫy's",
+    42,
+  ];
+  for (const v of evil) {
+    const out = jsAttr(v);
+    assert.doesNotMatch(out, /[&<>"'`\n\r\u2028\u2029]/, 'không còn ký tự đặc biệt HTML/JS');
+    // Không có entity nào để trình duyệt giải mã → JS nhận nguyên văn out
+    assert.equal(new Function(`return '${out}'`)(), String(v));
+
+    const json = jsonAttr({ name: v, n: 1 });
+    assert.doesNotMatch(json, /[&<>']/);
+    assert.equal(JSON.stringify(new Function(`return (${json})`)()), JSON.stringify({ name: v, n: 1 }));
+  }
+});

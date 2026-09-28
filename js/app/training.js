@@ -73,8 +73,8 @@ document.addEventListener('DOMContentLoaded', function () {
         const deleteBtn = isAdmin
           ? `<button class="btn-delete-course"
                     onclick="event.stopPropagation(); deleteCourseConfirm('${
-                      c.id
-                    }', '${rrtShared.escapeHtml(c.course_name || c.name || '')}', event)"
+                      jsAttr(c.id)
+                    }', '${jsAttr(c.course_name || c.name || '')}', event)"
                     title="Xóa khóa học"
                     style="position: absolute; bottom: 15px; right: 15px; width: 30px; height: 30px; background: #ffebee; color: #d32f2f; border: none; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; z-index: 10;">
                 <i class='bx bx-trash'></i>
@@ -96,7 +96,7 @@ document.addEventListener('DOMContentLoaded', function () {
             </span>
             ${deleteBtn}
             <div onclick="openTrainingDossier('${
-              c.id
+              jsAttr(c.id)
             }')" style="cursor: pointer;">
                 <h5 style="margin: 0 0 10px 0; font-weight: bold; color: #333; font-size: 16px;">${rrtShared.escapeHtml(
                   c.course_name || c.name || ''

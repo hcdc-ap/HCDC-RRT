@@ -881,17 +881,17 @@ document.addEventListener('DOMContentLoaded', function () {
             <td data-label="Action" class="text-center">
                 <div class="btn-group" role="group">
                     <button type="button" class="btn btn-sm btn-info text-white" onclick="viewReport('${
-                      report.id
+                      jsAttr(report.id)
                     }')" title="Xem & Cập nhật">
                         <i class='bx bx-show-alt'></i>
                     </button>
                     <button type="button" class="btn btn-sm btn-warning" 
-                    onclick="window.openEditModal('${report.id}')"
+                    onclick="window.openEditModal('${jsAttr(report.id)}')"
                             title="Yêu cầu chỉnh sửa">
                         <i class='bx bx-error'></i>
                     </button>
                     <button type="button" class="btn btn-sm btn-success" 
-                            onclick="approveReport('${report.id}')" 
+                            onclick="approveReport('${jsAttr(report.id)}')" 
                             title="Phê duyệt">
                         <i class='bx bx-check'></i>
                     </button>
