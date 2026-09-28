@@ -111,8 +111,8 @@
       headPhone: lab.head_phone || null,
       headEmail: lab.head_email || null,
     };
-    // Nhúng dưới dạng chuỗi JSON đã escape nháy đơn để đặt trong onclick='...'
-    return JSON.stringify(payload).replace(/'/g, '&#39;');
+    // Nhúng làm literal JS trong onclick='...' (utils/escape.js)
+    return window.jsonAttr(payload);
   }
 
   // --------------------------------------------------------------------------
@@ -130,7 +130,7 @@
 
     try {
       // 1. Ghi log đề xuất
-      const { data: logRow, error } = await window.supabaseClient
+      const { error } = await window.supabaseClient
         .from('lab_dispatch_log')
         .insert([
           {
@@ -530,12 +530,12 @@
           </div>
           <div class="btn-group btn-group-sm flex-shrink-0">
             <button class="btn btn-success" onclick="window.approveSuggestion('${
-              s.id
+              jsAttr(s.id)
             }','approve')">
               <i class='bx bx-check'></i> Duyệt
             </button>
             <button class="btn btn-outline-danger" onclick="window.approveSuggestion('${
-              s.id
+              jsAttr(s.id)
             }','reject')">
               <i class='bx bx-x'></i>
             </button>
@@ -961,7 +961,7 @@
                 incidentId: d.incident_id,
                 logId: d.id,
               };
-              const finalPayload = JSON.stringify(pObj).replace(/'/g, '&#39;');
+              const finalPayload = window.jsonAttr(pObj);
 
               // ĐÃ SỬA: Chống rớt dòng và ép nhỏ ô input lại
               actionBtns += `
@@ -969,7 +969,7 @@
                   <input type="number" id="chot-qty-${d.id}" class="form-control text-center fw-bold text-primary px-1" 
                          value="${d.accQty}" min="1" max="${d.accQty}" title="SL thực tế" style="max-width: 55px;">
                   <button class="btn btn-success px-2" style="white-space: nowrap;" 
-                          onclick='window.submitCustomDispatch(${finalPayload}, "chot-qty-${d.id}")' title="Chốt điều phối">
+                          onclick='window.submitCustomDispatch(${finalPayload}, "chot-qty-${jsAttr(d.id)}")' title="Chốt điều phối">
                     <i class='bx bx-check'></i> Chốt
                   </button>
                 </div>`;
@@ -996,7 +996,7 @@
               cxCls = 'btn-outline-danger';
             }
             if (cxLabel) {
-              actionBtns += `<button class="btn btn-sm ${cxCls} w-100" onclick="window.cancelDispatch('${d.id}')">
+              actionBtns += `<button class="btn btn-sm ${cxCls} w-100" onclick="window.cancelDispatch('${jsAttr(d.id)}')">
                             <i class='bx ${cxIcon}'></i> ${cxLabel}
                           </button>`;
             }
@@ -1397,79 +1397,6 @@
     });
   }
 
-  // --------------------------------------------------------------------------
-  // NHẮC LIÊN HỆ ĐẦU MỐI PXN sau khi chốt (mong muốn Khoa XN: phối hợp nhanh)
-  // --------------------------------------------------------------------------
-  function _showContactReminder(p) {
-    if (!p.headName && !p.headPhone && !p.headEmail) return; // không có đầu mối → bỏ qua
-
-    document.getElementById('lab-contact-reminder')?.remove();
-    const wrap = document.createElement('div');
-    wrap.id = 'lab-contact-reminder';
-    wrap.innerHTML = `
-      <div class="modal fade" id="labContactModal" tabindex="-1">
-        <div class="modal-dialog modal-dialog-centered">
-          <div class="modal-content">
-            <div class="modal-header" style="background:#0f766e;color:#fff;">
-              <h5 class="modal-title"><i class='bx bx-phone-call'></i> Liên hệ đầu mối Phòng xét nghiệm</h5>
-              <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-              <p class="mb-2">Đã điều <b>${p.sampleCount}</b> mẫu tới <b>${esc(
-      p.labName
-    )}</b>.
-              Vui lòng liên hệ đầu mối để thống nhất phối hợp:</p>
-              <div class="p-3 rounded" style="background:#f0fdf4;border:1px solid #bbf7d0;">
-                <div class="mb-1"><i class='bx bx-user'></i> <b>${esc(
-                  p.headName || 'Trưởng khoa XN'
-                )}</b></div>
-                ${
-                  p.headPhone
-                    ? `<div class="mb-2"><a href="tel:${esc(
-                        p.headPhone
-                      )}" class="btn btn-success btn-sm">
-                         <i class='bx bx-phone'></i> Gọi ${esc(
-                           p.headPhone
-                         )}</a></div>`
-                    : '<div class="text-muted mb-2"><small>Chưa có số điện thoại đầu mối</small></div>'
-                }
-                ${
-                  p.headEmail
-                    ? `<div><a href="mailto:${esc(
-                        p.headEmail
-                      )}"><i class='bx bx-envelope'></i> ${esc(
-                        p.headEmail
-                      )}</a></div>`
-                    : ''
-                }
-              </div>
-            </div>
-            <div class="modal-footer">
-              <button class="btn btn-secondary" data-bs-dismiss="modal">Đóng</button>
-            </div>
-          </div>
-        </div>
-      </div>`;
-    document.body.appendChild(wrap);
-    const modalEl = document.getElementById('labContactModal');
-    new bootstrap.Modal(modalEl).show();
-    modalEl.addEventListener(
-      'hidden.bs.modal',
-      () => {
-        wrap.remove();
-        setTimeout(() => {
-          if (!document.querySelector('.modal.show')) {
-            document
-              .querySelectorAll('.modal-backdrop')
-              .forEach((b) => b.remove());
-            document.body.classList.remove('modal-open');
-            document.body.style.overflow = '';
-          }
-        }, 150);
-      },
-      { once: true }
-    );
-  }
   // ==========================================================================
   // [YÊU CẦU 3] - GỬI KHẢO SÁT HÀNG LOẠT VÀ LẮNG NGHE REALTIME
   // ==========================================================================
@@ -1625,7 +1552,7 @@
       if (window.showToast)
         window.showToast('Lỗi gửi yêu cầu: ' + e.message, 'error');
       if (slot) {
-        slot.innerHTML = `<button class="btn btn-outline-warning btn-sm w-100 shadow-sm" onclick="window.sendSingleInquiry('${labId}')">
+        slot.innerHTML = `<button class="btn btn-outline-warning btn-sm w-100 shadow-sm" onclick="window.sendSingleInquiry('${jsAttr(labId)}')">
                             <i class='bx bx-mail-send'></i> Gửi lại yêu cầu
                           </button>`;
       }
@@ -1685,7 +1612,7 @@
           if (slotEl && labData) {
             const S = window._getDispatchState?.();
             const approvePayload = (qty) =>
-              JSON.stringify({
+              window.jsonAttr({
                 source: 'dashboard',
                 logId: newData.id,
                 labId: labData.lab_id,
@@ -1701,7 +1628,7 @@
                 headEmail: labData.head_email,
                 km: labData.route?.km || '?',
                 minutes: labData.route?.minutes || '?',
-              }).replace(/'/g, '&#39;');
+              });
 
             let displayStatus = newData.status;
             if (

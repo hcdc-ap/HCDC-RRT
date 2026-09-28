@@ -309,7 +309,7 @@
             <button class="btn btn-sm btn-outline-primary w-100 mt-2"
             onclick="window.LabRouteSteps.show(${origin.lat}, ${origin.lng}, ${
             lab.lat
-          }, ${lab.lng}, '${esc(lab.lab_name).replace(/'/g, "\\'")}')">
+          }, ${lab.lng}, '${jsAttr(lab.lab_name)}')">
             <i class='bx bx-directions'></i> Xem chỉ đường
           </button>
           </div>`,

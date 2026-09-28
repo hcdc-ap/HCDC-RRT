@@ -1,0 +1,287 @@
+-- ============================================================================
+-- Kiểm thử phân quyền RLS (migration 20260929000000_rrt_rls_roles.sql)
+-- Chạy bằng supabase/tests/run.sh trên Postgres CỤC BỘ — KHÔNG chạy trên
+-- database thật (script tạo và sửa dữ liệu mẫu).
+-- Mỗi kiểm tra in "PASS: ..." hoặc "FAIL: ...".
+-- ============================================================================
+\set ON_ERROR_STOP 1
+SET client_min_messages = notice;
+
+-- ---------- Công cụ kiểm tra ----------
+CREATE SCHEMA rrt_test;
+GRANT USAGE ON SCHEMA rrt_test TO authenticated, anon;
+
+-- Chuyển người dùng (giống Supabase: JWT claims + role authenticated)
+CREATE FUNCTION rrt_test.login(p_uid uuid) RETURNS void LANGUAGE plpgsql AS $$
+BEGIN
+  PERFORM set_config('request.jwt.claims',
+    json_build_object('sub', p_uid, 'role', 'authenticated')::text, false);
+END $$;
+
+CREATE FUNCTION rrt_test.eq(p_name text, p_got bigint, p_want bigint) RETURNS void LANGUAGE plpgsql AS $$
+BEGIN
+  IF p_got IS NOT DISTINCT FROM p_want THEN
+    RAISE NOTICE 'PASS: %', p_name;
+  ELSE
+    RAISE NOTICE 'FAIL: % (được %, cần %)', p_name, p_got, p_want;
+  END IF;
+END $$;
+
+-- Chạy câu lệnh ghi; trả số dòng bị ảnh hưởng, -1 nếu bị từ chối (lỗi)
+CREATE FUNCTION rrt_test.exec(p_sql text) RETURNS bigint LANGUAGE plpgsql AS $$
+DECLARE n bigint;
+BEGIN
+  EXECUTE p_sql;
+  GET DIAGNOSTICS n = ROW_COUNT;
+  RETURN n;
+EXCEPTION WHEN OTHERS THEN
+  RETURN -1;
+END $$;
+
+-- Ghi phải bị chặn: lỗi (-1) hoặc 0 dòng
+CREATE FUNCTION rrt_test.denied(p_name text, p_sql text) RETURNS void LANGUAGE plpgsql AS $$
+DECLARE n bigint := rrt_test.exec(p_sql);
+BEGIN
+  IF n <= 0 THEN RAISE NOTICE 'PASS: %', p_name;
+  ELSE RAISE NOTICE 'FAIL: % (không bị chặn, % dòng)', p_name, n; END IF;
+END $$;
+
+CREATE FUNCTION rrt_test.allowed(p_name text, p_sql text) RETURNS void LANGUAGE plpgsql AS $$
+DECLARE n bigint := rrt_test.exec(p_sql);
+BEGIN
+  IF n > 0 THEN RAISE NOTICE 'PASS: %', p_name;
+  ELSE RAISE NOTICE 'FAIL: % (bị chặn: %)', p_name, n; END IF;
+END $$;
+
+GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA rrt_test TO authenticated, anon;
+
+-- ---------- Dữ liệu mẫu (chạy bằng postgres, không qua RLS) ----------
+INSERT INTO public.ward_codes (ten_xa, ma_xa) VALUES ('Phường A', 'XA'), ('Phường B', 'XB');
+
+INSERT INTO auth.users (id, email) VALUES
+  ('00000000-0000-0000-0000-00000000000a', 'admin@t.vn'),
+  ('00000000-0000-0000-0000-0000000000a1', 'ward.a@t.vn'),
+  ('00000000-0000-0000-0000-0000000000b1', 'ward.b@t.vn'),
+  ('00000000-0000-0000-0000-000000000001', 's1@t.vn'),
+  ('00000000-0000-0000-0000-000000000002', 's2@t.vn'),
+  ('00000000-0000-0000-0000-000000000003', 's3@t.vn'),
+  ('00000000-0000-0000-0000-0000000000ff', 'pending@t.vn'),
+  ('00000000-0000-0000-0000-0000000000c1', 'h1@t.vn');
+
+-- Tuyến cơ sở và nhân viên phường A: Trạm Y tế; nhân viên phường B: s3
+INSERT INTO public.profiles (id, email, role, registration_status, approval_status, fax, workplace_ward, team) VALUES
+  ('00000000-0000-0000-0000-00000000000a', 'admin@t.vn', 'admin', 'approved', 'approved', NULL, NULL, 'HCDC'),
+  ('00000000-0000-0000-0000-0000000000a1', 'ward.a@t.vn', 'ward_admin', 'approved', 'approved', 'Trạm Y tế Phường/Xã/ Đặc khu', 'Phường A', 'Đội A'),
+  ('00000000-0000-0000-0000-0000000000b1', 'ward.b@t.vn', 'ward_admin', 'approved', 'approved', 'Trạm Y tế Phường/Xã/ Đặc khu', 'Phường B', 'Đội B'),
+  ('00000000-0000-0000-0000-000000000001', 's1@t.vn', 'user', 'approved', 'approved', 'Trạm Y tế Phường/Xã/ Đặc khu', 'Phường A', 'Đội A'),
+  ('00000000-0000-0000-0000-000000000002', 's2@t.vn', 'user', 'approved', 'pending', 'Trạm Y tế Phường/Xã/ Đặc khu', 'Phường A', 'Đội A'),
+  ('00000000-0000-0000-0000-000000000003', 's3@t.vn', 'user', 'approved', 'approved', 'Trạm Y tế Phường/Xã/ Đặc khu', 'Phường B', 'Đội B'),
+  ('00000000-0000-0000-0000-0000000000ff', 'pending@t.vn', 'user', 'pending', 'pending', 'Trạm Y tế Phường/Xã/ Đặc khu', 'Phường A', 'Đội A'),
+  -- h1: nhân viên HCDC (không thuộc phường/xã nào), được HCDC điều động vào sự kiện A
+  ('00000000-0000-0000-0000-0000000000c1', 'h1@t.vn', 'user', 'approved', 'approved', 'HCDC', NULL, 'HCDC');
+
+-- Sự kiện: IA ở phường A (s1 được điều động), IB ở phường B (s3)
+INSERT INTO public.incidents (id, event_name, status, ma_xa, initial_selected_members, members) VALUES
+  ('10000000-0000-0000-0000-00000000000a', 'Ổ dịch A', 'active', 'XA', 's1@t.vn', 'h1@t.vn'),
+  ('10000000-0000-0000-0000-00000000000b', 'Ổ dịch B', 'active', 'XB', 's3@t.vn', NULL);
+-- (trigger handle_new_incident đã tạo sẵn kế hoạch, nhật ký, nhiệm vụ... cho mỗi sự kiện)
+
+INSERT INTO public.roster_schedules (id, team_name, duty_date, created_by) VALUES
+  ('20000000-0000-0000-0000-00000000000a', 'Đội A', '2026-10-01', '00000000-0000-0000-0000-0000000000a1'),
+  ('20000000-0000-0000-0000-00000000000b', 'Đội B', '2026-10-01', '00000000-0000-0000-0000-0000000000b1');
+INSERT INTO public.roster_assignments (id, schedule_id, user_id, assignment_status) VALUES
+  ('30000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-00000000000a', '00000000-0000-0000-0000-000000000001', 'assigned'),
+  ('30000000-0000-0000-0000-000000000002', '20000000-0000-0000-0000-00000000000a', '00000000-0000-0000-0000-000000000002', 'assigned'),
+  ('30000000-0000-0000-0000-000000000003', '20000000-0000-0000-0000-00000000000b', '00000000-0000-0000-0000-000000000003', 'assigned');
+
+INSERT INTO public.notifications (id, user_email, message) VALUES
+  ('40000000-0000-0000-0000-000000000001', 's1@t.vn', 'cho s1'),
+  ('40000000-0000-0000-0000-000000000002', 's2@t.vn', 'cho s2'),
+  ('40000000-0000-0000-0000-000000000003', 's3@t.vn', 'cho s3'),
+  -- Luồng cũ lưu email khác hoa/thường hoặc lưu uid vào user_email
+  ('40000000-0000-0000-0000-000000000011', 'S1@T.VN', 'cho s1 (email viết hoa)'),
+  ('40000000-0000-0000-0000-000000000012', '00000000-0000-0000-0000-000000000001', 'cho s1 (theo uid)');
+
+INSERT INTO public.rrt_qualifications (profile_id, skills) VALUES
+  ('00000000-0000-0000-0000-000000000001', '["xét nghiệm"]'),
+  ('00000000-0000-0000-0000-000000000003', '["dịch tễ"]');
+
+INSERT INTO public.logistics_items (item_name, quantity) VALUES ('Khẩu trang', 100);
+INSERT INTO public.helpers (category, name) VALUES ('ward', 'Phường A');
+
+SET ROLE authenticated;
+
+-- ============================================================================
+\echo '--- Khách CHƯA đăng nhập (anon) ---'
+RESET ROLE; SET ROLE anon; SELECT set_config('request.jwt.claims', '{"role":"anon"}', false);
+SELECT rrt_test.eq('anon: không đọc được kho vật tư', (SELECT count(*) FROM public.logistics_items), 0);
+SELECT rrt_test.denied('anon: không gọi được update_incident_membership',
+  $$SELECT public.update_incident_membership('10000000-0000-0000-0000-00000000000a', 's1@t.vn', 'decline')$$);
+RESET ROLE; SET ROLE authenticated;
+
+-- ============================================================================
+\echo '--- Tài khoản CHƯA DUYỆT (pending, phường A) ---'
+SELECT rrt_test.login('00000000-0000-0000-0000-0000000000ff');
+SELECT rrt_test.eq('pending: chỉ thấy hồ sơ của mình', (SELECT count(*) FROM public.profiles), 1);
+SELECT rrt_test.eq('pending: không thấy sự kiện', (SELECT count(*) FROM public.incidents), 0);
+SELECT rrt_test.eq('pending: không thấy nhật ký sự kiện', (SELECT count(*) FROM public.incident_logs), 0);
+SELECT rrt_test.eq('pending: không thấy lịch trực', (SELECT count(*) FROM public.roster_schedules), 0);
+SELECT rrt_test.eq('pending: không thấy phân công', (SELECT count(*) FROM public.roster_assignments), 0);
+SELECT rrt_test.eq('pending: không thấy thông báo', (SELECT count(*) FROM public.notifications), 0);
+SELECT rrt_test.eq('pending: không thấy kho vật tư', (SELECT count(*) FROM public.logistics_items), 0);
+SELECT rrt_test.eq('pending: xem được danh mục helpers (cho form hồ sơ)', (SELECT count(*) FROM public.helpers), 1);
+SELECT rrt_test.denied('pending: không tạo được thông báo',
+  $$INSERT INTO public.notifications (user_email, message) VALUES ('s1@t.vn', 'x')$$);
+SELECT rrt_test.denied('pending: không tạo được sự kiện',
+  $$INSERT INTO public.incidents (event_name, ma_xa) VALUES ('giả', 'XA')$$);
+SELECT rrt_test.allowed('pending: tự sửa hồ sơ của mình (họ tên)',
+  $$UPDATE public.profiles SET full_name = 'Người mới' WHERE id = auth.uid()$$);
+SELECT rrt_test.denied('pending: không tự duyệt tài khoản',
+  $$UPDATE public.profiles SET registration_status = 'approved' WHERE id = auth.uid()$$);
+SELECT rrt_test.denied('pending: không tự duyệt hồ sơ',
+  $$UPDATE public.profiles SET approval_status = 'approved' WHERE id = auth.uid()$$);
+SELECT rrt_test.denied('pending: không tự nâng quyền admin',
+  $$UPDATE public.profiles SET role = 'admin' WHERE id = auth.uid()$$);
+SELECT rrt_test.denied('pending: không tự gán Leader',
+  $$UPDATE public.profiles SET position = 'Leader' WHERE id = auth.uid()$$);
+SELECT rrt_test.allowed('pending: tự lưu năng lực chuyên môn',
+  $$INSERT INTO public.rrt_qualifications (profile_id, skills) VALUES (auth.uid(), '["mới"]')$$);
+
+-- ============================================================================
+\echo '--- Nhân viên s1 (phường A, đội A, được điều động sự kiện A) ---'
+SELECT rrt_test.login('00000000-0000-0000-0000-000000000001');
+SELECT rrt_test.eq('s1: chỉ thấy hồ sơ của mình', (SELECT count(*) FROM public.profiles), 1);
+SELECT rrt_test.eq('s1: chỉ thấy sự kiện được điều động', (SELECT count(*) FROM public.incidents), 1);
+SELECT rrt_test.eq('s1: thấy nhật ký sự kiện A, không thấy của B',
+  (SELECT count(*) FROM public.incident_logs WHERE incident_id = '10000000-0000-0000-0000-00000000000b'), 0);
+SELECT rrt_test.eq('s1: thấy kế hoạch sự kiện A',
+  (SELECT count(*) FROM public.incident_plans WHERE incident_id = '10000000-0000-0000-0000-00000000000a'), 1);
+SELECT rrt_test.eq('s1: thấy lịch trực đội mình (không thấy đội B)', (SELECT count(*) FROM public.roster_schedules), 1);
+SELECT rrt_test.eq('s1: thấy cả đội trong ca (s1 + s2)', (SELECT count(*) FROM public.roster_assignments), 2);
+SELECT rrt_test.eq('s1: chỉ thấy thông báo của mình (kể cả lưu email viết hoa / uid)', (SELECT count(*) FROM public.notifications), 3);
+SELECT rrt_test.eq('s1: không đọc được action_token của người khác',
+  (SELECT count(*) FROM public.notifications WHERE lower(user_email) <> 's1@t.vn' AND user_email <> auth.uid()::text), 0);
+SELECT rrt_test.allowed('s1: đánh dấu đã đọc theo email viết hoa (incident-response.js)',
+  $$UPDATE public.notifications SET is_read = true WHERE user_email = 'S1@T.VN'$$);
+SELECT rrt_test.eq('s1: chỉ thấy năng lực của mình', (SELECT count(*) FROM public.rrt_qualifications), 1);
+SELECT rrt_test.eq('s1: xem được kho vật tư', (SELECT count(*) FROM public.logistics_items), 1);
+SELECT rrt_test.allowed('s1: nhận ca trực của mình',
+  $$UPDATE public.roster_assignments SET assignment_status = 'confirmed' WHERE id = '30000000-0000-0000-0000-000000000001'$$);
+SELECT rrt_test.denied('s1: không trả lời thay ca của s2',
+  $$UPDATE public.roster_assignments SET assignment_status = 'declined' WHERE id = '30000000-0000-0000-0000-000000000002'$$);
+SELECT rrt_test.denied('s1: không chuyển ca của mình cho người khác',
+  $$UPDATE public.roster_assignments SET user_id = '00000000-0000-0000-0000-000000000002' WHERE id = '30000000-0000-0000-0000-000000000001'$$);
+SELECT rrt_test.allowed('s1: đánh dấu đã đọc thông báo của mình',
+  $$UPDATE public.notifications SET is_read = true WHERE id = '40000000-0000-0000-0000-000000000001'$$);
+SELECT rrt_test.denied('s1: không sửa nội dung thông báo',
+  $$UPDATE public.notifications SET message = 'sửa' WHERE id = '40000000-0000-0000-0000-000000000001'$$);
+SELECT rrt_test.denied('s1: không đọc/sửa thông báo của s2',
+  $$UPDATE public.notifications SET is_read = true WHERE id = '40000000-0000-0000-0000-000000000002'$$);
+SELECT rrt_test.denied('s1: không xóa thông báo',
+  $$DELETE FROM public.notifications WHERE id = '40000000-0000-0000-0000-000000000001'$$);
+SELECT rrt_test.allowed('s1: xác nhận tham gia sự kiện A (RPC)',
+  $$SELECT public.update_incident_membership('10000000-0000-0000-0000-00000000000a', 's1@t.vn', 'confirm')$$);
+SELECT rrt_test.eq('s1: sau xác nhận, s1 có trong members (h1 vẫn giữ nguyên)',
+  (SELECT count(*) FROM public.incidents WHERE members = 'h1@t.vn;s1@t.vn'), 1);
+SELECT rrt_test.denied('s1: không trả lời thay người khác (RPC)',
+  $$SELECT public.update_incident_membership('10000000-0000-0000-0000-00000000000a', 's2@t.vn', 'confirm')$$);
+SELECT rrt_test.denied('s1: không tự thêm mình vào sự kiện không được điều động (RPC)',
+  $$SELECT public.update_incident_membership('10000000-0000-0000-0000-00000000000b', 's1@t.vn', 'confirm')$$);
+SELECT rrt_test.denied('s1: không sửa trực tiếp danh sách thành viên sự kiện',
+  $$UPDATE public.incidents SET members = '' WHERE id = '10000000-0000-0000-0000-00000000000a'$$);
+SELECT rrt_test.denied('s1: không tạo sự kiện',
+  $$INSERT INTO public.incidents (event_name, ma_xa) VALUES ('giả', 'XA')$$);
+SELECT rrt_test.allowed('s1: ghi lịch sử xác nhận của mình',
+  $$INSERT INTO public.deployment_history (incident_id, user_id, action_type) VALUES ('10000000-0000-0000-0000-00000000000a', auth.uid(), 'deployed')$$);
+SELECT rrt_test.denied('s1: không ghi lịch sử điều động cho người khác',
+  $$INSERT INTO public.deployment_history (incident_id, user_id, action_type) VALUES ('10000000-0000-0000-0000-00000000000a', '00000000-0000-0000-0000-000000000002', 'deployed')$$);
+SELECT rrt_test.allowed('s1: viết nhật ký hiện trường sự kiện A',
+  $$INSERT INTO public.incident_logs (incident_id, user_id, content) VALUES ('10000000-0000-0000-0000-00000000000a', auth.uid(), 'đã tới')$$);
+SELECT rrt_test.denied('s1: không viết nhật ký sự kiện B',
+  $$INSERT INTO public.incident_logs (incident_id, user_id, content) VALUES ('10000000-0000-0000-0000-00000000000b', auth.uid(), 'x')$$);
+SELECT rrt_test.denied('s1: không sửa kế hoạch sự kiện',
+  $$UPDATE public.incident_plans SET summary = 'x' WHERE incident_id = '10000000-0000-0000-0000-00000000000a'$$);
+SELECT rrt_test.denied('s1: không sửa kho vật tư',
+  $$UPDATE public.logistics_items SET quantity = 0$$);
+SELECT rrt_test.allowed('s1: tự sửa hồ sơ, gửi duyệt lại (approval_status = pending)',
+  $$UPDATE public.profiles SET phone = '0900', approval_status = 'pending' WHERE id = auth.uid()$$);
+SELECT rrt_test.eq('s1: sau khi gửi duyệt lại vẫn truy cập được (tài khoản vẫn đã duyệt)',
+  (SELECT count(*) FROM public.incidents), 1);
+
+-- ============================================================================
+\echo '--- Tuyến cơ sở phường A ---'
+SELECT rrt_test.login('00000000-0000-0000-0000-0000000000a1');
+SELECT rrt_test.eq('ward A: thấy hồ sơ trong phường (mình, s1, s2, pending)', (SELECT count(*) FROM public.profiles), 4);
+SELECT rrt_test.eq('ward A: chỉ thấy sự kiện phường A', (SELECT count(*) FROM public.incidents), 1);
+SELECT rrt_test.eq('ward A: thấy thông báo nhân sự phường A (3 của s1, 1 của s2)', (SELECT count(*) FROM public.notifications), 4);
+SELECT rrt_test.allowed('ward A: báo đóng sự kiện cho thành viên HCDC ngoài phường (shell.js)',
+  $$INSERT INTO public.notifications (user_email, message, incident_id) VALUES ('h1@t.vn', 'đóng sự kiện', '10000000-0000-0000-0000-00000000000a')$$);
+SELECT rrt_test.denied('ward A: không mượn sự kiện để báo người ngoài sự kiện',
+  $$INSERT INTO public.notifications (user_email, message, incident_id) VALUES ('s3@t.vn', 'x', '10000000-0000-0000-0000-00000000000a')$$);
+SELECT rrt_test.denied('ward A: không báo thành viên sự kiện phường B',
+  $$INSERT INTO public.notifications (user_email, message, incident_id) VALUES ('s3@t.vn', 'x', '10000000-0000-0000-0000-00000000000b')$$);
+SELECT rrt_test.denied('ward A: không sửa thông báo của nhân sự',
+  $$UPDATE public.notifications SET is_read = false WHERE user_email = 's2@t.vn'$$);
+SELECT rrt_test.denied('ward A: không xóa thông báo',
+  $$DELETE FROM public.notifications WHERE user_email = 's2@t.vn'$$);
+SELECT rrt_test.eq('ward A: thấy năng lực nhân sự phường A', (SELECT count(*) FROM public.rrt_qualifications), 2);
+SELECT rrt_test.eq('ward A: thấy lịch trực mình tạo', (SELECT count(*) FROM public.roster_schedules), 1);
+SELECT rrt_test.allowed('ward A: duyệt tài khoản đăng ký trong phường',
+  $$UPDATE public.profiles SET approval_status = 'approved' WHERE id = '00000000-0000-0000-0000-0000000000ff'$$);
+SELECT rrt_test.eq('ward A: duyệt hồ sơ → tài khoản được mở (registration_status)',
+  (SELECT count(*) FROM public.profiles WHERE id = '00000000-0000-0000-0000-0000000000ff' AND registration_status = 'approved'), 1);
+SELECT rrt_test.denied('ward A: không duyệt người phường B',
+  $$UPDATE public.profiles SET approval_status = 'approved' WHERE id = '00000000-0000-0000-0000-000000000003'$$);
+SELECT rrt_test.denied('ward A: không nâng quyền nhân sự thành admin',
+  $$UPDATE public.profiles SET role = 'admin' WHERE id = '00000000-0000-0000-0000-000000000001'$$);
+SELECT rrt_test.allowed('ward A: sửa năng lực chuyên môn nhân sự phường A',
+  $$UPDATE public.rrt_qualifications SET skills = '["cập nhật"]' WHERE profile_id = '00000000-0000-0000-0000-000000000001'$$);
+SELECT rrt_test.denied('ward A: không sửa năng lực nhân sự phường B',
+  $$UPDATE public.rrt_qualifications SET skills = '["x"]' WHERE profile_id = '00000000-0000-0000-0000-000000000003'$$);
+SELECT rrt_test.allowed('ward A: tạo sự kiện phường A',
+  $$INSERT INTO public.incidents (event_name, ma_xa, initial_selected_members) VALUES ('Ổ dịch A2', 'XA', 's2@t.vn') RETURNING id$$);
+SELECT rrt_test.denied('ward A: không tạo sự kiện ở phường B',
+  $$INSERT INTO public.incidents (event_name, ma_xa) VALUES ('sai phường', 'XB')$$);
+SELECT rrt_test.denied('ward A: không điều động người phường B',
+  $$UPDATE public.incidents SET initial_selected_members = 's1@t.vn;s3@t.vn' WHERE id = '10000000-0000-0000-0000-00000000000a'$$);
+SELECT rrt_test.allowed('ward A: điều động thêm người phường A',
+  $$UPDATE public.incidents SET initial_selected_members = 's1@t.vn;s2@t.vn' WHERE id = '10000000-0000-0000-0000-00000000000a'$$);
+SELECT rrt_test.denied('ward A: không chuyển sự kiện sang phường B',
+  $$UPDATE public.incidents SET ma_xa = 'XB' WHERE id = '10000000-0000-0000-0000-00000000000a'$$);
+SELECT rrt_test.denied('ward A: không sửa sự kiện phường B',
+  $$UPDATE public.incidents SET status = 'closed' WHERE id = '10000000-0000-0000-0000-00000000000b'$$);
+SELECT rrt_test.denied('ward A: không xóa sự kiện (chỉ Quản trị)',
+  $$DELETE FROM public.incidents WHERE id = '10000000-0000-0000-0000-00000000000a'$$);
+SELECT rrt_test.allowed('ward A: sửa kế hoạch sự kiện phường A',
+  $$UPDATE public.incident_plans SET summary = 'kế hoạch' WHERE incident_id = '10000000-0000-0000-0000-00000000000a'$$);
+SELECT rrt_test.allowed('ward A: gửi thông báo cho nhân sự phường A',
+  $$INSERT INTO public.notifications (user_email, message) VALUES ('s2@t.vn', 'họp') RETURNING id$$);
+SELECT rrt_test.denied('ward A: không gửi thông báo cho người phường B',
+  $$INSERT INTO public.notifications (user_email, message) VALUES ('s3@t.vn', 'x')$$);
+SELECT rrt_test.allowed('ward A: tạo lịch trực',
+  $$INSERT INTO public.roster_schedules (id, team_name, duty_date) VALUES ('20000000-0000-0000-0000-0000000000a2', 'Đội A', '2026-10-02') RETURNING id$$);
+SELECT rrt_test.allowed('ward A: phân công nhân sự phường A',
+  $$INSERT INTO public.roster_assignments (schedule_id, user_id) VALUES ('20000000-0000-0000-0000-0000000000a2', '00000000-0000-0000-0000-000000000002')$$);
+SELECT rrt_test.denied('ward A: không phân công người phường B',
+  $$INSERT INTO public.roster_assignments (schedule_id, user_id) VALUES ('20000000-0000-0000-0000-0000000000a2', '00000000-0000-0000-0000-000000000003')$$);
+SELECT rrt_test.denied('ward A: không sửa lịch trực do phường B tạo',
+  $$UPDATE public.roster_schedules SET note = 'x' WHERE id = '20000000-0000-0000-0000-00000000000b'$$);
+SELECT rrt_test.allowed('ward A: xóa lịch trực do mình tạo',
+  $$DELETE FROM public.roster_schedules WHERE id = '20000000-0000-0000-0000-0000000000a2'$$);
+SELECT rrt_test.denied('ward A: không ghi nhận đào tạo',
+  $$INSERT INTO public.training_records (profile_id) VALUES ('00000000-0000-0000-0000-000000000001')$$);
+SELECT rrt_test.denied('ward A: không sửa kho vật tư',
+  $$UPDATE public.logistics_items SET quantity = 0$$);
+
+-- ============================================================================
+\echo '--- Quản trị HCDC ---'
+SELECT rrt_test.login('00000000-0000-0000-0000-00000000000a');
+SELECT rrt_test.eq('admin: thấy mọi sự kiện', (SELECT count(*) FROM public.incidents), 3);
+SELECT rrt_test.eq('admin: thấy mọi thông báo', (SELECT count(*) FROM public.notifications), 7);
+SELECT rrt_test.allowed('admin: xóa thông báo', $$DELETE FROM public.notifications WHERE message = 'họp'$$);
+SELECT rrt_test.allowed('admin: điều động người mọi phường',
+  $$UPDATE public.incidents SET initial_selected_members = 's1@t.vn;s3@t.vn' WHERE id = '10000000-0000-0000-0000-00000000000a'$$);
+SELECT rrt_test.allowed('admin: sửa kho vật tư', $$UPDATE public.logistics_items SET quantity = 90$$);
+SELECT rrt_test.allowed('admin: xóa sự kiện', $$DELETE FROM public.incidents WHERE event_name = 'Ổ dịch A2'$$);
+
+RESET ROLE;

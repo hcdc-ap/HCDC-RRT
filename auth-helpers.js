@@ -36,17 +36,22 @@ window.getCurrentUserId = function () {
   // Ưu tiên 1: Đã có trong session
   if (window.userSession?.id) return window.userSession.id;
 
-  // Fallback 2: Đọc từ localStorage của Supabase
-  try {
-    const key = `sb-${
-      window.supabaseClient?.projectRef || 'default'
-    }-auth-token`;
-    const stored = localStorage.getItem(key);
-    if (stored) {
-      const parsed = JSON.parse(stored);
-      return parsed?.user?.id || null;
-    }
-  } catch (e) {}
+  // Fallback 2: Đọc phiên Supabase từ localStorage. js/app/core.js tạo client
+  // với storageKey 'your-app-name-auth-token' (giữ nguyên để không đăng xuất
+  // người dùng hiện tại); key mặc định sb-<ref>-auth-token để dự phòng.
+  const keys = [
+    'your-app-name-auth-token',
+    `sb-${window.supabaseClient?.projectRef || 'default'}-auth-token`,
+  ];
+  for (const key of keys) {
+    try {
+      const stored = localStorage.getItem(key);
+      if (stored) {
+        const id = JSON.parse(stored)?.user?.id;
+        if (id) return id;
+      }
+    } catch (e) {}
+  }
 
   return null;
 };
@@ -102,29 +107,4 @@ window.loadUserProfile = async function () {
   }
 };
 
-/**
- * Đăng xuất + cleanup
- */
-window.logout = async function () {
-  console.log('👋 Logging out...');
-
-  // Clear local state
-  window.userSession = null;
-  if (window.appState) {
-    window.appState.currentUser = null;
-    window.appState.appInitialized = false;
-  }
-
-  // Sign out từ Supabase
-  if (window.supabaseClient?.auth) {
-    await window.supabaseClient.auth.signOut();
-  }
-
-  // Clear localStorage
-  localStorage.removeItem('sidebar_hidden');
-  localStorage.removeItem('theme');
-
-  // Redirect về login
-  console.log('🔄 Redirecting to login...');
-  window.location.href = '/login.html';
-};
+// Đăng xuất: xem window.logout trong js/app/core.js

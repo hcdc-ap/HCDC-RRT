@@ -836,17 +836,17 @@
                       Điểm: <b>${lab.scores.total}</b></span></div>
                     <div class="btn-group btn-group-sm">
                       <button class="btn btn-outline-warning" onclick="window.sendSingleInquiry('${
-                        lab.lab_id
+                        jsAttr(lab.lab_id)
                       }')" title="Gửi khảo sát riêng cho đơn vị này">
                         <i class='bx bx-mail-send'></i> Gửi
                       </button>
                       <button class="btn btn-outline-secondary" onclick="window._showLabRoute('${
-                        lab.lab_id
+                        jsAttr(lab.lab_id)
                       }')" title="Xem đường đi">
                         <i class='bx bx-map'></i>
                       </button>
                       <button class="btn btn-outline-danger" onclick="window._excludeLab('${
-                        lab.lab_id
+                        jsAttr(lab.lab_id)
                       }')" title="Loại trừ Phòng xét nghiệm này">
                         <i class='bx bx-x-circle'></i>
                       </button>

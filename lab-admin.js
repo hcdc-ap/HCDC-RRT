@@ -191,7 +191,7 @@
               <td class="text-center">
                 <span class="badge bg-info text-dark">${capCount} loại</span>
                 <button class="btn btn-sm btn-outline-primary ms-1" onclick="window.openCapabilityModal('${
-                  lab.id
+                  jsAttr(lab.id)
                 }')" title="Quản lý năng lực">
                   <i class='bx bx-list-plus'></i>
                 </button>
@@ -199,13 +199,13 @@
               <td>${statusBadge}</td>
               <td class="text-nowrap">
                 <button class="btn btn-sm btn-outline-secondary" onclick="window.openLabModal('${
-                  lab.id
+                  jsAttr(lab.id)
                 }')" title="Sửa">
                   <i class='bx bx-edit'></i>
                 </button>
                 <button class="btn btn-sm btn-outline-danger" onclick="window.deleteLab('${
-                  lab.id
-                }','${esc(lab.name).replace(/'/g, "\\'")}')" title="Xóa">
+                  jsAttr(lab.id)
+                }','${jsAttr(lab.name)}')" title="Xóa">
                   <i class='bx bx-trash'></i>
                 </button>
               </td>
@@ -1647,8 +1647,8 @@
           }</td>
           <td class="text-center">
             <button class="btn btn-sm btn-outline-danger" onclick="window.removeCapability('${
-              c.id
-            }','${labId}')">
+              jsAttr(c.id)
+            }','${jsAttr(labId)}')">
               <i class='bx bx-trash'></i>
             </button>
           </td>
@@ -1706,7 +1706,7 @@
                       <input id="cap-turnaround" type="number" min="0" class="form-control" value="24">
                     </div>
                     <div class="col-md-2">
-                      <button class="btn btn-primary w-100" onclick="window.addCapability('${labId}', ${lab.bsl_level})">
+                      <button class="btn btn-primary w-100" onclick="window.addCapability('${jsAttr(labId)}', ${lab.bsl_level})">
                         <i class='bx bx-plus'></i> Thêm
                       </button>
                     </div>
@@ -1940,8 +1940,8 @@
         </td>
         <td class="text-center">
           <button class="btn btn-sm btn-outline-danger" onclick="window.deletePathogen('${
-            p.id
-          }', '${esc(p.name).replace(/'/g, "\\'")}')" title="Xóa">
+            jsAttr(p.id)
+          }', '${jsAttr(p.name)}')" title="Xóa">
             <i class='bx bx-trash'></i>
           </button>
         </td>

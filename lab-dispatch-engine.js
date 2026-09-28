@@ -27,10 +27,6 @@
 (function () {
   'use strict';
 
-  const OSRM_BASE = 'https://router.project-osrm.org/route/v1/driving';
-  const OSRM_TIMEOUT_MS = 4000;
-  const OSRM_GAP_MS = 250;
-
   // Preset trọng số (tổng = 1.0). 5 chiều:
   //   near = gần (phút đi thật) · free = còn công suất · fast = trả KQ nhanh
   //   qual = chất lượng (QMS) · net = phân cấp mạng lưới
