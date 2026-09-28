@@ -144,6 +144,11 @@ SELECT rrt_test.denied('pending: không tự nâng quyền admin',
   $$UPDATE public.profiles SET role = 'admin' WHERE id = auth.uid()$$);
 SELECT rrt_test.denied('pending: không tự gán Leader',
   $$UPDATE public.profiles SET position = 'Leader' WHERE id = auth.uid()$$);
+SELECT rrt_test.allowed('pending: tự chọn nơi công tác khi đăng ký',
+  $$UPDATE public.profiles SET workplace_ward = 'Phường B' WHERE id = auth.uid()$$);
+SELECT rrt_test.eq('pending: nơi công tác đã đổi (chưa duyệt thì được)',
+  (SELECT count(*) FROM public.profiles WHERE id = auth.uid() AND workplace_ma_xa = 'XB'), 1);
+UPDATE public.profiles SET workplace_ward = 'Phường A' WHERE id = auth.uid();
 SELECT rrt_test.allowed('pending: tự lưu năng lực chuyên môn',
   $$INSERT INTO public.rrt_qualifications (profile_id, skills) VALUES (auth.uid(), '["mới"]')$$);
 
@@ -283,5 +288,49 @@ SELECT rrt_test.allowed('admin: điều động người mọi phường',
   $$UPDATE public.incidents SET initial_selected_members = 's1@t.vn;s3@t.vn' WHERE id = '10000000-0000-0000-0000-00000000000a'$$);
 SELECT rrt_test.allowed('admin: sửa kho vật tư', $$UPDATE public.logistics_items SET quantity = 90$$);
 SELECT rrt_test.allowed('admin: xóa sự kiện', $$DELETE FROM public.incidents WHERE event_name = 'Ổ dịch A2'$$);
+
+
+-- ============================================================================
+\echo '--- Tự sửa hồ sơ không được dùng để leo quyền ---'
+SELECT rrt_test.login('00000000-0000-0000-0000-000000000003');
+SELECT rrt_test.allowed('s3: lưu hồ sơ kèm email khác (form gửi kèm email)',
+  $$UPDATE public.profiles SET email = 'S1@T.vn', phone = '0911' WHERE id = auth.uid()$$);
+SELECT rrt_test.eq('s3: email hồ sơ giữ nguyên', (SELECT count(*) FROM public.profiles WHERE email = 's3@t.vn'), 1);
+SELECT rrt_test.eq('s3: vẫn không thấy thông báo của s1',
+  (SELECT count(*) FROM public.notifications WHERE lower(user_email) = 's1@t.vn'), 0);
+SELECT rrt_test.allowed('s3: lưu hồ sơ kèm nơi công tác khác',
+  $$UPDATE public.profiles SET workplace_ward = 'Phường A', fax = 'UBND Phường/Xã/ Đặc khu' WHERE id = auth.uid()$$);
+SELECT rrt_test.eq('s3: nơi công tác giữ nguyên (đã duyệt)',
+  (SELECT count(*) FROM public.profiles WHERE id = auth.uid() AND workplace_ma_xa = 'XB' AND fax = 'Trạm Y tế Phường/Xã/ Đặc khu'), 1);
+
+SELECT rrt_test.login('00000000-0000-0000-0000-0000000000b1');
+SELECT rrt_test.allowed('ward B: lưu hồ sơ kèm nơi công tác phường A',
+  $$UPDATE public.profiles SET workplace_ward = 'Phường A' WHERE id = auth.uid()$$);
+SELECT rrt_test.eq('ward B: không thành tuyến cơ sở phường A (không thấy hồ sơ phường A)',
+  (SELECT count(*) FROM public.profiles WHERE workplace_ma_xa = 'XA'), 0);
+
+SELECT rrt_test.login('00000000-0000-0000-0000-0000000000a1');
+SELECT rrt_test.allowed('ward A: sửa hồ sơ nhân sự (kèm email khác)',
+  $$UPDATE public.profiles SET email = 'h1@t.vn', phone = '0922' WHERE id = '00000000-0000-0000-0000-000000000002'$$);
+SELECT rrt_test.eq('ward A: không đổi được email nhân sự (tránh mượn email người ngoài phường)',
+  (SELECT count(*) FROM public.profiles WHERE id = '00000000-0000-0000-0000-000000000002' AND email = 's2@t.vn'), 1);
+
+-- ============================================================================
+\echo '--- Đội trưởng (Leader) lập báo cáo tình hình ---'
+RESET ROLE;
+UPDATE public.profiles SET position = 'Leader' WHERE id = '00000000-0000-0000-0000-0000000000c1';
+SET ROLE authenticated;
+SELECT rrt_test.login('00000000-0000-0000-0000-0000000000c1');
+SELECT rrt_test.allowed('Leader h1: lập báo cáo sự kiện A mình tham gia',
+  $$INSERT INTO public.incident_reports (incident_id, report_type, cases_new) VALUES ('10000000-0000-0000-0000-00000000000a', 'Tiến độ', 2) RETURNING id$$);
+SELECT rrt_test.denied('Leader h1: không lập báo cáo sự kiện B không tham gia',
+  $$INSERT INTO public.incident_reports (incident_id, report_type) VALUES ('10000000-0000-0000-0000-00000000000b', 'x')$$);
+SELECT rrt_test.denied('Leader h1: không sửa báo cáo',
+  $$UPDATE public.incident_reports SET cases_new = 99 WHERE incident_id = '10000000-0000-0000-0000-00000000000a'$$);
+SELECT rrt_test.denied('Leader h1: không sửa phương án (IAP)',
+  $$UPDATE public.incident_plans SET summary = 'x' WHERE incident_id = '10000000-0000-0000-0000-00000000000a'$$);
+SELECT rrt_test.login('00000000-0000-0000-0000-000000000001');
+SELECT rrt_test.denied('s1 (không phải Leader): không lập báo cáo',
+  $$INSERT INTO public.incident_reports (incident_id, report_type) VALUES ('10000000-0000-0000-0000-00000000000a', 'x')$$);
 
 RESET ROLE;
