@@ -24,15 +24,19 @@ RRT_TEST_EMAIL=test@... RRT_TEST_PASSWORD=... npm run check:schema
 
 Công cụ `tools/check-supabase-schema.js` gửi `GET /rest/v1/<bảng>?select=<cột>&limit=0`
 cho từng truy vấn trong code (chỉ đọc, không lấy dữ liệu) và kiểm tra các RPC
-qua OpenAPI của PostgREST. Chưa kiểm tra được ràng buộc CHECK — cần xác nhận
-thủ công: `deployment_history.action_type` có chấp nhận `declined` không (app
-ghi giá trị này khi thành viên từ chối tham gia).
+qua OpenAPI của PostgREST. Công cụ chưa kiểm tra ràng buộc CHECK; xem trong
+`migrations/*_remote_schema.sql` (vd. `deployment_history_action_type_check`
+cho phép `mobilize`, `deployed`, `active`, `replace_in`, `declined`).
 
-## Đưa schema vào repo (khuyến nghị)
+## Schema trong repo
 
-Mã nguồn có nhắc tới migration
-`supabase/migrations/20260917000000_atomic_incident_membership.sql` nhưng file
-này hiện chưa được commit. Để schema được quản lý cùng mã nguồn:
+`migrations/20260928000000_remote_schema.sql` là ảnh chụp schema `public`
+(bảng, ràng buộc, index, view, hàm/RPC, trigger, RLS policy, grant) của database
+thật ngày 2026-09-28. Header của trigger webhook `Send Free Notification`
+(service_role key, webhook secret) đã được thay bằng `<SERVICE_ROLE_KEY>` /
+`<WEBHOOK_SECRET>` — không commit giá trị thật.
+
+Cập nhật lại schema / tải Edge Functions:
 
 ```bash
 npm i -g supabase          # hoặc: npx supabase ...

@@ -501,7 +501,7 @@ document.addEventListener('DOMContentLoaded', function () {
     try {
       const { data } = await window.supabaseClient
         .from('profiles')
-        .select('id, full_name, username, email, team, position, role')
+        .select('id, full_name, email, team, position, role')
         .not('role', 'in', `(${window.LIMS_ONLY_ROLES.join(',')})`);
       return data || [];
     } catch (e) {
@@ -651,7 +651,7 @@ document.addEventListener('DOMContentLoaded', function () {
       .map(
         (m, i) => `<tr>
       <td class="text-muted">${i + 1}</td>
-      <td>${_escT(m.full_name || m.username || m.email || 'N/A')}</td>
+      <td>${_escT(m.full_name || m.email || 'N/A')}</td>
       <td>${_escT(m.team || '—')}</td>
       <td>${_escT(posLabel(m.position || m.role))}</td>
     </tr>`
