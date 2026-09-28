@@ -30,6 +30,12 @@ for f in supabase/migrations/2*.sql; do
     echo "$out" | grep -v NOTICE >&2
     exit 1
   fi
+  # Chạy lại lần 2: migration phải chạy lại được mà không lỗi
+  if ! out="$(psql -d "$DB" -v ON_ERROR_STOP=1 -q -f "$f" 2>&1)"; then
+    echo "Chạy lại lần 2 bị lỗi: $f" >&2
+    echo "$out" | grep -v NOTICE >&2
+    exit 1
+  fi
 done
 
 status=0

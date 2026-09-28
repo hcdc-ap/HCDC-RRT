@@ -190,7 +190,7 @@ async function checkUser() {
     return e !== email && e !== uid && !myWardEmails.has(e);
   });
   if (badNotif.length)
-    fail(`notifications: đọc được ${badNotif.length} thông báo của người khác (kèm action_token xác nhận qua email) — chưa áp migration 20260929000000?`);
+    fail(`notifications: đọc được ${badNotif.length} thông báo của người khác (kèm action_token xác nhận qua email) — chưa áp migration 20260929000000_rrt_rls_roles?`);
   else ok(`notifications: chỉ thấy thông báo trong phạm vi (${notif.length} dòng)`);
 
   // 5. Dữ liệu LIMS (phòng xét nghiệm) — tài khoản RRT không phải quản trị không được đọc
@@ -202,16 +202,6 @@ async function checkUser() {
   else ok(`LIMS: không đọc được ${lims.length} bảng riêng của phòng xét nghiệm`);
 
   // 6. Bảng mở cho MỌI tài khoản đăng nhập — cần quyết định nghiệp vụ
-  // 6b. Thông báo: chỉ của mình (hoặc nhân sự phường/xã với tuyến cơ sở)
-  const noti = (await api(token, 'notifications?select=id,user_email&limit=5000')).rows;
-  const wardEmails = new Set(profiles.filter(inMyWard).map((p) => String(p.email || '').toLowerCase()));
-  const badNoti = noti.filter((n) => {
-    const e = String(n.user_email || '').trim().toLowerCase();
-    return e !== email && !wardEmails.has(e);
-  });
-  if (badNoti.length) fail(`notifications: đọc được ${badNoti.length} thông báo của người khác`);
-  else ok(`notifications: chỉ thấy thông báo trong phạm vi (${noti.length} dòng)`);
-
   const wide = [...OPEN_READ].filter(
     (t) =>
       TABLES.includes(t) &&

@@ -21,6 +21,9 @@
 -- Không đụng tới bảng LIMS (lims_*, lab_*, laboratories, inventory_transactions),
 -- training_*, pathogens, test_types, technique_equivalences, website_stats.
 --
+-- Thay luôn bản thử "restrict_notifications_rls" (không cần áp riêng; nếu đã
+-- áp thì các policy notif_* của nó cũng bị xóa ở bước 2).
+--
 -- Hoàn tác: supabase/migrations/rollback/20260929000000_rrt_rls_roles_down.sql
 -- ============================================================================
 
@@ -119,9 +122,17 @@ CREATE OR REPLACE FUNCTION public.rrt_email_in_my_ward(p_email text)
 RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path TO 'public' AS $$
   SELECT public.rrt_is_ward_admin() AND EXISTS (
     SELECT 1 FROM public.profiles p
-    WHERE lower(trim(p.email)) = lower(trim(p_email))
+    WHERE (lower(trim(p.email)) = lower(trim(p_email)) OR p.id::text = trim(p_email))
       AND public.row_in_my_ward(p.workplace_ma_xa, p.fax)
   );
+$$;
+
+-- Thông báo gửi cho chính mình: user_email là email (không phân biệt hoa thường)
+-- hoặc uid (một số luồng cũ lưu uid vào cột này)
+CREATE OR REPLACE FUNCTION public.rrt_is_me(p_email text)
+RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path TO 'public' AS $$
+  SELECT auth.uid() IS NOT NULL
+     AND (lower(trim(p_email)) = public.rrt_my_email() OR trim(p_email) = auth.uid()::text);
 $$;
 
 -- Email có nằm trong chuỗi "a@x;b@y" không (không phân biệt hoa thường)
@@ -158,6 +169,22 @@ RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path TO 'public'
         )
     )
   );
+$$;
+
+-- Người nhận là thành viên (được điều động/đã xác nhận/từ chối) của sự kiện
+-- mà người gọi quản lý — để tuyến cơ sở đóng sự kiện báo được cả thành viên
+-- HCDC điều động từ ngoài phường/xã.
+CREATE OR REPLACE FUNCTION public.rrt_email_in_managed_incident(p_email text, p_incident_id uuid)
+RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path TO 'public' AS $$
+  SELECT p_incident_id IS NOT NULL
+     AND public.rrt_can_manage_incident(p_incident_id)
+     AND EXISTS (
+       SELECT 1 FROM public.incidents i
+       WHERE i.id = p_incident_id
+         AND (public.rrt_email_in_list(p_email, i.members)
+              OR public.rrt_email_in_list(p_email, i.initial_selected_members)
+              OR public.rrt_email_in_list(p_email, i.declined_members))
+     );
 $$;
 
 -- Lịch trực: xem được nếu là ca của đội mình, ca mình tạo, ca mình được phân
@@ -369,8 +396,7 @@ RETURNS trigger
 LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public'
 AS $$
 BEGIN
-  IF auth.uid() IS NULL OR public.rrt_is_admin()
-     OR public.rrt_email_in_my_ward(OLD.user_email) THEN
+  IF auth.uid() IS NULL OR public.rrt_is_admin() THEN
     RETURN NEW;
   END IF;
 
@@ -500,25 +526,25 @@ CREATE POLICY rrt_delete ON public.deployment_history FOR DELETE TO authenticate
   USING (public.rrt_is_admin());
 
 -- ---- notifications ----
+-- Xem: của mình | Quản trị | tuyến cơ sở: của nhân sự phường/xã mình
+-- Tạo: Quản trị | tuyến cơ sở: cho nhân sự phường/xã mình hoặc thành viên sự kiện mình quản lý
+-- Sửa: người nhận (chỉ đánh dấu đã đọc/trả lời — trigger chặn cột khác) | Quản trị
+-- Xóa: Quản trị
 CREATE POLICY rrt_select ON public.notifications FOR SELECT TO authenticated
   USING (
     public.rrt_is_admin()
-    OR (public.rrt_is_approved() AND lower(trim(user_email)) = public.rrt_my_email())
+    OR (public.rrt_is_approved() AND public.rrt_is_me(user_email))
     OR public.rrt_email_in_my_ward(user_email)
   );
 CREATE POLICY rrt_insert ON public.notifications FOR INSERT TO authenticated
-  WITH CHECK (public.rrt_is_admin() OR public.rrt_email_in_my_ward(user_email));
-CREATE POLICY rrt_update ON public.notifications FOR UPDATE TO authenticated
-  USING (
-    public.rrt_is_admin()
-    OR (public.rrt_is_approved() AND lower(trim(user_email)) = public.rrt_my_email())
-    OR public.rrt_email_in_my_ward(user_email)
-  )
   WITH CHECK (
     public.rrt_is_admin()
-    OR (public.rrt_is_approved() AND lower(trim(user_email)) = public.rrt_my_email())
     OR public.rrt_email_in_my_ward(user_email)
+    OR (public.rrt_is_ward_admin() AND public.rrt_email_in_managed_incident(user_email, incident_id))
   );
+CREATE POLICY rrt_update ON public.notifications FOR UPDATE TO authenticated
+  USING (public.rrt_is_admin() OR (public.rrt_is_approved() AND public.rrt_is_me(user_email)))
+  WITH CHECK (public.rrt_is_admin() OR (public.rrt_is_approved() AND public.rrt_is_me(user_email)));
 CREATE POLICY rrt_delete ON public.notifications FOR DELETE TO authenticated
   USING (public.rrt_is_admin());
 

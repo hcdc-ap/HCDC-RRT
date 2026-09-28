@@ -200,6 +200,8 @@ DROP FUNCTION IF EXISTS public.rrt_incidents_guard();
 DROP FUNCTION IF EXISTS public.rrt_roster_assignments_guard();
 DROP FUNCTION IF EXISTS public.rrt_notifications_guard();
 DROP FUNCTION IF EXISTS public.rrt_can_manage_schedule(uuid);
+DROP FUNCTION IF EXISTS public.rrt_email_in_managed_incident(text, uuid);
+DROP FUNCTION IF EXISTS public.rrt_is_me(text);
 DROP FUNCTION IF EXISTS public.rrt_can_view_schedule(uuid);
 DROP FUNCTION IF EXISTS public.rrt_can_view_schedule_row(uuid, text, uuid);
 DROP FUNCTION IF EXISTS public.rrt_can_view_incident(uuid);
