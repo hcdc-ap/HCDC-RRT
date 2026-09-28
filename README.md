@@ -46,6 +46,15 @@ RRT_TEST_EMAIL=test@... RRT_TEST_PASSWORD=... npm run e2e
 RRT_TEST_EMAIL=test@... RRT_NEW_PASSWORD='Moi@12345' npm run e2e:recovery
 ```
 
+### Migration phân quyền (RLS)
+
+Các file `supabase/migrations/2026092900xxxx_*.sql` sau bản chụp schema là thay đổi
+**chưa tự áp** lên database. Mỗi file có bộ test chạy trên PostgreSQL trong bộ nhớ
+(PGlite, không kết nối Supabase), nằm trong `npm test`
+(vd. `tests/rls-notifications.test.js`). Áp bằng Supabase → SQL Editor (dán nguyên
+file), rồi chạy `npm run check:rls` với tài khoản nhân viên để xác nhận. Cách hoàn
+tác ghi ở cuối mỗi file.
+
 `npm run e2e` dùng Google Chrome đã cài trên máy (hoặc đặt `CHROME_PATH`);
 `HEADLESS=0` để xem trình duyệt chạy. `npm run check:schema -- --list` liệt kê
 các truy vấn mà không gọi mạng.
