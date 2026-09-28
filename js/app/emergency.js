@@ -3,6 +3,14 @@
 // (Tách từ script.js cũ — xem js/app/README.md về thứ tự nạp)
 // ============================================================
 
+// Chuẩn hoá tên đội để so sánh: cùng dạng Unicode (NFC), bỏ khoảng trắng thừa
+function normTeam(t) {
+  return String(t || '')
+    .normalize('NFC')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 document.addEventListener('DOMContentLoaded', function () {
   // Main function to load and display the member list
   // ============================================================
@@ -111,7 +119,9 @@ document.addEventListener('DOMContentLoaded', function () {
         'alert alert-success d-flex align-items-center justify-content-between shadow-sm mb-4';
       alertBox.style.borderLeft = '5px solid #198754';
 
-      const onDutyMembers = teamData.filter((u) => u.team === onDutyTeam);
+      const onDutyMembers = teamData.filter(
+        (u) => normTeam(u.team) === normTeam(onDutyTeam)
+      );
       const memberNames =
         onDutyMembers.length > 0
           ? onDutyMembers
@@ -141,15 +151,18 @@ document.addEventListener('DOMContentLoaded', function () {
 
     const teamSet = new Set(
       teamData
-        .map((m) => m.team)
-        .filter((t) => t && String(t).trim() !== '' && t !== 'No team')
+        .map((m) => normTeam(m.team))
+        .filter((t) => t !== '' && t !== 'No team')
     );
     const teamSelect = document.getElementById('emer-filter-team');
     if (teamSelect) {
+      const prev = teamSelect.value;
       teamSelect.innerHTML = '<option value="all">-- Tất cả Đội --</option>';
-      [...teamSet].sort().forEach((t) => {
-        teamSelect.innerHTML += `<option value="${t}">${t}</option>`;
+      [...teamSet].sort((a, b) => a.localeCompare(b, 'vi')).forEach((t) => {
+        teamSelect.add(new Option(t, t));
       });
+      // Giữ lựa chọn đang lọc khi bảng được vẽ lại
+      if ([...teamSet].includes(prev)) teamSelect.value = prev;
     }
 
     teamData.forEach((m) => {
@@ -184,7 +197,7 @@ document.addEventListener('DOMContentLoaded', function () {
       } catch (e) {}
 
       const row = `
-          <tr>
+          <tr data-team="${window.escapeHtml ? window.escapeHtml(normTeam(m.team)) : normTeam(m.team)}">
               <td class="text-center">
                   <input type="checkbox" class="member-checkbox form-check-input" value="${
                     m.email
@@ -234,11 +247,16 @@ document.addEventListener('DOMContentLoaded', function () {
     // (thay cho push -> draw -> pop cũ vốn bị mất filter khi user sort/search)
     if (!window._emerFilterRegistered) {
       window._emerFilterRegistered = true;
-      $.fn.dataTable.ext.search.push(function (settings, data) {
+      $.fn.dataTable.ext.search.push(function (settings, data, dataIndex) {
         if (settings.nTable.id !== 'memberListTable') return true;
         const teamVal = $('#emer-filter-team').val() || 'all';
         const roleVal = $('#emer-filter-role').val() || 'all';
-        const matchTeam = teamVal === 'all' || data[2] === teamVal;
+        // So theo tên đội gốc lưu trên dòng (data-team), KHÔNG theo data[2]:
+        // dữ liệu tìm kiếm của DataTables 2 đã bỏ dấu tiếng Việt nên
+        // "Team Phường ..." không bao giờ bằng giá trị trong dropdown.
+        const tr = settings.aoData[dataIndex]?.nTr;
+        const rowTeam = tr ? tr.getAttribute('data-team') || '' : normTeam(data[2]);
+        const matchTeam = teamVal === 'all' || rowTeam === normTeam(teamVal);
         const matchRole =
           roleVal === 'all' || String(data[3]).includes(roleVal);
         return matchTeam && matchRole;
@@ -525,7 +543,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // Reset ô search + đặt bộ lọc về đúng đội rồi vẽ lại
     table.search('');
-    $('#emer-filter-team').val(teamName);
+    $('#emer-filter-team').val(normTeam(teamName));
     $('#emer-filter-role').val('all');
     table.draw();
 
