@@ -4,7 +4,6 @@
 // ============================================================
 
 document.addEventListener('DOMContentLoaded', function () {
-
   window.getCurrentUserEmail = function () {
     return window.userSession?.email || window.userSession?.username || null;
   };
@@ -456,85 +455,6 @@ document.addEventListener('DOMContentLoaded', function () {
     );
   }
 
-  // ========================================================================
-  // HELPER: Hiển thị Modal xác nhận xuất file
-  // ========================================================================
-  function showExportConfirmModal() {
-    // Xóa modal cũ nếu tồn tại (tránh duplicate)
-    const oldModal = document.getElementById('exportConfirmModal');
-    if (oldModal) oldModal.remove();
-
-    // Tạo modal HTML
-    const modalHtml = `
-    <div class="modal fade" id="exportConfirmModal" tabindex="-1" aria-hidden="true">
-      <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content border-0 shadow-lg">
-          <div class="modal-body text-center p-4">
-            <i class='bx bxs-file-pdf text-danger' style='font-size: 4rem;'></i>
-            <h5 class="mt-3 fw-bold">Lưu báo cáo thành công!</h5>
-            <p class="text-muted mb-4">Bạn có muốn xuất báo cáo này ra file định dạng chuẩn (Google Docs/PDF) không?</p>
-            <div class="d-flex justify-content-center gap-2">
-              <button type="button" class="btn btn-light px-4" data-bs-dismiss="modal">Để sau</button>
-              <button type="button" class="btn btn-danger px-4" id="btn-confirm-export">
-                <i class='bx bx-export'></i> Xuất file ngay
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  `;
-
-    // Append vào body
-    document.body.insertAdjacentHTML('beforeend', modalHtml);
-
-    // Show modal
-    const exportModalEl = document.getElementById('exportConfirmModal');
-    const exportModal = new bootstrap.Modal(exportModalEl);
-    exportModal.show();
-
-    // Handle click "Xuất file ngay"
-    document
-      .getElementById('btn-confirm-export')
-      ?.addEventListener('click', function () {
-        exportModal.hide();
-
-        // Cleanup sau khi modal đóng hoàn toàn
-        exportModalEl.addEventListener(
-          'hidden.bs.modal',
-          function cleanup() {
-            exportModalEl.remove();
-            // Xóa backdrop nếu còn sót
-            document
-              .querySelectorAll('.modal-backdrop')
-              .forEach((el) => el.remove());
-            exportModalEl.removeEventListener('hidden.bs.modal', cleanup);
-          },
-          { once: true }
-        );
-
-        // Gọi hàm xuất file
-        if (typeof window.exportOfficialReport === 'function') {
-          window.exportOfficialReport();
-        } else {
-          showToast('⚠️ Chức năng xuất file chưa sẵn sàng!', 'warning');
-        }
-      });
-
-    // Cleanup khi modal đóng (dù bằng cách nào)
-    exportModalEl.addEventListener(
-      'hidden.bs.modal',
-      function () {
-        setTimeout(() => {
-          exportModalEl.remove();
-          document
-            .querySelectorAll('.modal-backdrop')
-            .forEach((el) => el.remove());
-        }, 100);
-      },
-      { once: true }
-    );
-  }
 
   // ========================================================================
   // EXPORT OFFICIAL REPORT - FULL VERSION (PDF + Chat Integration)

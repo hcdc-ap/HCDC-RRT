@@ -6,11 +6,9 @@ const QueryCache = {
   async fetch(key, fetchFn) {
     const cached = this.cache.get(key);
     if (cached && Date.now() - cached.timestamp < this.ttl) {
-      console.log(`🔄 Cache hit: ${key}`);
       return cached.data;
     }
     
-    console.log(`📡 Fetching fresh data: ${key}`);
     const data = await fetchFn();
     this.cache.set(key, { data, timestamp: Date.now() });
     return data;
@@ -21,7 +19,6 @@ const QueryCache = {
     for (const key of this.cache.keys()) {
       if (key.includes(pattern)) {
         this.cache.delete(key);
-        console.log(`🗑️ Cache invalidated: ${key}`);
       }
     }
   }

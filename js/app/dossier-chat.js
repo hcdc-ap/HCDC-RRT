@@ -151,16 +151,6 @@ document.addEventListener('DOMContentLoaded', function () {
         .getPublicUrl(filePath);
       const fileUrl = publicUrlData.publicUrl;
 
-      // 4. Tạo nội dung hiển thị
-      let displayContent = '';
-      if (file.type.startsWith('image/')) {
-        displayContent = `<a href="${fileUrl}" target="_blank"><img src="${fileUrl}" style="max-width: 200px; border-radius: 8px;"></a>`;
-      } else {
-        displayContent = `<a href="${fileUrl}" target="_blank" class="text-decoration-none text-primary">
-          <i class="bx bxs-file"></i> ${window.escapeHtml(file.name)}
-        </a>`;
-      }
-
       // 5. Lưu vào Database - FIX FIELD NAMES
       // Trong handleChatFileUpload
       const { error: dbError } = await supabaseClient
@@ -219,6 +209,9 @@ document.addEventListener('DOMContentLoaded', function () {
   // ========================================================================
   // HELPER: Mở modal xem ảnh full-size
   // ========================================================================
+  // Gắn lên window vì được gọi từ onclick="openImageModal(...)" trong HTML
+  // render động — hàm cục bộ trong closure không gọi được từ onclick inline.
+  window.openImageModal = openImageModal;
   function openImageModal(url) {
     let modal = document.getElementById('image-modal');
 
@@ -1125,11 +1118,12 @@ document.addEventListener('DOMContentLoaded', function () {
             case 'deployed':
               actionText = `🟢 Điều động: ${userName}`;
               break;
-            case 'replaced':
+            case 'replaced': {
               const replacer =
                 d.replaced_profile?.full_name || d.replaced_by || '?';
               actionText = `🔄 Thay thế: ${userName} → ${replacer}`;
               break;
+            }
             case 'added':
               actionText = `➕ Bổ sung: ${userName}`;
               break;

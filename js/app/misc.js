@@ -66,9 +66,6 @@ window.createWardDropdown = async function () {
     const wards = helpersData
       .filter((h) => h.category === 'ward')
       .map((h) => h.name);
-    const employeeStatuses = helpersData
-      .filter((h) => h.category === 'employeeStatus')
-      .map((h) => h.name);
     const academicList = helpersData
       .filter((h) => h.category === 'academic')
       .map((h) => h.name);
@@ -127,7 +124,6 @@ window.createWardDropdown = async function () {
     // 3. XỬ LÝ DROPDOWN PHỤ THUỘC (Đơn vị -> Khoa/Phòng)
     const faxSelect = $('#fax'); // Giả sử #fax là dropdown Đơn vị công tác
     const departmentSelect = $('#department'); // Giả sử #department là dropdown Khoa/Phòng
-    const employeeStatusSelect = $('#employeeStatus');
 
     faxSelect.empty().append('<option value="">Chọn</option>');
     departmentSelect.empty().append('<option value="">Chọn</option>');
@@ -252,19 +248,9 @@ document.addEventListener('change', function (e) {
     }
   }
 });
-// Hàm lấy số lượt truy cập từ GAS và hiển thị
-function fetchVisitCount() {
-  // Tạm thời vô hiệu hóa bộ đếm cũ của GAS để web chạy mượt
-  console.log('Tính năng đếm lượt truy cập đang được nâng cấp lên Supabase.');
-
-  // Bạn có thể giả lập một con số cho giao diện khỏi trống
-  const visitElement = document.getElementById('visitCount');
-  if (visitElement) visitElement.textContent = 'Đang cập nhật...';
-}
 // Gọi hàm ngay khi trang được tải
 document.addEventListener('DOMContentLoaded', () => {
   createWardDropdown();
-  //fetchVisitCount();
   getUserLocation((loc) => {
     console.log('Đã chuẩn bị sẵn vị trí:', loc);
   });

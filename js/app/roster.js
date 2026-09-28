@@ -353,7 +353,6 @@ document.addEventListener('DOMContentLoaded', function () {
     try {
       const isRoster = wizardData.context === 'roster';
       let finalCandidates = [];
-      let busyRostersData = [];
 
       // ✅ BỌC THÉP 1: XỬ LÝ CHUỖI TÊN CHỨC VỤ BỊ DÍNH HTML/CẶN
       let targetPosition = 'Thành viên';
@@ -503,7 +502,6 @@ document.addEventListener('DOMContentLoaded', function () {
             .in('assignment_status', ['assigned', 'confirmed']); // Kể cả pending (assigned) hay confirmed đều tính là bận
 
           if (busyRosters) {
-            busyRostersData = busyRosters;
             busyRosterIds = busyRosters.map((r) => r.user_id);
           }
         } catch (e) {
@@ -1290,21 +1288,6 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   };
 
-  async function waitForSupabaseReady(timeout = 10000) {
-    if (window.supabaseClient?.auth) return true;
-    return new Promise((resolve, reject) => {
-      const startTime = Date.now();
-      const check = () => {
-        if (window.supabaseClient?.auth) return resolve(true);
-        if (Date.now() - startTime > timeout)
-          return reject(
-            new Error('Supabase client not initialized after ' + timeout + 'ms')
-          );
-        setTimeout(check, 100);
-      };
-      check();
-    });
-  }
 
   window.submitNewShift = async function () {
     const date = document.getElementById('new-shift-date').value;

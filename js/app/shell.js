@@ -332,7 +332,7 @@ document.addEventListener('DOMContentLoaded', function () {
    */
   function parseFilterDate(str) {
     if (!str) return null;
-    const parts = str.split(/[/\-]/);
+    const parts = str.split(/[/-]/);
     if (parts.length !== 3) return null;
 
     let d, m, y;
@@ -361,7 +361,6 @@ document.addEventListener('DOMContentLoaded', function () {
     const notificationPage = document.getElementById('page-notification');
     const teamPage = document.getElementById('page-team');
     const emergencyPage = document.getElementById('page-emergency');
-    const labPage = document.getElementById('page-lab-admin');
 
     let currentPage = '';
     if (
@@ -995,14 +994,6 @@ document.addEventListener('DOMContentLoaded', function () {
     console.log('📊 State:', window.__uiState);
   }
 
-  function bindUserInfo(session) {
-    $('.brand .text').text(session.username);
-    $('#profileMenu .profile-name').text(session.username);
-    $('#profileMenu .profile-email').text(session.email || 'N/A');
-    if (session.avatar) {
-      $('#profileMenu .profile-img').attr('src', session.avatar);
-    }
-  }
 
   // ===============================
   // 3. DASHBOARD INIT

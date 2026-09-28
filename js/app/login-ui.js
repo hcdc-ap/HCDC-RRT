@@ -393,126 +393,6 @@ function confirmPassword() {
   );
 }
 // ======================
-// VALIDATE OTP INPUT UI
-// ======================
-function inputValidationOTP() {
-  const inputArr = [
-    {
-      el: document.getElementById('otp-email'),
-      label: document.querySelector('label[for="otp-email"]'),
-      type: 'otp-mail',
-    },
-    {
-      el: document.getElementById('otp-code'),
-      label: document.querySelector('label[for="otp-code"]'),
-      type: 'otp-code',
-    },
-    {
-      el: document.getElementById('new-password'),
-      label: document.querySelector('label[for="new-password"]'),
-      type: 'otp-password',
-    },
-    {
-      el: document.getElementById('new-confirm-password'),
-      label: document.querySelector('label[for="new-confirm-password"]'),
-      type: 'otp-confirm-password',
-    },
-  ];
-
-  const otpPasswordRequirementsLength = document.getElementById(
-    'otp-password-requirements-length'
-  );
-  const otpPasswordRequirementsNumber = document.getElementById(
-    'otp-password-requirements-number'
-  );
-  const otpPasswordRequirementsLower = document.getElementById(
-    'otp-password-requirements-lower'
-  );
-  const otpPasswordRequirementsUpper = document.getElementById(
-    'otp-password-requirements-upper'
-  );
-  const otpPasswordRequirementsSpecial = document.getElementById(
-    'otp-password-requirements-special'
-  );
-
-  inputArr.forEach((item, idx) => {
-    if (!item.el) return;
-    item.el.onchange = () => {
-      let v = item.el.value.trim();
-      if (item.type === 'otp-mail') {
-        if (validMail.test(v))
-          validationStyling('valid', item.el, item.label, idx);
-        else validationStyling('invalid', item.el, item.label, idx);
-      } else if (item.type === 'otp-code') {
-        if (/^\d{6}$/.test(v))
-          validationStyling('valid', item.el, item.label, idx);
-        else validationStyling('invalid', item.el, item.label, idx);
-      } else if (item.type === 'otp-password') {
-        if (validPassword.test(v))
-          validationStyling('valid', item.el, item.label, idx);
-        else validationStyling('invalid', item.el, item.label, idx);
-      } else if (item.type === 'otp-confirm-password') {
-        const passwordEl = document.getElementById('new-password');
-        if (v === passwordEl.value && v.length > 0)
-          validationStyling('valid', item.el, item.label, idx);
-        else validationStyling('invalid', item.el, item.label, idx);
-      }
-    };
-  });
-
-  const otpPassword = document.getElementById('new-password');
-  if (otpPassword) {
-    otpPassword.onfocus = function () {
-      document
-        .getElementById('otp-password-requirements-container')
-        .classList.add('active');
-      document
-        .getElementById('otp-password-requirements')
-        .classList.add('active');
-    };
-    otpPassword.onblur = function () {
-      if (!otpPassword.value) {
-        document
-          .getElementById('otp-password-requirements-container')
-          .classList.remove('active');
-        document
-          .getElementById('otp-password-requirements')
-          .classList.remove('active');
-      }
-    };
-    otpPassword.oninput = () => {
-      let value = otpPassword.value;
-      const valid = (req) => {
-        if (!req.classList.contains('invalid'))
-          req.firstElementChild.classList.remove('uil-info-circle');
-        req.classList.remove('invalid');
-        req.classList.add('valid');
-        req.firstElementChild.classList.remove('uil-times-circle');
-        req.firstElementChild.classList.add('uil-check-circle');
-      };
-      const invalid = (req) => {
-        if (req.classList.contains('valid')) {
-          req.classList.remove('valid');
-          req.classList.add('invalid');
-          req.firstElementChild.classList.remove('uil-check-circle');
-          req.firstElementChild.classList.add('uil-times-circle');
-        }
-      };
-      if (value.length >= 8 && value.length <= 32)
-        valid(otpPasswordRequirementsLength);
-      else invalid(otpPasswordRequirementsLength);
-      if (/\d/.test(value)) valid(otpPasswordRequirementsNumber);
-      else invalid(otpPasswordRequirementsNumber);
-      if (/[a-z]/.test(value)) valid(otpPasswordRequirementsLower);
-      else invalid(otpPasswordRequirementsLower);
-      if (/[A-Z]/.test(value)) valid(otpPasswordRequirementsUpper);
-      else invalid(otpPasswordRequirementsUpper);
-      if (/[^a-zA-Z\d\s]/.test(value)) valid(otpPasswordRequirementsSpecial);
-      else invalid(otpPasswordRequirementsSpecial);
-    };
-  }
-}
-// ======================
 // FORM SHAKING HIỆU ỨNG
 // ======================
 function sumbitForms() {
@@ -572,7 +452,6 @@ function extraThemes() {
 
   // ... (Khai báo các biến nút khác giữ nguyên) ...
   const clearCustomThemeBtn = loginView.querySelector('#clear-custom-theme');
-  const ownTheme = loginView.querySelector('.own-theme');
 
   if (!openThemesButton || !themes || !form) return;
 
@@ -639,10 +518,6 @@ function extraThemes() {
     localStorage.setItem('login_custom_theme', customTheme);
     localStorage.removeItem('login_theme');
   };
-}
-function onLoginViewShown() {
-  extraThemes();
-  restoreLoginTheme();
 }
 // ======================
 // MAIN ENTRYPOINT
@@ -825,23 +700,6 @@ function resetLoginUI() {
 
   // reset style (custom theme)
   loginView.removeAttribute('style');
-}
-function applyLoginTheme(themeName) {
-  const loginView = document.getElementById('view-login');
-  if (!loginView) return;
-
-  // chỉ remove theme cũ
-  loginView.classList.forEach((cls) => {
-    if (
-      cls !== 'app-view' &&
-      cls !== 'active' &&
-      cls !== 'view-login' // 🔑 GIỮ LẠI CLASS NỀN
-    ) {
-      loginView.classList.remove(cls);
-    }
-  });
-
-  loginView.classList.add(themeName);
 }
 function restoreLoginTheme() {
   const loginView = document.getElementById('view-login');

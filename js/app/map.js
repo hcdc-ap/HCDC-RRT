@@ -33,7 +33,6 @@ document.addEventListener('DOMContentLoaded', function () {
   let companyData = [];
   let filteredData = [];
   let incidentData = [];
-  let geojsonBaseLayer;
 
   // Các LAYER ỔN ĐỊNH (tạo 1 lần, cập nhật nội dung bên trong)
   let choroplethLayer = null; // L.geoJSON (tô màu phường)
@@ -44,7 +43,6 @@ document.addEventListener('DOMContentLoaded', function () {
 
   let layersControl = null; // L.control.layers DUY NHẤT
   let legendControl = null;
-  let statsControl = null;
 
   // Trạng thái bật/tắt từng lớp
   const layerVisible = {
@@ -1212,7 +1210,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
   // ĐỔI: dùng Esri World_Light_Gray_Reference — lớp nhãn riêng
   // tương ứng chính xác với World_Light_Gray_Base ở trên (cặp Base+Reference chuẩn của Esri)
-  const cartoLabels = L.tileLayer(
+  L.tileLayer(
     'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Reference/MapServer/tile/{z}/{y}/{x}',
     {
       pane: 'overlayPane',
@@ -1269,7 +1267,7 @@ document.addEventListener('DOMContentLoaded', function () {
         };
 
         // Lớp viền ranh giới hành chính cơ bản
-        geojsonBaseLayer = L.geoJSON(geojsonData, {
+        L.geoJSON(geojsonData, {
           style: { fillColor: 'transparent', color: '#bcbcbc', weight: 1 },
           interactive: false,
         }).addTo(map);

@@ -126,9 +126,6 @@ document.addEventListener('DOMContentLoaded', function () {
     console.log('🚀 Bắt đầu render User Dashboard...');
 
     // 1. CHUẨN HÓA ĐỊNH DANH
-    const username = String(window.userSession?.username || '')
-      .toLowerCase()
-      .trim();
     const myEmail = String(window.userSession?.email || '')
       .toLowerCase()
       .trim();
@@ -268,7 +265,6 @@ document.addEventListener('DOMContentLoaded', function () {
     if (!alertsContainer) return;
 
     // Giữ lại phần thông báo Sự cố đã render trước đó
-    const existingIncidentsHTML = alertsContainer.innerHTML;
     // Dọn dẹp để vẽ lại phần Roster (Tùy chiến thuật giao diện của bạn, ở đây tôi nối tiếp vào)
 
     const rosters = window.appState.rosters || []; // Dữ liệu kéo từ Supabase (bảng roster_schedules & roster_assignments)
@@ -283,7 +279,6 @@ document.addEventListener('DOMContentLoaded', function () {
       .trim();
 
     const myShifts = rosters.filter((r) => {
-      const rowId = r.id || 'No-ID';
       const rDate = rrtShared.parseFilterDate(r.duty_date); // Sử dụng parseFilterDate (có thể thay parseAnyDate nếu bạn thích)
       if (!rDate || isNaN(rDate.getTime())) return false;
 

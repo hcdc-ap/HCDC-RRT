@@ -232,7 +232,6 @@ document
   .querySelector('#my-manifest-placeholder')
   .setAttribute('href', manifestURL);
 
-const webAppUrl = '<?!= getWebAppUrl() ?>'; // (Ghi chú: dòng này của GAS, ở StackBlitz bạn có thể để trống const webAppUrl = '';)
 /* =========================
      SPA ROUTER
   ========================= */
@@ -475,14 +474,6 @@ window.onInitialDataSuccess = function (appStateData) {
     window.renderRRTTable();
   }
 
-  // Áp dụng bộ lọc nếu có
-  const startDate = $('#filter-date-start').val();
-  const endDate = $('#filter-date-end').val();
-  if ((startDate || endDate) && typeof applyDateFilter === 'function') {
-    console.log('🔄 Đang áp dụng lại bộ lọc ngày...');
-    applyDateFilter(startDate, endDate);
-  }
-
   // Kiểm tra quyền Admin để hiện nút xuất báo cáo
 
   if (window.userSession && window.userSession.role === 'admin') {
@@ -618,13 +609,7 @@ window.enterDashboard = async function () {
     // ✅ 5. Load data với BATCH FETCH + CACHE
     console.log('📦 Batch fetching dashboard data...');
 
-    const [
-      profilesRes,
-      incidentsRes,
-      trainingRes,
-      deploymentRes,
-      notificationsRes,
-    ] = await batchFetch([
+    const dashboardBatch = await batchFetch([
       // Profiles - LỌC THEO ROLE
       () =>
         QueryCache.fetch(`profiles:${currentUserRole}`, async () => {
@@ -696,6 +681,22 @@ window.enterDashboard = async function () {
         return data;
       },
     ]);
+    const [
+      profilesRes,
+      incidentsRes,
+      trainingRes,
+      deploymentRes,
+      notificationsRes,
+    ] = dashboardBatch;
+
+    // Truy vấn lỗi trả về null (xem utils/batch-fetch.js) — báo cho người dùng
+    // biết dữ liệu có thể thiếu thay vì im lặng hiển thị danh sách rỗng.
+    if (dashboardBatch.errors.length && typeof showToast === 'function') {
+      showToast(
+        'Một số dữ liệu chưa tải được, vui lòng tải lại trang.',
+        'warning'
+      );
+    }
 
     // ✅ 6. Lưu vào appState
     window.appState = window.appState || {};
@@ -945,7 +946,7 @@ document.addEventListener('DOMContentLoaded', function () {
       console.log('🔐 Đang đăng nhập với Supabase...');
       await window.supabaseClient.auth.signOut();
 
-      const { data: authData, error: authError } =
+      const { error: authError } =
         await window.supabaseClient.auth.signInWithPassword({
           email: email,
           password: password,

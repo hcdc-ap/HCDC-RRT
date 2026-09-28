@@ -4,51 +4,6 @@
 // ============================================================
 
 document.addEventListener('DOMContentLoaded', function () {
-  //TRAINING
-  // ============================================================
-  // MODULE TRAINING LOGIC – ĐÃ FIX HOÀN TOÀN (XÓA + LƯU + TÌM KIẾM)
-  // Helper: Parse ngày an toàn (Hỗ trợ dd/MM/yyyy và yyyy-MM-dd)
-  function parseDateStr(dateStr) {
-    if (!dateStr) return null;
-
-    // 🔥 CẬP NHẬT: Thay thế 'T' bằng khoảng trắng để cắt bỏ phần giờ an toàn hơn
-    let str = String(dateStr).replace('T', ' ').trim().split(' ')[0];
-    let day, month, year;
-
-    // Trường hợp 1: dd/MM/yyyy (Từ Datepicker VN)
-    if (str.includes('/')) {
-      const parts = str.split('/');
-      if (parts.length === 3) {
-        day = parseInt(parts[0], 10);
-        month = parseInt(parts[1], 10) - 1;
-        year = parseInt(parts[2], 10);
-      }
-    }
-    // Trường hợp 2: yyyy-MM-dd (Từ Server/ISO)
-    else if (str.includes('-')) {
-      const parts = str.split('-');
-      if (parts.length === 3) {
-        year = parseInt(parts[0], 10);
-        month = parseInt(parts[1], 10) - 1;
-        day = parseInt(parts[2], 10);
-      }
-    }
-
-    if (!isNaN(day) && !isNaN(month) && !isNaN(year)) {
-      const d = new Date(year, month, day);
-      // Đặt giờ về 00:00:00 để so sánh chính xác chỉ theo ngày
-      d.setHours(0, 0, 0, 0);
-
-      if (
-        d.getDate() === day &&
-        d.getMonth() === month &&
-        d.getFullYear() === year
-      ) {
-        return d;
-      }
-    }
-    return null;
-  }
   // ============================================================
   // 1. HÀM RENDER TRANG TRAINING (HOÀN CHỈNH)
   // ============================================================

@@ -504,7 +504,6 @@ document.addEventListener('DOMContentLoaded', function () {
         if (profile.approval_status === 'edit' && profile.edit_comment) {
           const commentClean =
             window.escapeHtml?.(profile.edit_comment) || profile.edit_comment;
-          const reviewer = profile.reviewed_by || 'Quản trị viên';
           const reviewDate = profile.updated_at
             ? new Date(profile.updated_at).toLocaleString('vi-VN')
             : '';
@@ -561,7 +560,6 @@ document.addEventListener('DOMContentLoaded', function () {
   const reportForm = document.getElementById('rrtForm');
   const modalTitle = document.getElementById('modal-title');
 
-  let isEditMode = false; // toàn cục, true = Sửa, false = Tạo mới
   let isSubmitting = false; // Ngăn submit nhiều lần
 
   // ==========================================
@@ -625,7 +623,11 @@ document.addEventListener('DOMContentLoaded', function () {
   if (btnCreateReport) {
     btnCreateReport.addEventListener('click', function () {
       modalTitle.textContent = '📑 Biểu mẫu đăng ký RRT';
-      isEditMode = false;
+      // Phải reset biến TOÀN CỤC (submit đọc window.isEditMode). Trước đây chỉ
+      // gán biến cục bộ nên sau khi admin sửa hồ sơ A rồi bấm "Tạo mới",
+      // submit vẫn UPDATE đè lên hồ sơ A.
+      window.isEditMode = false;
+      window.currentEditingProfileId = null;
 
       reportForm.reset();
 
@@ -915,7 +917,6 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   }
   // =====  Chức năng In Báo cáo =====
-  const reportModal = document.getElementById('modal-rrtForm');
 
   // ==========================================
   // IN PDF BẰNG TRÌNH DUYỆT (PRINT)

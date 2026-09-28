@@ -83,7 +83,6 @@ document.addEventListener('DOMContentLoaded', function () {
       String(today.getDate()).padStart(2, '0');
 
     let onDutyTeam = null;
-    let onDutyShift = null;
 
     rosters.forEach((r) => {
       if (!r.duty_date) return;
@@ -96,7 +95,6 @@ document.addEventListener('DOMContentLoaded', function () {
         (!r.shift_type || r.shift_type === 'roster')
       ) {
         onDutyTeam = r.team_name || 'Không tên';
-        onDutyShift = r;
       }
     });
 
@@ -590,35 +588,6 @@ document.addEventListener('DOMContentLoaded', function () {
   // XỬ LÝ QUY TRÌNH KÍCH HOẠT KHẨN CẤP (NEW & ADD)
   // ======================================================
 
-  // 2. Helper: Kiểm tra nhân sự có đang bận không (để cảnh báo)
-  function getBusyInfo(username) {
-    if (!window.appState.deploymentHistory) return null;
-
-    // Tìm lịch sử gần nhất
-    const lastDeploy = window.appState.deploymentHistory.find(
-      (h) => String(h.username).toLowerCase() === String(username).toLowerCase()
-    );
-
-    if (!lastDeploy) return null;
-
-    // Nếu đang Active/Mobilize/Deploy/Replace_In VÀ Sự kiện chưa đóng
-    if (
-      ['mobilize', 'deployed', 'replace_in', 'active'].includes(
-        lastDeploy.action
-      )
-    ) {
-      const incInfo = window.appState.trackingIncidents.find(
-        (i) => i.id === lastDeploy.incidentId
-      );
-      if (incInfo && incInfo.status !== 'closed') {
-        return {
-          incidentId: lastDeploy.incidentId,
-          eventName: incInfo.event || lastDeploy.incidentId,
-        };
-      }
-    }
-    return null;
-  }
 
   // 3. Xử lý nút "Tiếp tục" -> Chuyển sang Modal Review
   // ========================================================================
@@ -1506,27 +1475,9 @@ LƯU Ý QUAN TRỌNG SAU KHI DÁN:
   };
   // Callback function sau khi kích hoạt thành công
 
-  // Generic failure handler
-  function onFailure(error) {
-    hideLoadingSpinner();
-    showToast('Đã xảy ra lỗi: ' + (error.message || error), 'error');
-  }
 
   //CALENDAR
 
-  // Chuyển đổi trạng thái sang tiếng Việt cho dễ đọc
-  function formatStatus(status) {
-    switch (status) {
-      case 'Active':
-        return 'Đang hoạt động';
-      case 'Confirmed':
-        return 'Đã xác nhận';
-      case 'Rejected':
-        return 'Không thể tham gia';
-      default:
-        return status;
-    }
-  }
   // ============================================================
   // LOGIC LẬP BÁO CÁO (SITREP) - XUẤT PDF TRÌNH DUYỆT
   // ============================================================

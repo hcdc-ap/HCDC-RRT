@@ -3456,12 +3456,10 @@
       </div>
     </div>
   </div>
-  <!-- Thêm dòng này TRƯỚC script.js -->
+  <!-- Helpers dùng chung — phải nạp TRƯỚC js/app/* -->
   <script src="auth-helpers.js"></script>
   <script src="utils/query-cache.js"></script>
   <script src="utils/batch-fetch.js"></script>
-  <script src="utils/dom-render.js"></script>
-  <script src="utils/error-handler.js"></script>
   <script src="utils/debounce.js"></script>
   <!-- App chính (trước đây là script.js) — GIỮ ĐÚNG THỨ TỰ, xem js/app/README.md -->
   <script src="js/app/core.js"></script>
@@ -3482,7 +3480,7 @@
   <script src="js/app/official-reports.js"></script>
   <script src="js/app/iap.js"></script>
   <script src="js/app/misc.js"></script>
-  <script src="team-reponse-stats.js"></script>
+  <script src="team-response-stats.js"></script>
   <script src="fix-patches.js"></script>
   <script src="lab-admin.js"></script>
   <script src="lab-dispatch-engine.js"></script>

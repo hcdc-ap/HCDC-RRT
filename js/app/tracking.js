@@ -590,12 +590,6 @@ document.addEventListener('DOMContentLoaded', function () {
     // --- ACTION BAR (XỬ LÝ 3 TRẠNG THÁI) ---
     const actionBar = document.getElementById('dossier-action-bar');
     if (actionBar) {
-      const myEmail = String(window.userSession.email || '')
-        .toLowerCase()
-        .trim();
-      const myUser = String(window.userSession.username || '')
-        .toLowerCase()
-        .trim();
       const invitedStr = (inc.initial_selected_members || '').toLowerCase();
       const confirmedStr = (inc.members || '').toLowerCase();
       const declinedStr = (inc.declined_members || '').toLowerCase();
@@ -1048,14 +1042,6 @@ document.addEventListener('DOMContentLoaded', function () {
         showToast('Lỗi: ' + err.message, 'error');
     }
   };
-  // --- Cập nhật badge chuông mượt mà ---
-  function updateNotificationIconCount(change) {
-    const el = document.querySelector('.notification .num');
-    let count = parseInt(el.textContent) || 0;
-    el.textContent = Math.max(0, count + change);
-    el.classList.add('badge-changed');
-    setTimeout(() => el.classList.remove('badge-changed'), 600);
-  }
   // ==========================================
   // HÀM TẢI THÔNG BÁO (SUPABASE VERSION)
   // ==========================================
@@ -1265,8 +1251,6 @@ document.addEventListener('DOMContentLoaded', function () {
     if (typeof showLoadingSpinner === 'function') showLoadingSpinner(true);
 
     try {
-      const adminName =
-        window.userSession?.username || window.userSession?.email || 'admin';
 
       // ✅ Update profile với approval_status = 'edit' + lưu yêu cầu chỉnh sửa
       const { error } = await supabaseClient
@@ -1347,7 +1331,7 @@ document.addEventListener('DOMContentLoaded', function () {
     // === PARSE NGÀY LỌC ===
     const parseFilterDate = (str) => {
       if (!str) return null;
-      const parts = str.split(/[/\-]/);
+      const parts = str.split(/[/-]/);
       if (parts.length !== 3) return null;
 
       let [d, m, y] = parts.map(Number);
@@ -1393,7 +1377,7 @@ document.addEventListener('DOMContentLoaded', function () {
       const dateMatch = dateCell?.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
       if (!dateMatch) return true; // Nếu không parse được, giữ lại hàng
 
-      const [_, day, month, year] = dateMatch.map(Number);
+      const [, day, month, year] = dateMatch.map(Number);
       const rowDate = new Date(year, month - 1, day);
       const rowTime = rowDate.getTime();
 

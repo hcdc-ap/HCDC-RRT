@@ -81,11 +81,6 @@
     if (m == null) return '';
     return m >= 1000 ? (m / 1000).toFixed(1) + ' km' : Math.round(m) + ' m';
   }
-  function fmtDur(s) {
-    if (s == null) return '';
-    const min = Math.round(s / 60);
-    return min < 1 ? '<1 phút' : min + ' phút';
-  }
 
   // ============================================================================
 // LabRouteSteps.show — GIỮ OSRM cho TỪNG BƯỚC rẽ, nhưng SỐ TỔNG (km/phút)

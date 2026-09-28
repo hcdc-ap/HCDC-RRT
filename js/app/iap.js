@@ -751,7 +751,7 @@ window.submitIAP = async function () {
 
     if (delPlanErr) console.warn('⚠️ Delete plan warning:', delPlanErr.message);
 
-    const { data: planResult, error: planErr } = await window.supabaseClient
+    const { error: planErr } = await window.supabaseClient
       .from('incident_plans')
       .insert([planPayload])
       .select();
@@ -767,8 +767,10 @@ window.submitIAP = async function () {
       .from('incident_assessments')
       .delete()
       .eq('incident_id', incidentId);
+    if (delAssessErr)
+      console.warn('⚠️ Delete assessment warning:', delAssessErr.message);
 
-    const { data: assessResult, error: assessErr } = await window.supabaseClient
+    const { error: assessErr } = await window.supabaseClient
       .from('incident_assessments')
       .insert([assessPayload])
       .select();

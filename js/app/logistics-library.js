@@ -4,7 +4,6 @@
 // ============================================================
 
 document.addEventListener('DOMContentLoaded', function () {
-
   // === LOGISTICS ===
   // ==========================
   // LOGIC MODULE LOGISTICS (ĐÃ NÂNG CẤP)
@@ -812,14 +811,6 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   };
 
-  // HÀM TẮT LOADING CHUNG – ĐẢM BẢO 100% TẮT ĐƯỢC
-  function hideGlobalLoading() {
-    const spinner = document.getElementById('global-loading-spinner');
-    if (spinner) spinner.style.display = 'none';
-    else if (typeof hideLoadingSpinner === 'function') hideLoadingSpinner();
-    else if (typeof showLoadingSpinner === 'function')
-      showLoadingSpinner(false);
-  }
   // Đặt gần đầu file, sau các helper khác
   window.isMyWardTeam = function (teamName) {
     const role = (window.userSession?.role || '').toLowerCase();

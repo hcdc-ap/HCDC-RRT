@@ -56,8 +56,12 @@
         .eq('is_read', false);
 
       // 4. Ghi lịch sử điều động (nếu có userId)
+      // Lưu ý: query builder của supabase-js chỉ có .then(), KHÔNG có .catch() —
+      // trước đây gọi .catch() ở đây làm ném TypeError trước khi request được gửi,
+      // nên lịch sử không bao giờ được ghi và người dùng thấy toast "Lỗi hệ thống"
+      // dù đã xác nhận thành công. Lỗi ghi lịch sử không được chặn luồng chính.
       if (myUserId) {
-        await window.supabaseClient
+        const { error: historyErr } = await window.supabaseClient
           .from('deployment_history')
           .upsert(
             {
@@ -71,8 +75,9 @@
               updated_at: new Date().toISOString(),
             },
             { onConflict: 'incident_id,user_id' }
-          )
-          .catch((e) => console.warn('deployment_history upsert:', e.message));
+          );
+        if (historyErr)
+          console.warn('deployment_history upsert:', historyErr.message);
       }
 
       if (typeof showToast === 'function')
@@ -311,7 +316,6 @@
   // action bar chính xác hơn sau khi đã phản hồi
   // ============================================================
 
-  const _origOpenDossierView = window.openDossierView;
   // Không override toàn bộ, chỉ patch phần action bar sau khi mở
   // bằng cách hook vào sự kiện sau khi dossier render xong.
   // (openDossierView gốc đã đủ logic, PATCH 4 đã fix phần cốt lõi)
@@ -540,10 +544,6 @@
       }
     }, 150);
   });
-  // Shortcut nội bộ
-  function _esc(s) {
-    return window.escapeHtml(s);
-  }
 
   console.log('[fix-patches.js] ✅ Tất cả patches đã được áp dụng thành công.');
 })();

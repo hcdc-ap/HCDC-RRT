@@ -284,55 +284,6 @@ document.addEventListener('DOMContentLoaded', function () {
     showToast('Lỗi cập nhật dữ liệu: ' + (error.message || error), 'error');
   };
 
-  // ============================================================
-  // HÀM ĐỒNG BỘ TRACKING (REALTIME)
-  // ============================================================
-
-  // Thay vì Polling, chúng ta dùng Realtime của Supabase
-  window.initTrackingRealtime = function () {
-    if (!window.userSession) return;
-
-    // 1. Lắng nghe thay đổi trên bảng 'incidents'
-    const incidentChannel = supabaseClient
-      .channel('tracking_incidents')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'incidents' },
-        (payload) => {
-          console.log('⚡ Incident update detected:', payload);
-          // Refresh dữ liệu Dashboard
-          if (typeof window.enterDashboard === 'function')
-            window.enterDashboard();
-          // Cập nhật lại UI Tracking nếu đang mở
-          // forceFetch=true: bắt buộc tải lại từ DB — nếu không, hàm này thấy
-          // window.appState.trackingIncidents đã có sẵn dữ liệu (từ lần mở trang
-          // trước) nên bỏ qua việc tải mới, khiến sự kiện vừa kích hoạt/thay đổi
-          // không hiện ra cho tới khi F5 lại trang.
-          if (
-            document.getElementById('page-tracking')?.style.display !== 'none'
-          ) {
-            if (typeof window.renderTrackingPage === 'function')
-              window.renderTrackingPage(true);
-          }
-        }
-      )
-      .subscribe();
-
-    // 2. Lắng nghe thay đổi trên bảng 'roster_assignments'
-    const rosterChannel = supabaseClient
-      .channel('tracking_rosters')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'roster_assignments' },
-        (payload) => {
-          console.log('⚡ Roster update detected:', payload);
-          if (typeof window.renderTrackingPage === 'function')
-            window.renderTrackingPage(true);
-        }
-      )
-      .subscribe();
-  };
-
   /**
    * Helper: Cập nhật danh sách thành viên (PHIÊN BẢN KHÔNG CÒN GOOGLE APPS SCRIPT)
    */
@@ -608,7 +559,7 @@ document.addEventListener('DOMContentLoaded', function () {
         else if (gender === 'female' || gender === 'nữ') genderCounts.Female++;
 
         const statusKey = (r.approval_status || 'pending').toLowerCase();
-        if (statusCounts.hasOwnProperty(statusKey)) statusCounts[statusKey]++;
+        if (Object.hasOwn(statusCounts, statusKey)) statusCounts[statusKey]++;
 
         // Chuyên môn & Cấp bậc
         const specRaw = (qual.specialty || r.academic || '')
@@ -644,7 +595,7 @@ document.addEventListener('DOMContentLoaded', function () {
           const capLang =
             languageRaw.charAt(0).toUpperCase() +
             languageRaw.slice(1).toLowerCase();
-          if (languageCounts.hasOwnProperty(capLang)) languageCounts[capLang]++;
+          if (Object.hasOwn(languageCounts, capLang)) languageCounts[capLang]++;
         }
 
         // Kỹ năng JSONB
@@ -1094,49 +1045,12 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   }
 
-  // =================================================================
-  // GET STATUS BADGE CLASS
-  // =================================================================
-  function getStatusBadgeClass(status) {
-    if (!status) return 'pending';
-    switch (status.toLowerCase()) {
-      case 'on duty':
-        return 'approved';
-      case 'off duty':
-        return 'pending';
-      case 'available':
-        return 'pending';
-      case 'deploy':
-        return 'approved';
-      default:
-        return 'pending';
-    }
-  }
-
-  const sectionMap = [
-    'page-dashboard',
-    'page-datatable',
-    'page-roster',
-    'page-emergency',
-    'page-tracking',
-    'page-team',
-    'page-training',
-    'page-logistics',
-    'page-library',
-    'page-map',
-    'page-lab-admin',
-    'page-notification',
-  ];
-  const sideMenuItems = document.querySelectorAll('#sidebar .side-menu.top li');
 
   /**
    * Hàm hiển thị Section & Quản lý Polling (HOÀN CHỈNH)
    */
   window.showSectionById = async function (targetId) {
-    // 1. Tắt poller cũ
-    if (typeof stopDashboardPoller === 'function') stopDashboardPoller();
-    if (typeof stopTrackingPoller === 'function') stopTrackingPoller();
-
+    // (Poller cũ đã được thay bằng RealtimeManager — xem js/app/core.js)
     // 2. Cập nhật Sidebar UI
     document
       .querySelectorAll('#sidebar .side-menu li')
@@ -1162,8 +1076,6 @@ document.addEventListener('DOMContentLoaded', function () {
     switch (targetId) {
       case 'page-dashboard':
         if (typeof renderDashboard === 'function') renderDashboard();
-
-        if (typeof startDashboardPoller === 'function') startDashboardPoller();
         break;
       case 'page-map':
         // [QUAN TRỌNG] Dùng await ở đây vì renderMapPage là async
@@ -1190,7 +1102,7 @@ document.addEventListener('DOMContentLoaded', function () {
         break;
 
       // ... Các case khác giữ nguyên ...
-      default:
+      default: {
         // Các trang đơn giản không cần async
         const renderFnName =
           'render' +
@@ -1199,6 +1111,7 @@ document.addEventListener('DOMContentLoaded', function () {
           'Page';
         if (typeof window[renderFnName] === 'function') window[renderFnName]();
         break;
+      }
     }
   };
 

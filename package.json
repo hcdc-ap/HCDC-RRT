@@ -1,8 +1,22 @@
 {
+  "name": "hcdc-rrt",
+  "private": true,
+  "description": "HCDC Rapid Response Team (RRT) webapp — Trung tâm Kiểm soát Bệnh tật TP.HCM",
   "scripts": {
-    "start": "servor --reload"
+    "start": "servor --reload",
+    "lint": "eslint .",
+    "test": "node --test \"tests/*.test.js\"",
+    "check": "npm run lint && npm test"
+  },
+  "engines": {
+    "node": ">=22"
   },
   "dependencies": {
     "servor": "^4.0.2"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.5",
+    "eslint": "^9.39.5",
+    "globals": "^17.12.0"
   }
 }
