@@ -1094,6 +1094,34 @@ document.addEventListener('hide.bs.modal', function (event) {
     document.activeElement.blur();
   }
 });
+// Lưới an toàn: nền xám (backdrop) còn lại mà KHÔNG có modal nào đang hiện
+// (vd. lỡ kéo bản đồ trong modal rồi thả ra ngoài) → tự gỡ, khỏi phải F5.
+// Kiểm tra sau mỗi lần thả chuột/chạm; chờ 600ms để không đụng lúc modal
+// đang chuyển (đóng modal này, mở modal kia).
+(function () {
+  function modalVisible() {
+    return [...document.querySelectorAll('.modal')].some(
+      (m) =>
+        m.classList.contains('show') ||
+        getComputedStyle(m).display !== 'none'
+    );
+  }
+  let timer = null;
+  function sweep() {
+    clearTimeout(timer);
+    timer = setTimeout(() => {
+      if (!document.querySelector('.modal-backdrop') || modalVisible()) return;
+      document.querySelectorAll('.modal-backdrop').forEach((b) => b.remove());
+      document.body.classList.remove('modal-open');
+      document.body.style.overflow = '';
+      document.body.style.paddingRight = '';
+      console.warn('🧹 Đã gỡ nền xám bị kẹt (không còn modal nào mở)');
+    }, 600);
+  }
+  document.addEventListener('pointerup', sweep, true);
+  document.addEventListener('keyup', (e) => e.key === 'Escape' && sweep(), true);
+})();
+
 // Dọn backdrop kẹt cho MỌI modal động trong app
 document.addEventListener('hidden.bs.modal', function () {
   setTimeout(() => {
