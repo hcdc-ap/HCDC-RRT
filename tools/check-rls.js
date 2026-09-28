@@ -35,9 +35,14 @@ const schema = fs
   .join('\n');
 const TABLES = [...new Set([...schema.matchAll(/CREATE TABLE IF NOT EXISTS "public"\."(\w+)"/g)].map((m) => m[1]))]
   .filter((t) => t !== 'spatial_ref_sys'); // bảng hệ thống PostGIS
-const POLICIES = [...schema.matchAll(/CREATE POLICY "([^"]+)" ON "public"\."(\w+)" AS PERMISSIVE FOR (\w+) TO (\w+)(.*?);\n/gs)].map(
-  (m) => ({ name: m[1], table: m[2], cmd: m[3], to: m[4], body: m[5].replace(/\s+/g, ' ') })
-);
+// Policy bị DROP ở migration sau (theo thứ tự trong file ghép) thì không còn hiệu lực.
+const DROPS = [...schema.matchAll(/DROP POLICY IF EXISTS "([^"]+)" ON "public"\."(\w+)"/g)].map((m) => ({
+  key: `${m[2]}.${m[1]}`,
+  at: m.index,
+}));
+const POLICIES = [...schema.matchAll(/CREATE POLICY "([^"]+)" ON "public"\."(\w+)" AS PERMISSIVE FOR (\w+) TO (\w+)(.*?);\n/gs)]
+  .filter((m) => !DROPS.some((d) => d.key === `${m[2]}.${m[1]}` && d.at > m.index))
+  .map((m) => ({ name: m[1], table: m[2], cmd: m[3], to: m[4], body: m[5].replace(/\s+/g, ' ') }));
 // Policy mở cho mọi người: USING (true) / WITH CHECK (true)
 const openFor = (cmds) =>
   new Set(
@@ -62,7 +67,8 @@ async function api(token, pathAndQuery, extraHeaders = {}) {
     headers: { apikey: ANON, Authorization: `Bearer ${token}`, Prefer: 'count=exact', ...extraHeaders },
   });
   const count = Number((res.headers.get('content-range') || '').split('/')[1]);
-  const body = res.status === 200 ? await res.json().catch(() => []) : await res.text();
+  // 206 = PostgREST trả một phần (bảng có nhiều dòng hơn limit) — vẫn là đọc được.
+  const body = res.ok ? await res.json().catch(() => []) : await res.text();
   return { status: res.status, count: Number.isFinite(count) ? count : null, rows: Array.isArray(body) ? body : [], body };
 }
 
@@ -72,7 +78,7 @@ async function countAll(token) {
   await Promise.all(
     TABLES.map(async (t) => {
       const r = await api(token, `${t}?select=*&limit=1`);
-      out[t] = r.status === 200 ? r.count ?? r.rows.length : `HTTP ${r.status}`;
+      out[t] = r.status === 200 || r.status === 206 ? r.count ?? r.rows.length : `HTTP ${r.status}`;
     })
   );
   return out;
@@ -167,6 +173,17 @@ async function checkUser() {
   });
   if (badTr.length) fail(`training_records: đọc được ${badTr.length} hồ sơ đào tạo của người khác`);
   else ok(`training_records: chỉ thấy hồ sơ trong phạm vi (${tr.length} dòng)`);
+
+  // 4b. Thông báo (notifications): của mình, hoặc của nhân sự trong phường/xã (ward_admin)
+  const myWardEmails = new Set(profiles.filter(inMyWard).map((p) => String(p.email || '').toLowerCase()));
+  const notif = (await api(token, 'notifications?select=user_email&limit=5000')).rows;
+  const badNotif = notif.filter((n) => {
+    const e = String(n.user_email || '').toLowerCase();
+    return e !== email && e !== uid && !myWardEmails.has(e);
+  });
+  if (badNotif.length)
+    fail(`notifications: đọc được ${badNotif.length} thông báo của người khác (kèm action_token xác nhận qua email) — chưa áp migration 20260929000000?`);
+  else ok(`notifications: chỉ thấy thông báo trong phạm vi (${notif.length} dòng)`);
 
   // 5. Dữ liệu LIMS (phòng xét nghiệm) — tài khoản RRT không phải quản trị không được đọc
   const lims = TABLES.filter(
