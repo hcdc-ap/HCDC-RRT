@@ -333,4 +333,36 @@ SELECT rrt_test.login('00000000-0000-0000-0000-000000000001');
 SELECT rrt_test.denied('s1 (không phải Leader): không lập báo cáo',
   $$INSERT INTO public.incident_reports (incident_id, report_type) VALUES ('10000000-0000-0000-0000-00000000000a', 'x')$$);
 
+-- ============================================================================
+\echo '--- Đề xuất phòng xét nghiệm (tuyến cơ sở / Đội trưởng) ---'
+SELECT rrt_test.login('00000000-0000-0000-0000-0000000000a1');
+SELECT rrt_test.allowed('ward A: đề xuất PXN cho sự kiện phường A',
+  $$INSERT INTO public.lab_dispatch_log (lab_id, incident_id, sample_count, status, dispatched_by)
+    VALUES (gen_random_uuid(), '10000000-0000-0000-0000-00000000000a', 3, 'suggested', auth.uid()) RETURNING id$$);
+SELECT rrt_test.denied('ward A: không tự chốt điều phối (chỉ HCDC)',
+  $$INSERT INTO public.lab_dispatch_log (lab_id, incident_id, sample_count, status, dispatched_by)
+    VALUES (gen_random_uuid(), '10000000-0000-0000-0000-00000000000a', 3, 'dispatched', auth.uid())$$);
+SELECT rrt_test.denied('ward A: không đề xuất cho sự kiện phường B',
+  $$INSERT INTO public.lab_dispatch_log (lab_id, incident_id, sample_count, status, dispatched_by)
+    VALUES (gen_random_uuid(), '10000000-0000-0000-0000-00000000000b', 3, 'suggested', auth.uid())$$);
+SELECT rrt_test.denied('ward A: không đề xuất đứng tên người khác',
+  $$INSERT INTO public.lab_dispatch_log (lab_id, sample_count, status, dispatched_by)
+    VALUES (gen_random_uuid(), 3, 'suggested', '00000000-0000-0000-0000-000000000001')$$);
+SELECT rrt_test.eq('ward A: báo HCDC qua rrt_notify_admins (1 quản trị)',
+  (SELECT public.rrt_notify_admins('Đề xuất điều 3 mẫu', '10000000-0000-0000-0000-00000000000a')), 1);
+SELECT rrt_test.eq('ward A: không đọc được thông báo gửi HCDC',
+  (SELECT count(*) FROM public.notifications WHERE user_email = 'admin@t.vn'), 0);
+
+SELECT rrt_test.login('00000000-0000-0000-0000-0000000000c1');
+SELECT rrt_test.allowed('Leader h1: đề xuất PXN cho sự kiện A đang tham gia',
+  $$INSERT INTO public.lab_dispatch_log (lab_id, incident_id, sample_count, status, dispatched_by)
+    VALUES (gen_random_uuid(), '10000000-0000-0000-0000-00000000000a', 2, 'suggested', auth.uid())$$);
+
+SELECT rrt_test.login('00000000-0000-0000-0000-000000000001');
+SELECT rrt_test.denied('s1 (không phải Leader): không đề xuất PXN',
+  $$INSERT INTO public.lab_dispatch_log (lab_id, sample_count, status, dispatched_by)
+    VALUES (gen_random_uuid(), 3, 'suggested', auth.uid())$$);
+SELECT rrt_test.denied('s1: không gọi được rrt_notify_admins',
+  $$SELECT public.rrt_notify_admins('spam', NULL)$$);
+
 RESET ROLE;
