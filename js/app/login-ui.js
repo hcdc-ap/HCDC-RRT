@@ -649,8 +649,12 @@ window.addEventListener('DOMContentLoaded', () => {
       }
 
       try {
+        // BẮT BUỘC có redirectTo: dự án Supabase dùng chung với LIMS, nếu bỏ trống
+        // Supabase sẽ chuyển về "Site URL" (trang LIMS) thay vì trang RRT.
+        // URL này phải nằm trong Authentication -> URL Configuration -> Redirect URLs.
         const { error } = await supabaseClient.auth.resetPasswordForEmail(
-          email
+          email,
+          { redirectTo: window.location.origin + window.location.pathname }
         );
         if (error) throw error;
 
@@ -665,21 +669,87 @@ window.addEventListener('DOMContentLoaded', () => {
     };
   }
 
-  // ------- OTP & RESET PASSWORD -------
-  // Vô hiệu hóa form này vì Supabase xử lý reset password thông qua Magic Link trong email, không cần nhập mã OTP tay.
+  // ------- ĐẶT MẬT KHẨU MỚI (sau khi bấm link khôi phục trong email) -------
+  // Supabase xác thực bằng link trong email nên không cần ô nhập mã OTP.
   var otpForm = document.getElementById('otp-form');
+  var otpCodeInfo = document.getElementById('otp-code')?.closest('.info');
+  if (otpCodeInfo) otpCodeInfo.style.display = 'none';
+  var otpCodeInput = document.getElementById('otp-code');
+  if (otpCodeInput) otpCodeInput.required = false;
+
   if (otpForm) {
-    otpForm.style.display = 'none'; // Ẩn đi
+    otpForm.onsubmit = async function (e) {
+      e.preventDefault();
+      var newPass = document.getElementById('new-password').value;
+      var confirmPass = document.getElementById('new-confirm-password').value;
+
+      if (!validPassword.test(newPass)) {
+        showToast(
+          'Mật khẩu phải 8-32 ký tự, có chữ hoa, chữ thường, số và ký tự đặc biệt!',
+          'error'
+        );
+        return;
+      }
+      if (newPass !== confirmPass) {
+        showToast('Mật khẩu xác nhận không khớp!', 'error');
+        return;
+      }
+
+      showLoading(true);
+      try {
+        const { error } = await supabaseClient.auth.updateUser({
+          password: newPass,
+        });
+        if (error) throw error;
+
+        window.rrtShared.passwordRecovery = false;
+        otpForm.reset();
+        // Đăng xuất phiên tạm để người dùng đăng nhập lại bằng mật khẩu mới
+        await supabaseClient.auth.signOut();
+        showSection('login');
+        showToast('Đổi mật khẩu thành công! Vui lòng đăng nhập lại.', 'success');
+      } catch (err) {
+        showToast('Không đổi được mật khẩu: ' + err.message, 'error');
+      } finally {
+        showLoading(false);
+      }
+    };
   }
 
   // ------- Quay lại bước recover từ otp-reset -------
   var backBtn = document.getElementById('back-to-recover');
   if (backBtn) {
-    backBtn.onclick = function () {
-      showSection('recover');
+    backBtn.onclick = async function () {
+      // Hủy đặt lại mật khẩu: bỏ phiên tạm từ link email
+      if (window.rrtShared.passwordRecovery) {
+        window.rrtShared.passwordRecovery = false;
+        await supabaseClient.auth.signOut();
+      }
+      showSection('login');
     };
   }
 });
+// Gọi từ core.js khi người dùng mở trang bằng link khôi phục mật khẩu
+window.startPasswordRecovery = function (session) {
+  if (typeof window.go === 'function') window.go('login');
+  // go('login') tự reset giao diện login trong setTimeout(0) -> đợi xong mới đổi form
+  setTimeout(function () {
+    if (!session) {
+      window.rrtShared.passwordRecovery = false;
+      showSection('recover');
+      showToast(
+        'Liên kết khôi phục không còn hiệu lực. Vui lòng gửi lại email.',
+        'error'
+      );
+      return;
+    }
+    var emailInput = document.getElementById('otp-email');
+    if (emailInput) emailInput.value = session.user?.email || '';
+    var title = document.querySelector('#otp-reset .title');
+    if (title) title.textContent = 'Đặt lại mật khẩu';
+    showSection('otp-reset');
+  }, 50);
+};
 window.onresize = () => {
   if (right && right.classList.contains('active') && signupSlideButton)
     signupSlideButton.click();

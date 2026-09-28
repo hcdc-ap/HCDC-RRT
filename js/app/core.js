@@ -5,6 +5,36 @@
 
 // Không gian dùng chung giữa các file js/app/* (thay cho closure chung của script.js cũ)
 window.rrtShared = window.rrtShared || {};
+// Trạng thái link khôi phục mật khẩu từ email (điền bởi detectAuthLinkFromUrl bên dưới)
+rrtShared.passwordRecovery = false;
+rrtShared.authLinkError = null;
+
+// ===============================
+// 🔑 NHẬN DIỆN LINK KHÔI PHỤC MẬT KHẨU TỪ EMAIL
+// ===============================
+// Phải đọc URL NGAY LÚC NẠP FILE, trước khi tạo Supabase client, vì client
+// (detectSessionInUrl) sẽ đọc token trong "#..." rồi xóa khỏi thanh địa chỉ.
+// - "#...type=recovery": người dùng bấm link hợp lệ -> phải hiện form đặt mật khẩu
+//   mới, KHÔNG được tự vào dashboard (dù Supabase đã tạo phiên đăng nhập tạm).
+// - "#error=...": link hỏng/hết hạn/đã dùng -> báo cho người dùng biết.
+(function detectAuthLinkFromUrl() {
+  const raw = (window.location.hash || '').replace(/^#/, '');
+  const params = new URLSearchParams(raw);
+  const query = new URLSearchParams(window.location.search);
+
+  if (params.get('type') === 'recovery') {
+    window.rrtShared.passwordRecovery = true;
+  }
+
+  const errorCode = params.get('error_code') || query.get('error_code');
+  const errorDesc =
+    params.get('error_description') || query.get('error_description');
+  if (errorCode || params.get('error')) {
+    window.rrtShared.authLinkError = { code: errorCode, description: errorDesc };
+    // Xóa phần lỗi khỏi URL để F5 không báo lại
+    history.replaceState(null, '', window.location.pathname);
+  }
+})();
 
 // ===============================
 // ⚡ SUPABASE SINGLETON INIT - CHỈ CHẠY 1 LẦN DUY NHẤT
@@ -66,7 +96,12 @@ window.rrtShared = window.rrtShared || {};
         error,
       } = await window.supabaseClient.auth.getSession();
 
-      if (session && !error) {
+      if (window.rrtShared.passwordRecovery) {
+        // Vào từ link khôi phục mật khẩu: hiện form đặt mật khẩu mới thay vì dashboard
+        if (typeof window.startPasswordRecovery === 'function') {
+          window.startPasswordRecovery(session);
+        }
+      } else if (session && !error) {
         console.log('✅ Tìm thấy vé! Tự động đưa vào Dashboard...');
         // Ép hệ thống chạy thẳng hàm mở Dashboard
         if (typeof window.enterDashboard === 'function') {
@@ -78,6 +113,15 @@ window.rrtShared = window.rrtShared || {};
         if (typeof window.go === 'function') {
           window.go('login'); // Nhớ dùng đúng cái ID mà lúc nãy bạn vừa sửa cho hết trắng màn hình nhé
         }
+      }
+
+      if (window.rrtShared.authLinkError) {
+        const { code, description } = window.rrtShared.authLinkError;
+        const msg =
+          code === 'otp_expired'
+            ? 'Liên kết trong email đã hết hạn hoặc đã được sử dụng. Vui lòng bấm "Quên mật khẩu" để gửi lại và chỉ mở email mới nhất.'
+            : 'Liên kết không hợp lệ: ' + (description || code || 'không rõ lỗi');
+        if (typeof showToast === 'function') showToast(msg, 'error');
       }
 
       // 2. Lắng nghe mọi động tĩnh (Phòng trường hợp Token hết hạn giữa chừng)
@@ -279,6 +323,22 @@ document.addEventListener('supabase:ready', function ({ detail }) {
 
   client.auth.onAuthStateChange(async (event, session) => {
     console.log(`🛡️ Auth state changed: ${event}`, session);
+
+    if (event === 'PASSWORD_RECOVERY') {
+      window.rrtShared.passwordRecovery = true;
+      if (typeof window.startPasswordRecovery === 'function') {
+        window.startPasswordRecovery(session);
+      }
+      return;
+    }
+
+    // Đang đặt lại mật khẩu: phiên tạm từ link email KHÔNG được mở dashboard
+    if (
+      window.rrtShared.passwordRecovery &&
+      (event === 'INITIAL_SESSION' || event === 'SIGNED_IN')
+    ) {
+      return;
+    }
 
     if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN') {
       if (session) {

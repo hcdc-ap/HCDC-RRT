@@ -50,3 +50,16 @@ supabase functions download notify-lab-result
 ```
 
 Sau đó commit thư mục `supabase/` (không commit file `.env`/khoá `service_role`).
+
+## Khôi phục mật khẩu (dự án dùng chung với LIMS)
+
+Dự án Supabase này dùng chung với app LIMS (`hcdc-lims.vercel.app`), nên
+**Site URL** đang trỏ về LIMS. App RRT gửi email khôi phục kèm `redirectTo`
+= địa chỉ trang RRT; Supabase chỉ chấp nhận nếu địa chỉ đó nằm trong
+**Authentication → URL Configuration → Redirect URLs**, nếu không sẽ chuyển
+về Site URL (trang LIMS). Cần thêm:
+
+```
+https://hcdc-ap.github.io/HCDC-RRT/**
+http://localhost:8080/**
+```
