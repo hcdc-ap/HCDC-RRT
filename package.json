@@ -8,7 +8,8 @@
     "test": "node --test \"tests/*.test.js\"",
     "check": "npm run lint && npm test",
     "check:schema": "node tools/check-supabase-schema.js",
-    "e2e": "node tests/e2e/smoke.js"
+    "e2e": "node tests/e2e/smoke.js",
+    "e2e:recovery": "node tests/e2e/password-recovery.js"
   },
   "engines": {
     "node": ">=22"

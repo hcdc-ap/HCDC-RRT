@@ -35,6 +35,10 @@ RRT_TEST_EMAIL=test@... RRT_TEST_PASSWORD=... npm run check:schema
 # 2. End-to-end: đăng nhập, mở lần lượt 11 trang, báo lỗi JS và request lỗi
 npm start   # terminal khác
 RRT_TEST_EMAIL=test@... RRT_TEST_PASSWORD=... npm run e2e
+
+# 3. Quên mật khẩu: gửi email thật, dán link từ email vào terminal, đổi mật khẩu
+#    tài khoản test. Cần http://localhost:8080/** trong Supabase Redirect URLs.
+RRT_TEST_EMAIL=test@... RRT_NEW_PASSWORD='Moi@12345' npm run e2e:recovery
 ```
 
 `npm run e2e` dùng Google Chrome đã cài trên máy (hoặc đặt `CHROME_PATH`);
