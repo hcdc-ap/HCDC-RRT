@@ -32,6 +32,11 @@ Cần mạng tới `*.supabase.co` và **một tài khoản test** (không dùng
 # 1. Đối chiếu mọi bảng/cột/quan hệ/RPC mà code dùng với database — chỉ đọc
 RRT_TEST_EMAIL=test@... RRT_TEST_PASSWORD=... npm run check:schema
 
+# 1b. Phân quyền dữ liệu (RLS): đọc thẳng từng bảng qua API bằng tài khoản
+#     không phải quản trị, báo dữ liệu đọc được ngoài phạm vi — chỉ đọc.
+#     Chạy lần lượt với nhân viên, tuyến cơ sở và 1 tài khoản tự đăng ký chưa duyệt.
+RRT_TEST_EMAIL=test@... RRT_TEST_PASSWORD=... npm run check:rls
+
 # 2. End-to-end: đăng nhập, mở lần lượt 11 trang, báo lỗi JS và request lỗi
 npm start   # terminal khác
 RRT_TEST_EMAIL=test@... RRT_TEST_PASSWORD=... npm run e2e
