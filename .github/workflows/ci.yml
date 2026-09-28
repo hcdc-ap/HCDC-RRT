@@ -17,3 +17,23 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npm test
+
+  # Phân quyền dữ liệu (RLS): nạp schema + migration vào Postgres tạm, kiểm tra
+  # từng vai trò (khách, chưa duyệt, nhân viên, tuyến cơ sở, quản trị)
+  rls:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      PGHOST: localhost
+      PGUSER: postgres
+      PGPASSWORD: postgres
+    steps:
+      - uses: actions/checkout@v4
+      - run: bash supabase/tests/run.sh

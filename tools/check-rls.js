@@ -47,6 +47,14 @@ const openFor = (cmds) =>
   );
 const OPEN_READ = openFor(['SELECT', 'ALL']);
 const OPEN_WRITE = openFor(['ALL', 'INSERT', 'UPDATE', 'DELETE']);
+// Migration phân quyền theo vai trò đã thay policy của các bảng RRT này
+// (kiểm tra chi tiết quyền ghi: npm run test:rls).
+const HAS_ROLE_MIGRATION = /rrt_rls_roles/.test(fs.readdirSync(migDir).join(' '));
+const SCOPED_BY_ROLE = new Set([
+  'incidents', 'incident_logs', 'incident_reports', 'incident_plans', 'incident_assessments',
+  'incident_objectives', 'incident_activities', 'incident_logistics', 'deployment_history',
+  'notifications', 'roster_schedules', 'roster_assignments', 'rrt_qualifications',
+]);
 
 // Bảng CÔNG KHAI có chủ đích (khách chưa đăng nhập được đọc)
 const PUBLIC_OK = new Set(['website_stats']);
@@ -177,14 +185,38 @@ async function checkUser() {
   else ok(`LIMS: không đọc được ${lims.length} bảng riêng của phòng xét nghiệm`);
 
   // 6. Bảng mở cho MỌI tài khoản đăng nhập — cần quyết định nghiệp vụ
-  const wide = [...OPEN_READ].filter((t) => TABLES.includes(t) && typeof counts[t] === 'number' && counts[t] > 0);
+  // 6b. Thông báo: chỉ của mình (hoặc nhân sự phường/xã với tuyến cơ sở)
+  const noti = (await api(token, 'notifications?select=id,user_email&limit=5000')).rows;
+  const wardEmails = new Set(profiles.filter(inMyWard).map((p) => String(p.email || '').toLowerCase()));
+  const badNoti = noti.filter((n) => {
+    const e = String(n.user_email || '').trim().toLowerCase();
+    return e !== email && !wardEmails.has(e);
+  });
+  if (badNoti.length) fail(`notifications: đọc được ${badNoti.length} thông báo của người khác`);
+  else ok(`notifications: chỉ thấy thông báo trong phạm vi (${noti.length} dòng)`);
+
+  const wide = [...OPEN_READ].filter(
+    (t) =>
+      TABLES.includes(t) &&
+      !(HAS_ROLE_MIGRATION && SCOPED_BY_ROLE.has(t)) &&
+      typeof counts[t] === 'number' &&
+      counts[t] > 0
+  );
   if (wide.length) {
-    warn(`Mọi tài khoản đăng nhập (kể cả vừa tự đăng ký) đều đọc được TOÀN BỘ các bảng sau:`);
+    warn(
+      HAS_ROLE_MIGRATION
+        ? 'Tài khoản này đọc được TOÀN BỘ các bảng dùng chung sau (đúng nếu là danh mục/kho/thư viện):'
+        : 'Mọi tài khoản đăng nhập (kể cả vừa tự đăng ký) đều đọc được TOÀN BỘ các bảng sau:'
+    );
     for (const t of wide.sort()) console.log(`            - ${t}: ${counts[t]} dòng`);
   }
 }
 
 function staticWriteReport() {
+  if (HAS_ROLE_MIGRATION) {
+    console.log('\n(Quyền ghi theo vai trò: kiểm tra bằng npm run test:rls trên Postgres cục bộ)');
+    return;
+  }
   const tables = [...OPEN_WRITE].filter((t) => TABLES.includes(t)).sort();
   if (!tables.length) return;
   console.log('\n=== Theo file schema: MỌI tài khoản đăng nhập đều GHI/SỬA/XÓA được (không gọi mạng) ===');

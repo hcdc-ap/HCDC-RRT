@@ -399,6 +399,19 @@ document.addEventListener('supabase:ready', function ({ detail }) {
 // Hàm này xử lý điều hướng và khởi tạo app sau khi xác thực thành công
 window.handleSuccessfulAuth = function () {
   console.log('🚀 Handling successful authentication...');
+  // Tài khoản chưa được duyệt: database chỉ cho xem/sửa hồ sơ của chính mình
+  const me = window.userSession || {};
+  if (
+    !['admin', 'super_admin'].includes(String(me.role || '').toLowerCase()) &&
+    me.registration_status !== 'approved' &&
+    !['approved', 'edit'].includes(String(me.approval_status || '').toLowerCase()) &&
+    typeof showToast === 'function'
+  ) {
+    showToast(
+      'Tài khoản đang chờ duyệt. Vui lòng cập nhật Hồ sơ RRT (nơi công tác) để tuyến cơ sở hoặc HCDC phê duyệt.',
+      'warning'
+    );
+  }
   if (typeof window.go === 'function') {
     console.log('   -> Navigating to dashboard...');
     window.go('dashboard');

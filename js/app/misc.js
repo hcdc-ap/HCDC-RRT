@@ -1037,10 +1037,14 @@ window.applyRolePermissions = function (role) {
     'btn-auto-trigger',
   ];
 
+  // Chỉ HCDC (database cũng chặn tuyến cơ sở — supabase/migrations/*_rrt_rls_roles.sql):
+  // đào tạo chỉ HCDC tổ chức, thư viện chỉ HCDC cập nhật
+  const hcdcOnlyIds = ['btn-create-course-trigger', 'btn-add-doc'];
+
   adminOnlyIds.forEach((id) => {
     const el = document.getElementById(id);
     if (el) {
-      if (isAdmin || isWardAdmin) {
+      if (isAdmin || (isWardAdmin && !hcdcOnlyIds.includes(id))) {
         // Cấp đúng display: flex cho cụm nút điều chỉnh nhân sự để không bị vỡ UI
         el.style.display = id === 'admin-rotation-controls' ? 'flex' : '';
       } else {

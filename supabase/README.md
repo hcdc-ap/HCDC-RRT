@@ -63,3 +63,36 @@ về Site URL (trang LIMS). Cần thêm:
 https://hcdc-ap.github.io/HCDC-RRT/**
 http://localhost:8080/**
 ```
+
+## Phân quyền dữ liệu theo vai trò (`20260929000000_rrt_rls_roles.sql`)
+
+Thay các policy "mọi tài khoản đăng nhập đều đọc/ghi" trên bảng RRT bằng phân
+quyền theo vai trò (xem đầu file migration). Kiểm thử cục bộ:
+
+```bash
+npm run test:rls     # cần Postgres cục bộ (PGHOST/PGUSER/PGPASSWORD); CI tự chạy
+```
+
+### Áp dụng lên Supabase thật (dùng chung với LIMS)
+
+1. **Xem trước ai sẽ bị khóa** (SQL Editor, chỉ đọc) — những tài khoản này sẽ
+   chỉ còn xem được hồ sơ của mình cho tới khi được duyệt:
+   ```sql
+   SELECT email, role, approval_status, registration_status
+   FROM profiles
+   WHERE coalesce(registration_status, '') <> 'approved'
+     AND lower(coalesce(approval_status, '')) NOT IN ('approved', 'edit')
+     AND lower(coalesce(role, '')) NOT IN ('admin', 'super_admin', 'ward_admin', 'hcdc_admin', 'lab_admin')
+   ORDER BY email;
+   ```
+   Nếu có nhân viên thật trong danh sách (ví dụ đã được duyệt rồi tự sửa hồ sơ),
+   duyệt lại họ trong app sau khi áp dụng, hoặc chạy trước:
+   `UPDATE profiles SET registration_status = 'approved' WHERE email IN (...);`
+2. Chạy **toàn bộ** file migration trong SQL Editor (một transaction; lỗi thì
+   không có gì thay đổi).
+3. Kiểm tra ngay: `npm run check:rls` với tài khoản nhân viên, tuyến cơ sở,
+   một tài khoản chưa duyệt; `npm run e2e` với cả 3 vai trò; mở LIMS kiểm tra.
+4. Sự cố: chạy `migrations/rollback/20260929000000_rrt_rls_roles_down.sql` để
+   trả policy về như cũ.
+
+Khóa một tài khoản: `UPDATE profiles SET registration_status = 'rejected' WHERE email = '...';`
