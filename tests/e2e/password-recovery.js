@@ -15,7 +15,9 @@
 //   CHROME_PATH       đường dẫn Chrome/Chromium; mặc định dùng Google Chrome đã cài
 //   HEADLESS=0        mở cửa sổ trình duyệt để xem
 const readline = require('readline/promises');
-const { chromium } = require('playwright-core');
+const { launchBrowser } = require('./launch');
+
+let userAgent;
 
 const BASE_URL = (process.env.BASE_URL || 'http://localhost:8080').replace(/\/$/, '');
 const { RRT_TEST_EMAIL: EMAIL, RRT_NEW_PASSWORD: NEW_PASSWORD } = process.env;
@@ -28,7 +30,7 @@ function check(ok, msg) {
 }
 
 async function newPage(browser, problems) {
-  const context = await browser.newContext();
+  const context = await browser.newContext({ userAgent });
   const page = await context.newPage();
   page.on('pageerror', (e) => problems.push(`pageerror: ${e.message}`));
   return page;
@@ -59,10 +61,9 @@ const isVisible = (page, sel) =>
     process.exit(2);
   }
 
-  const browser = await chromium.launch({
-    headless: process.env.HEADLESS !== '0',
-    ...(process.env.CHROME_PATH ? { executablePath: process.env.CHROME_PATH } : { channel: 'chrome' }),
-  });
+  const launched = await launchBrowser();
+  const browser = launched.browser;
+  userAgent = launched.userAgent;
   const problems = [];
 
   // ---- 1. Gửi email khôi phục từ form "Quên mật khẩu?" ----
