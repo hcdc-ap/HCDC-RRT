@@ -35,7 +35,7 @@ CREATE TRIGGER trg_rrt_rehearsal_stamp BEFORE INSERT OR UPDATE ON public.rrt_reh
   FOR EACH ROW EXECUTE FUNCTION public.rrt_rehearsal_stamp();
 
 ALTER TABLE public.rrt_rehearsal ENABLE ROW LEVEL SECURITY;
-REVOKE ALL ON public.rrt_rehearsal FROM anon, public;
+REVOKE ALL ON public.rrt_rehearsal FROM anon, authenticated, public;  -- bỏ cả TRUNCATE mặc định (TRUNCATE không qua RLS)
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.rrt_rehearsal TO authenticated;
 
 DROP POLICY IF EXISTS rrt_rehearsal_select ON public.rrt_rehearsal;

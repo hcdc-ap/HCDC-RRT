@@ -403,6 +403,8 @@ SELECT rrt_test.allowed('s1: sửa kết quả',
   $$UPDATE public.rrt_rehearsal SET data = '{"status":"fail","note":"x"}' WHERE kind = 'result' AND key = 'A1'$$);
 SELECT rrt_test.denied('s1: không xóa được (chỉ HCDC)',
   $$DELETE FROM public.rrt_rehearsal WHERE kind = 'result' AND key = 'A1'$$);
+SELECT rrt_test.denied('s1: không TRUNCATE được (TRUNCATE không qua RLS)',
+  $$TRUNCATE public.rrt_rehearsal$$);
 SELECT rrt_test.denied('s1: kind lạ bị từ chối',
   $$INSERT INTO public.rrt_rehearsal (kind, key, data) VALUES ('secret', 'x', '{}')$$);
 -- Tài khoản chờ duyệt riêng (pending@t.vn đã được duyệt ở phần trên)
