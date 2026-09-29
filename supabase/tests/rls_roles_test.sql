@@ -392,4 +392,39 @@ SELECT rrt_test.denied('ward A: đề xuất không được tự gắn token',
   $$INSERT INTO public.lab_dispatch_log (lab_id, incident_id, status, dispatched_by, action_token)
     VALUES (gen_random_uuid(), '10000000-0000-0000-0000-00000000000a', 'suggested', auth.uid(), 'TOKEN-TU-CHE')$$);
 
+-- ============================================================================
+\echo '--- Bảng kết quả tập dượt (rrt_rehearsal) ---'
+SELECT rrt_test.login('00000000-0000-0000-0000-000000000001');
+SELECT rrt_test.allowed('s1 (đã duyệt): ghi kết quả tập dượt',
+  $$INSERT INTO public.rrt_rehearsal (kind, key, data) VALUES ('result', 'A1', '{"status":"pass"}')$$);
+SELECT rrt_test.eq('s1: người ghi do trigger đặt, không giả mạo được',
+  (SELECT count(*) FROM public.rrt_rehearsal WHERE kind = 'result' AND key = 'A1' AND updated_by = auth.uid()), 1);
+SELECT rrt_test.allowed('s1: sửa kết quả',
+  $$UPDATE public.rrt_rehearsal SET data = '{"status":"fail","note":"x"}' WHERE kind = 'result' AND key = 'A1'$$);
+SELECT rrt_test.denied('s1: không xóa được (chỉ HCDC)',
+  $$DELETE FROM public.rrt_rehearsal WHERE kind = 'result' AND key = 'A1'$$);
+SELECT rrt_test.denied('s1: kind lạ bị từ chối',
+  $$INSERT INTO public.rrt_rehearsal (kind, key, data) VALUES ('secret', 'x', '{}')$$);
+-- Tài khoản chờ duyệt riêng (pending@t.vn đã được duyệt ở phần trên)
+RESET ROLE;
+INSERT INTO auth.users (id, email) VALUES ('00000000-0000-0000-0000-0000000000fe', 'pending2@t.vn');
+INSERT INTO public.profiles (id, email, role, registration_status, approval_status, fax, workplace_ward, team)
+  VALUES ('00000000-0000-0000-0000-0000000000fe', 'pending2@t.vn', 'user', 'pending', 'pending', 'Trạm Y tế Phường/Xã/ Đặc khu', 'Phường A', 'Đội A');
+SET ROLE authenticated;
+SELECT rrt_test.login('00000000-0000-0000-0000-0000000000fe');
+SELECT rrt_test.eq('pending: không đọc được kết quả tập dượt',
+  (SELECT count(*) FROM public.rrt_rehearsal), 0);
+SELECT rrt_test.denied('pending: không ghi được',
+  $$INSERT INTO public.rrt_rehearsal (kind, key, data) VALUES ('result', 'A2', '{}')$$);
+RESET ROLE;
+SET ROLE anon;
+SELECT rrt_test.denied('anon: không đọc được bảng tập dượt',
+  $$SELECT * FROM public.rrt_rehearsal$$);
+RESET ROLE;
+SET ROLE authenticated;
+SELECT rrt_test.login('00000000-0000-0000-0000-00000000000a');
+SELECT rrt_test.eq('admin: đọc được kết quả', (SELECT count(*) FROM public.rrt_rehearsal), 1);
+SELECT rrt_test.allowed('admin: xóa được để dọn dẹp',
+  $$DELETE FROM public.rrt_rehearsal WHERE kind = 'result' AND key = 'A1'$$);
+
 RESET ROLE;

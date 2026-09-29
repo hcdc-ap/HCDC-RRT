@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>Tập dượt RRT-HCDC</title>
+<link rel="icon" type="image/png" href="https://github.com/hcdc-ap/images-host/blob/main/images/productivity.png?raw=true">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js" integrity="sha384-Rj26LVGvoeRVR6+mwQmFfcR3QOBEwT+ZmuCWpuiqeTzJpCs0ER4ITAWGb4Hiy3Ok" crossorigin="anonymous"></script>
+<style>
+  :root {
+    color-scheme: light;
+    --bg: #f3f6f6; --surface: #ffffff; --surface-2: #eaf1f1; --ink: #17252a; --muted: #56686e; --line: #d8e2e3;
+    --brand: #006a75; --brand-ink: #ffffff; --brand-soft: #dcefef; --accent: #f26522;
+    --pass: #13795b; --pass-soft: #def3ea; --fail: #c2352b; --fail-soft: #fbe3e0; --skip: #6b7a80;
+    --warn-soft: #fff3e3; --warn-ink: #8a4b0b; --radius: 12px;
+    --sans: 'Be Vietnam Pro', 'Segoe UI', system-ui, sans-serif;
+    --mono: 'JetBrains Mono', ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      color-scheme: dark;
+      --bg: #0f1719; --surface: #162124; --surface-2: #1c2b2f; --ink: #e5eeef; --muted: #9db0b4; --line: #2a3b3f;
+      --brand: #3fb3bd; --brand-ink: #062326; --brand-soft: #173a3e; --accent: #ff8a50;
+      --pass: #4fd1a1; --pass-soft: #163a2f; --fail: #ff7b70; --fail-soft: #43201d; --skip: #a3b1b6;
+      --warn-soft: #3a2a17; --warn-ink: #ffc98a;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body { background: var(--bg); color: var(--ink); font: 15px/1.6 var(--sans); padding-inline: 16px; padding-block: 0 48px; }
+  .wrap { max-width: 1040px; margin: 0 auto; display: grid; gap: 28px; }
+  h1, h2, h3 { text-wrap: balance; margin: 0; line-height: 1.25; }
+  h1 { font-size: clamp(26px, 4vw, 34px); font-weight: 700; letter-spacing: -0.01em; }
+  h2 { font-size: 20px; font-weight: 700; }
+  h3 { font-size: 15px; font-weight: 600; }
+  p { margin: 0; }
+  [hidden] { display: none !important; }
+  .eyebrow { font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--brand); }
+  .muted { color: var(--muted); }
+  header.top { padding-top: 28px; display: grid; gap: 10px; }
+  header.top p.lead { max-width: 68ch; color: var(--muted); }
+  .userbar { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; font-size: 14px; }
+  .linkbtn { font: inherit; font-size: 13px; background: none; border: 0; color: var(--brand); text-decoration: underline; cursor: pointer; padding: 0; }
+  .panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 20px; display: grid; gap: 14px; }
+  .warnbox { background: var(--warn-soft); color: var(--warn-ink); border-radius: var(--radius); padding: 14px 16px; display: grid; gap: 6px; }
+  .warnbox ul, .cols ul { margin: 0; padding-left: 20px; display: grid; gap: 4px; }
+  .login { max-width: 420px; }
+  .login form { display: grid; gap: 10px; }
+  .login label { font-size: 13px; color: var(--muted); display: grid; gap: 4px; }
+  .primary { font: inherit; font-weight: 600; background: var(--brand); color: var(--brand-ink); border: 0; border-radius: 8px; padding: 9px 16px; cursor: pointer; }
+  .err { color: var(--fail); font-size: 14px; min-height: 1em; }
+  .bar { display: flex; height: 12px; border-radius: 999px; overflow: hidden; background: var(--surface-2); }
+  .bar span { display: block; height: 100%; transition: width .3s ease; }
+  .bar .p { background: var(--pass); } .bar .f { background: var(--fail); } .bar .s { background: var(--skip); }
+  .legend { display: flex; flex-wrap: wrap; gap: 8px 18px; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .legend b { color: var(--ink); }
+  .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
+  .groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
+  .gstat { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; display: grid; gap: 4px; font-size: 13px; color: inherit; text-decoration: none; }
+  .gstat .n { font-family: var(--mono); color: var(--muted); font-variant-numeric: tabular-nums; }
+  .gstat.hasfail { border-color: var(--fail); }
+  .tablewrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th { text-align: left; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); font-weight: 600; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+  td { padding: 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  tr:last-child td { border-bottom: 0; }
+  .rolechip { display: inline-flex; align-items: center; font-weight: 600; font-size: 13px; padding: 2px 10px; border-radius: 999px; background: var(--brand-soft); color: var(--brand); white-space: nowrap; }
+  input[type="text"], input[type="email"], input[type="password"], textarea { width: 100%; font: inherit; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; }
+  input:focus-visible, textarea:focus-visible, button:focus-visible, a:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+  textarea { min-height: 38px; resize: vertical; }
+  input:disabled, textarea:disabled { background: var(--surface-2); color: var(--muted); }
+  .filters { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--bg); padding-block: 10px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; border-bottom: 1px solid var(--line); }
+  .filters .lbl { font-size: 13px; color: var(--muted); margin-right: 4px; }
+  .chip { font: inherit; font-size: 13px; font-weight: 600; border: 1px solid var(--line); background: var(--surface); color: var(--ink); border-radius: 999px; padding: 5px 12px; cursor: pointer; }
+  .chip[aria-pressed="true"] { background: var(--brand); color: var(--brand-ink); border-color: var(--brand); }
+  .chip.onlyfail[aria-pressed="true"] { background: var(--fail); border-color: var(--fail); color: #fff; }
+  section.group { display: grid; gap: 12px; }
+  section.group > header { display: grid; gap: 4px; }
+  .case { background: var(--surface); border: 1px solid var(--line); border-left: 4px solid var(--line); border-radius: var(--radius); padding: 16px 18px; display: grid; gap: 10px; }
+  .case[data-status="pass"] { border-left-color: var(--pass); }
+  .case[data-status="fail"] { border-left-color: var(--fail); }
+  .case[data-status="skip"] { border-left-color: var(--skip); }
+  .case .head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 12px; }
+  .case .cid { font-family: var(--mono); font-size: 13px; font-weight: 600; color: var(--muted); }
+  .case .who { display: flex; flex-wrap: wrap; gap: 6px; }
+  .case ol { margin: 0; padding-left: 22px; display: grid; gap: 4px; }
+  .expect { background: var(--surface-2); border-radius: 8px; padding: 10px 12px; font-size: 14px; }
+  .expect b { color: var(--brand); }
+  .pre { font-size: 13px; color: var(--muted); }
+  .actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .st { font: inherit; font-size: 13px; font-weight: 600; border-radius: 8px; padding: 6px 14px; cursor: pointer; border: 1px solid var(--line); background: var(--surface); color: var(--ink); }
+  .st[data-v="pass"][aria-pressed="true"] { background: var(--pass); border-color: var(--pass); color: #fff; }
+  .st[data-v="fail"][aria-pressed="true"] { background: var(--fail); border-color: var(--fail); color: #fff; }
+  .st[data-v="skip"][aria-pressed="true"] { background: var(--skip); border-color: var(--skip); color: #fff; }
+  .st:disabled { cursor: not-allowed; opacity: .6; }
+  .stamp, .save-state { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .note-row { display: grid; gap: 4px; }
+  .note-row label { font-size: 12px; color: var(--muted); }
+  .cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+  @media (prefers-reduced-motion: reduce) { .bar span { transition: none; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <p class="eyebrow">RRT-HCDC · Tập dượt trước tập huấn tháng 10/2026</p>
+    <h1>Kịch bản tập dượt theo vai trò</h1>
+    <p class="lead">Mỗi người đăng nhập đúng tài khoản được phân vai trên webapp RRT, làm lần lượt các tình huống của vai mình và đánh dấu <b>Đạt</b>, <b>Lỗi</b> hoặc <b>Bỏ qua</b> ở trang này. Kết quả lưu chung cho cả tổ. Tình huống nào ghi <b>Lỗi</b> thì mô tả ngắn điều đã thấy ở ô ghi chú.</p>
+    <div class="userbar" id="userbar" hidden><span id="whoami"></span><button class="linkbtn" id="logout" type="button">Đăng xuất</button><span class="muted" id="conn"></span></div>
+  </header>
+
+  <section class="panel login" id="loginPanel" hidden aria-labelledby="h-login">
+    <h2 id="h-login">Đăng nhập bằng tài khoản RRT</h2>
+    <p class="muted">Dùng đúng email và mật khẩu đăng nhập webapp RRT. Đã đăng nhập webapp trên trình duyệt này thì trang tự nhận.</p>
+    <form id="loginForm">
+      <label>Email<input type="email" id="loginEmail" autocomplete="username" required></label>
+      <label>Mật khẩu<input type="password" id="loginPass" autocomplete="current-password" required></label>
+      <button class="primary" type="submit" id="loginBtn">Đăng nhập</button>
+      <p class="err" id="loginErr" role="alert"></p>
+    </form>
+  </section>
+
+  <div class="warnbox" role="note" id="pendingBox" hidden>
+    <h3>Tài khoản chưa được duyệt</h3>
+    <p>Tài khoản này chưa được duyệt nên chưa xem và ghi được kết quả tập dượt. Người đóng vai MOI nhờ người ghi nhận đánh dấu hộ các tình huống A1 cho tới khi được duyệt (A2).</p>
+  </div>
+
+  <div class="warnbox" role="note">
+    <h3>Đây là hệ thống thật: thông báo, email và Telegram đều gửi thật</h3>
+    <ul>
+      <li>Đặt tên mọi sự kiện, ca trực bắt đầu bằng <b>[TẬP HUẤN]</b> để dễ nhận biết và dọn dẹp.</li>
+      <li>Báo trước trong <b>nhóm Telegram chung</b> của RRT: kích hoạt khẩn cấp sẽ đăng tin lên nhóm này.</li>
+      <li>Chỉ điều động người trong tổ tập dượt. Chỉ gửi yêu cầu điều phối mẫu tới <b>PXN thử</b>, không gửi PXN thật.</li>
+      <li>Hệ thống giới hạn số email khôi phục mật khẩu mỗi giờ: tình huống quên mật khẩu chỉ làm một lần.</li>
+    </ul>
+  </div>
+
+  <section class="panel" aria-labelledby="h-progress">
+    <h2 id="h-progress">Tiến độ</h2>
+    <div class="bar" aria-hidden="true"><span class="p" id="bp"></span><span class="f" id="bf"></span><span class="s" id="bs"></span></div>
+    <div class="legend" id="legend"></div>
+    <div class="groups" id="gstats"></div>
+  </section>
+
+  <section class="panel" aria-labelledby="h-cast">
+    <h2 id="h-cast">Phân vai</h2>
+    <p class="muted">Người thực hiện lấy từ dữ liệu phân vai (chỉ tài khoản đã đăng nhập mới thấy). Cột "Cần chuẩn bị" là điều kiện tài khoản phải có trước buổi tập dượt.</p>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Vai</th><th>Tài khoản / vai trò trên hệ thống</th><th>Cần chuẩn bị</th><th style="min-width:200px">Người thực hiện</th></tr></thead>
+        <tbody id="cast"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="panel" aria-labelledby="h-prep">
+    <h2 id="h-prep">Trước và sau buổi tập dượt</h2>
+    <div class="cols">
+      <div>
+        <h3>Trước giờ bắt đầu</h3>
+        <ul>
+          <li>Kiểm tra các tài khoản ở bảng Phân vai đăng nhập được và đúng vai trò, xã/phường.</li>
+          <li>Tạm chuyển người đóng vai <b>DT</b> về Trạm Y tế và xã/phường tập dượt, đội của xã, vị trí Đội trưởng (ghi lại giá trị cũ để khôi phục).</li>
+          <li>Tạo <b>PXN thử</b> ở trang Phòng Xét nghiệm, email đầu mối là email của người đóng vai PXN (F0).</li>
+          <li>Người đóng vai <b>MOI</b> chuẩn bị một email cá nhân <b>chưa từng</b> đăng ký RRT.</li>
+          <li>Mỗi người mở sẵn email và Telegram (nếu đã liên kết bot) trên điện thoại.</li>
+        </ul>
+      </div>
+      <div>
+        <h3>Sau khi xong</h3>
+        <ul>
+          <li>Xóa sự kiện <b>[TẬP HUẤN]</b>, ca trực <b>[TẬP HUẤN]</b> và PXN thử.</li>
+          <li>Khôi phục đơn vị, đội, vị trí của người đóng vai DT; quyết định giữ hay xóa tài khoản MOI.</li>
+          <li>Thông báo, lịch sử điều động của buổi tập dượt vẫn còn trong database: nhờ quản trị hệ thống dọn nếu cần.</li>
+          <li>Rà các tình huống <b>Lỗi</b> trên trang này và gửi cho người phụ trách kỹ thuật.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <div class="filters" role="toolbar" aria-label="Lọc tình huống">
+    <span class="lbl">Xem theo vai:</span>
+    <span id="rolefilters" style="display:contents"></span>
+    <button class="chip onlyfail" id="onlyfail" aria-pressed="false" type="button">Chỉ tình huống lỗi</button>
+  </div>
+
+  <div id="cases" class="wrap" style="gap:28px"></div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+  var SUPABASE_URL = 'https://sxzjbygiowpscyhiffqc.supabase.co';
+  // Khóa công khai (anon) — giống js/app/core.js; quyền do RLS quyết định.
+  var SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN4empieWdpb3dwc2N5aGlmZnFjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkyMTI4MjEsImV4cCI6MjA5NDc4ODgyMX0.Qfz4b4GBDAQV4aO-ca1WFKUM1lbCWqjhItkm1YCnm1k';
+  var POLL_MS = 15000;
+
+  var ROLES = [
+    { key: 'HCDC', name: 'Quản trị RRT (HCDC)', acct: 'Tài khoản test quản trị HCDC · Quản trị RRT (HCDC)', prep: 'Vào được trang Phòng Xét nghiệm và Vật tư.' },
+    { key: 'TCS', name: 'Quản trị tuyến cơ sở', acct: 'Tài khoản test quản trị tuyến cơ sở · Quản trị tuyến cơ sở', prep: 'Đơn vị Trạm Y tế/UBND Phường-Xã; đúng xã/phường tập dượt.' },
+    { key: 'NV1', name: 'Nhân viên RRT cùng xã', acct: 'Tài khoản test nhân viên · Nhân viên RRT', prep: 'Đã duyệt; cùng xã/phường với TCS; có đội trong xã.' },
+    { key: 'DT', name: 'Đội trưởng', acct: 'Nhân viên khoa Giám sát cảnh báo · Nhân viên RRT, vị trí Đội trưởng', prep: 'Tạm chuyển về Trạm Y tế và xã/phường tập dượt, đội của xã; đã liên kết Telegram.' },
+    { key: 'NV2', name: 'Nhân viên ngoài xã', acct: 'Nhân viên khoa Giám sát cảnh báo · Nhân viên RRT', prep: 'Đã duyệt; KHÔNG thuộc xã/phường tập dượt.' },
+    { key: 'MOI', name: 'Người mới đăng ký', acct: 'Nhân viên khoa Giám sát cảnh báo · đăng ký mới bằng email khác', prep: 'Email cá nhân chưa từng đăng ký RRT; tự đăng ký trong buổi (A1).' },
+    { key: 'PXN', name: 'Đầu mối PXN thử', acct: 'Nhân viên khoa Giám sát cảnh báo · không cần tài khoản RRT', prep: 'Email được khai làm đầu mối của PXN thử (F0).' },
+    { key: 'GHI', name: 'Ghi nhận, dự phòng', acct: 'Nhân viên khoa Giám sát cảnh báo', prep: 'Theo dõi trang này, ghi lỗi; đánh dấu hộ vai MOI và PXN.' }
+  ];
+
+  var GROUPS = [
+    { key: 'A', title: 'Tài khoản và đăng nhập', note: 'Đăng ký, duyệt, mật khẩu, liên kết Telegram.' },
+    { key: 'B', title: 'Phân quyền theo vai trò', note: 'Mỗi vai chỉ thấy và làm được đúng phạm vi của mình.' },
+    { key: 'C', title: 'Lịch trực', note: 'Tạo ca, nhận ca, báo bận, thay người.' },
+    { key: 'D', title: 'Kích hoạt khẩn cấp', note: 'Điều động và xác nhận qua ứng dụng, Telegram, Email.' },
+    { key: 'E', title: 'Trong sự kiện', note: 'Nhật ký, phương án, báo cáo, SOS, thay quân.' },
+    { key: 'F', title: 'Điều phối mẫu xét nghiệm', note: 'Đề xuất PXN và chốt điều phối với PXN thử.' },
+    { key: 'G', title: 'Kết thúc và dọn dẹp', note: 'Đóng sự kiện, xóa dữ liệu tập dượt.' }
+  ];
+
+  var CASES = [
+    { id: 'A1', g: 'A', who: ['MOI'], t: 'Tự đăng ký tài khoản mới',
+      steps: ['Ở trang đăng nhập webapp, bấm "Đăng ký", điền thông tin bằng email cá nhân CHƯA từng đăng ký, bấm "Đăng ký".', 'Đăng nhập, vào "Biểu mẫu RRT", mục 6 chọn Đơn vị "Trạm Y tế Phường/Xã/ Đặc khu" và đúng xã/phường tập dượt, nộp hồ sơ.'],
+      expect: 'Thấy thông báo "Tài khoản đang chờ duyệt". Chỉ xem/sửa được hồ sơ của mình; các trang khác trống (không phải lỗi).' },
+    { id: 'A2', g: 'A', who: ['TCS'], t: 'Duyệt người mới đăng ký', pre: 'A1',
+      steps: ['Vào "Biểu mẫu RRT", tìm hồ sơ của MOI.', 'Ở cột Phê duyệt chọn "Đã duyệt".', 'MOI đăng xuất rồi đăng nhập lại.'],
+      expect: 'TCS thấy hồ sơ MOI (vì cùng xã). Sau khi duyệt, MOI dùng được đầy đủ chức năng của Nhân viên RRT.' },
+    { id: 'A3', g: 'A', who: ['TCS'], t: 'Không thấy hồ sơ ngoài xã',
+      steps: ['Vào "Biểu mẫu RRT" và "Thành viên", tìm tên NV2.'],
+      expect: 'Không tìm thấy NV2 ở cả hai trang (NV2 không thuộc xã tập dượt).' },
+    { id: 'A4', g: 'A', who: ['NV1'], t: 'Quên mật khẩu (làm một lần)',
+      steps: ['Đăng xuất, bấm "Quên mật khẩu?", nhập email, bấm "Gửi liên kết" một lần.', 'Mở email mới nhất (xem cả Spam), bấm liên kết, đặt mật khẩu mới.', 'Đăng nhập bằng mật khẩu mới; mở lại liên kết cũ trong email.'],
+      expect: 'Liên kết mở đúng trang RRT với form "Đặt lại mật khẩu"; đăng nhập được bằng mật khẩu mới; liên kết cũ báo đã hết hạn hoặc đã dùng.' },
+    { id: 'A5', g: 'A', who: ['NV1'], t: 'Đổi mật khẩu trong ứng dụng',
+      steps: ['Bấm ảnh hồ sơ góc phải → "Đổi mật khẩu", nhập mật khẩu cũ và mới, xác nhận.'],
+      expect: 'Báo đổi thành công, tự đăng xuất sau vài giây; đăng nhập lại được bằng mật khẩu mới.' },
+    { id: 'A6', g: 'A', who: ['NV1'], t: 'Sửa hồ sơ, thử đổi nơi công tác',
+      steps: ['Mở "Biểu mẫu RRT", sửa số điện thoại và thử đổi Đơn vị công tác/Phường-Xã, nộp.'],
+      expect: 'Số điện thoại lưu được; Đơn vị và Phường-Xã giữ nguyên như cũ. Trạng thái hồ sơ về "Chờ duyệt" nhưng tài khoản vẫn dùng bình thường.' },
+    { id: 'A7', g: 'A', who: ['NV1'], t: 'Liên kết Telegram',
+      steps: ['Mở bot Telegram của hệ thống, bấm Start hoặc gõ /start.', 'Gõ đúng email đăng nhập RRT và gửi.'],
+      expect: 'Bot trả lời "HỒ SƠ HỢP LỆ" kèm tên.' },
+
+    { id: 'B1', g: 'B', who: ['NV1'], t: 'Menu của nhân viên',
+      steps: ['Xem danh sách menu bên trái.'],
+      expect: 'Có: Dashboard, Biểu mẫu RRT, Theo dõi sự kiện, Đào tạo, Thư viện, Bản đồ, Tin nhắn. Không có: Lịch trực, Kích hoạt khẩn cấp, Thành viên, Vật tư, Phòng Xét nghiệm.' },
+    { id: 'B2', g: 'B', who: ['TCS'], t: 'Menu và nút của tuyến cơ sở',
+      steps: ['Xem menu bên trái; mở "Thư viện" và "Đào tạo".'],
+      expect: 'Có Lịch trực, Kích hoạt khẩn cấp, Thành viên; không có Vật tư, Phòng Xét nghiệm. Thư viện không có nút "Đăng tải"; Đào tạo không có nút "Khóa Đào tạo".' },
+    { id: 'B3', g: 'B', who: ['TCS'], t: 'Thành viên: chỉ trong xã, không phong Đội trưởng',
+      steps: ['Vào "Thành viên", xem danh sách.', 'Thử đổi Vị trí của NV1 thành "Đội trưởng".'],
+      expect: 'Chỉ thấy người cùng xã/phường. Không có lựa chọn "Đội trưởng" (hoặc báo không có quyền phong Đội trưởng).' },
+    { id: 'B4', g: 'B', who: ['HCDC'], t: 'HCDC gán Đội trưởng',
+      steps: ['Vào "Thành viên", tìm người đóng vai DT, đổi Vị trí thành "Đội trưởng" (nếu chưa gán trước buổi).'],
+      expect: 'Lưu được. DT đăng xuất/đăng nhập lại thấy nút "Lập báo cáo" trong sự kiện đang tham gia (kiểm tra ở E3).' },
+    { id: 'B5', g: 'B', who: ['NV2'], t: 'Nhân viên ngoài xã',
+      steps: ['Vào "Biểu mẫu RRT", "Theo dõi sự kiện", "Bản đồ".'],
+      expect: 'Chỉ thấy hồ sơ của mình; chưa thấy sự kiện [TẬP HUẤN] (cho tới D6); bản đồ không hiện nhân sự xã tập dượt.' },
+
+    { id: 'C1', g: 'C', who: ['TCS'], t: 'Tạo ca trực',
+      steps: ['Vào "Lịch trực", chọn ngày mai, chọn đội của xã có NV1 và DT, ghi chú "[TẬP HUẤN]", bấm "XÁC NHẬN".'],
+      expect: 'Chỉ thấy các đội thuộc xã mình. Ca xuất hiện trên lịch; NV1 và DT nhận thông báo lịch trực qua ứng dụng, email (và Telegram nếu đã liên kết).' },
+    { id: 'C2', g: 'C', who: ['NV1'], t: 'Nhận ca trên Dashboard', pre: 'C1',
+      steps: ['Mở Dashboard, dòng "Lịch trực [tên đội]" có nhãn "Chờ xác nhận", bấm "Phản hồi ngay".', 'Chọn nhận ca.'],
+      expect: 'Dòng chuyển sang "Đã nhận". TCS thấy NV1 đã nhận ca.' },
+    { id: 'C3', g: 'C', who: ['DT'], t: 'Báo bận qua email hoặc Telegram', pre: 'C1',
+      steps: ['Không mở ứng dụng. Trong email (hoặc tin Telegram) thông báo lịch trực, bấm nút báo bận.'],
+      expect: 'Trang xác nhận hiện ghi nhận. TCS thấy DT báo bận; bấm lại nút lần hai báo đã phản hồi trước đó.' },
+    { id: 'C4', g: 'C', who: ['TCS', 'MOI'], t: 'Thay người báo bận', pre: 'C3 và A2',
+      steps: ['TCS bấm "Tạo yêu cầu Thay thế", chọn ca [TẬP HUẤN], thay DT bằng MOI, làm hết các bước.', 'MOI xác nhận thay ca.'],
+      expect: 'MOI nhận thông báo điều động thay thế; sau khi MOI xác nhận, lịch hiện MOI trong ca.' },
+
+    { id: 'D1', g: 'D', who: ['TCS'], t: 'Kích hoạt sự kiện mới',
+      steps: ['Vào "Kích hoạt khẩn cấp", tick NV1, DT, MOI, bấm "KÍCH HOẠT (3)".', 'Chọn "Sự kiện Mới", tên "[TẬP HUẤN] Ổ dịch giả định", chọn địa điểm, bấm "Tiếp tục" rồi "XÁC NHẬN".'],
+      expect: 'Danh sách chọn chỉ có người cùng xã; không có ô chọn xã. Báo kích hoạt thành công. Nhóm Telegram chung có tin kích hoạt; 3 người nhận thông báo qua ứng dụng và email.' },
+    { id: 'D2', g: 'D', who: ['NV1'], t: 'Xác nhận trong ứng dụng', pre: 'D1',
+      steps: ['Vào "Theo dõi sự kiện", mở sự kiện [TẬP HUẤN].', 'Thanh vàng "YÊU CẦU TỪ HỆ THỐNG" hiện ra, bấm "XÁC NHẬN".'],
+      expect: 'Thanh vàng biến mất; NV1 được tính là đã xác nhận.' },
+    { id: 'D3', g: 'D', who: ['DT'], t: 'Xác nhận qua Telegram', pre: 'D1',
+      steps: ['Trong tin nhắn riêng của bot, bấm "TÔI XÁC NHẬN".'],
+      expect: 'Tin nhắn cập nhật "ĐÃ XÁC NHẬN"; nhóm Telegram chung có tin cập nhật; trong ứng dụng DT được tính là đã xác nhận.' },
+    { id: 'D4', g: 'D', who: ['MOI'], t: 'Báo không tham gia qua email', pre: 'D1',
+      steps: ['Trong email kích hoạt, bấm "Báo không thể tham gia".'],
+      expect: 'Trang xác nhận hiện ghi nhận; MOI không còn thấy sự kiện trong "Theo dõi sự kiện".' },
+    { id: 'D5', g: 'D', who: ['TCS'], t: 'Theo dõi phản hồi và bổ sung người', pre: 'D2 đến D4',
+      steps: ['Mở sự kiện, xem thẻ "Thống kê Phản hồi".', 'Vào "Kích hoạt khẩn cấp", chọn "Bổ sung nhân sự" cho sự kiện này.'],
+      expect: 'Thống kê: 2 xác nhận, 1 không tham gia. Khi bổ sung nhân sự, hệ thống cảnh báo sự kiện có người báo không tham gia.' },
+    { id: 'D6', g: 'D', who: ['HCDC', 'NV2'], t: 'HCDC bổ sung người ngoài xã', pre: 'D1',
+      steps: ['HCDC vào "Kích hoạt khẩn cấp", chọn NV2, "Bổ sung nhân sự" vào sự kiện [TẬP HUẤN].', 'NV2 xác nhận trong ứng dụng.'],
+      expect: 'HCDC chọn được người ngoài xã; NV2 nhận thông báo và giờ thấy sự kiện.' },
+
+    { id: 'E1', g: 'E', who: ['NV1'], t: 'Nhật ký, tin nhắn, đính kèm', pre: 'D2',
+      steps: ['Trong sự kiện, gửi một tin nhắn, đính kèm một ảnh nhỏ.'],
+      expect: 'Tin nhắn và file hiện cho các thành viên sự kiện khác (TCS, DT) thấy.' },
+    { id: 'E2', g: 'E', who: ['NV1'], t: 'Phương án chỉ xem',
+      steps: ['Trong sự kiện, bấm "Phương án (IAP)".'],
+      expect: 'Mở ở chế độ chỉ xem, không có nút "LƯU IAP". Không có nút "Lập báo cáo".' },
+    { id: 'E3', g: 'E', who: ['DT'], t: 'Đội trưởng lập báo cáo tình hình', pre: 'B4 và D3',
+      steps: ['Trong sự kiện, bấm "Lập báo cáo", nhập số liệu giả định, gửi.'],
+      expect: 'Gửi được báo cáo. Không sửa hay xóa được báo cáo đã gửi.' },
+    { id: 'E4', g: 'E', who: ['TCS'], t: 'Tuyến cơ sở lập phương án',
+      steps: ['Trong sự kiện, bấm "Phương án (IAP)", thêm một mục tiêu, bấm "LƯU IAP".'],
+      expect: 'Lưu được; NV1 mở lại thấy nội dung mới (chỉ xem).' },
+    { id: 'E5', g: 'E', who: ['TCS'], t: 'Yêu cầu hỗ trợ SOS',
+      steps: ['Trong sự kiện, bấm "Yêu cầu hỗ trợ SOS", chọn "Vật tư", ghi "[TẬP HUẤN]", "XÁC NHẬN".'],
+      expect: 'Yêu cầu hiện trong nhật ký sự kiện; HCDC thấy yêu cầu.' },
+    { id: 'E6', g: 'E', who: ['TCS'], t: 'Thay quân một người',
+      steps: ['Trong sự kiện, bấm cụm nút thay quân "Người", thay NV1 bằng một người khác trong xã.'],
+      expect: 'Chỉ chọn được người cùng xã; người mới nhận thông báo điều động.' },
+
+    { id: 'F0', g: 'F', who: ['HCDC'], t: 'Tạo PXN thử',
+      steps: ['Vào "Phòng Xét nghiệm", "Thêm Phòng Xét nghiệm", tên "[TẬP HUẤN] PXN thử", email đầu mối là email của người đóng vai PXN, vị trí gần xã tập dượt.', 'Bấm "Quản lý năng lực", khai một kỹ thuật và công suất.'],
+      expect: 'PXN thử xuất hiện trong danh sách và trên Bản đồ.' },
+    { id: 'F1', g: 'F', who: ['TCS'], t: 'Đề xuất PXN cho HCDC', pre: 'F0 và D1',
+      steps: ['Trong sự kiện, bấm "Xét nghiệm", chọn kỹ thuật đã khai ở F0, bấm "Tìm Phòng xét nghiệm phù hợp".', 'Trên thẻ PXN thử, bấm "Đề xuất lên điều phối".'],
+      expect: 'Thẻ chuyển "Đã đề xuất"; HCDC nhận thông báo "[Điều phối Phòng Xét nghiệm]". TCS không có nút gửi yêu cầu hay chốt điều phối.' },
+    { id: 'F2', g: 'F', who: ['HCDC', 'PXN'], t: 'Gửi yêu cầu và chốt điều phối', pre: 'F1',
+      steps: ['HCDC mở công cụ Xét nghiệm của sự kiện, trên thẻ PXN thử bấm "Gửi".', 'Người đóng vai PXN mở email yêu cầu, bấm nhận mẫu.', 'HCDC bấm "Chốt điều phối (Đủ mẫu)" và xác nhận.'],
+      expect: 'Thẻ tự đổi từ "Đang chờ PXN..." sang cho phép chốt (nếu không tự đổi, đóng rồi mở lại hộp thoại). Sau khi chốt, thành viên sự kiện nhận thông báo kết quả điều phối.' },
+    { id: 'F3', g: 'F', who: ['NV1'], t: 'Nhân viên không điều phối mẫu',
+      steps: ['Mở sự kiện, tìm nút "Xét nghiệm"; mở "Bản đồ", tìm nút "Tìm Phòng Xét nghiệm".'],
+      expect: 'Không có hai nút này.' },
+
+    { id: 'G1', g: 'G', who: ['TCS'], t: 'Đánh giá và đóng sự kiện',
+      steps: ['Trong sự kiện, bấm "Đánh giá (AAR)", thử "Tự động tổng hợp", rồi "LƯU & ĐÓNG SỰ KIỆN".'],
+      expect: 'Sự kiện chuyển "Đã kết thúc"; thành viên nhận thông báo kết thúc; trên Bản đồ marker sự kiện chuyển màu xám.' },
+    { id: 'G2', g: 'G', who: ['TCS'], t: 'Tuyến cơ sở không xóa được sự kiện',
+      steps: ['Tìm thao tác xóa sự kiện [TẬP HUẤN].'],
+      expect: 'Không xóa được (chỉ HCDC xóa).' },
+    { id: 'G3', g: 'G', who: ['HCDC', 'GHI'], t: 'Dọn dữ liệu tập dượt',
+      steps: ['Xóa sự kiện [TẬP HUẤN], ca trực [TẬP HUẤN], PXN thử.', 'Khôi phục đơn vị, đội, vị trí của người đóng vai DT.'],
+      expect: 'Không còn dữ liệu [TẬP HUẤN] trên Lịch trực, Theo dõi sự kiện, Bản đồ, Phòng Xét nghiệm.' }
+  ];
+
+  var ROLEMAP = {}; ROLES.forEach(function (r) { ROLEMAP[r.key] = r; });
+  var state = { results: {}, cast: {}, filter: 'ALL', onlyFail: false, canWrite: false, sb: null, myName: '', timer: null };
+  try { var saved = localStorage.getItem('tapduot-filter'); if (saved) state.filter = saved; } catch (e) {}
+
+  function $(id) { return document.getElementById(id); }
+  function el(tag, attrs, text) {
+    var n = document.createElement(tag);
+    if (attrs) Object.keys(attrs).forEach(function (k) { if (attrs[k] !== null && attrs[k] !== undefined) n.setAttribute(k, attrs[k]); });
+    if (text !== undefined) n.textContent = text;
+    return n;
+  }
+  function fmtTime(iso) { try { return new Date(iso).toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' }); } catch (e) { return ''; } }
+  function conn(msg) { $('conn').textContent = msg; }
+
+  // ---------- Dựng giao diện tĩnh ----------
+  var castInputs = {}, caseNodes = {};
+  function buildCast() {
+    var tb = $('cast');
+    ROLES.forEach(function (r) {
+      var tr = el('tr');
+      var c1 = el('td'); c1.appendChild(el('span', { 'class': 'rolechip' }, r.key)); c1.appendChild(el('div', { 'class': 'muted', style: 'font-size:13px;margin-top:4px' }, r.name));
+      var c2 = el('td', null, r.acct);
+      var c3 = el('td', { 'class': 'muted', style: 'font-size:14px' }, r.prep);
+      var c4 = el('td');
+      var inp = el('input', { type: 'text', id: 'cast-' + r.key, placeholder: 'Đăng nhập để xem', 'aria-label': 'Người thực hiện vai ' + r.key });
+      inp.addEventListener('change', function () { save('cast', r.key, { name: inp.value.trim() }); });
+      castInputs[r.key] = inp; c4.appendChild(inp);
+      [c1, c2, c3, c4].forEach(function (c) { tr.appendChild(c); });
+      tb.appendChild(tr);
+    });
+  }
+  function buildFilters() {
+    var box = $('rolefilters');
+    [{ key: 'ALL', label: 'Tất cả' }].concat(ROLES.map(function (r) { return { key: r.key, label: r.key }; })).forEach(function (f) {
+      var b = el('button', { 'class': 'chip', type: 'button', 'data-k': f.key, title: f.key === 'ALL' ? 'Tất cả vai' : ROLEMAP[f.key].name }, f.label);
+      b.addEventListener('click', function () { state.filter = f.key; try { localStorage.setItem('tapduot-filter', f.key); } catch (e) {} render(); });
+      box.appendChild(b);
+    });
+    $('onlyfail').addEventListener('click', function () { state.onlyFail = !state.onlyFail; render(); });
+  }
+  function buildCases() {
+    var host = $('cases');
+    GROUPS.forEach(function (g) {
+      var sec = el('section', { 'class': 'group', id: 'g-' + g.key, 'aria-labelledby': 'gh-' + g.key });
+      var hd = el('header'); hd.appendChild(el('h2', { id: 'gh-' + g.key }, g.key + '. ' + g.title)); hd.appendChild(el('p', { 'class': 'muted' }, g.note)); sec.appendChild(hd);
+      CASES.filter(function (c) { return c.g === g.key; }).forEach(function (c) {
+        var card = el('article', { 'class': 'case', id: 'c-' + c.id });
+        var head = el('div', { 'class': 'head' });
+        head.appendChild(el('span', { 'class': 'cid' }, c.id)); head.appendChild(el('h3', null, c.t));
+        var who = el('div', { 'class': 'who' }); c.who.forEach(function (k) { who.appendChild(el('span', { 'class': 'rolechip', title: ROLEMAP[k].name }, k)); }); head.appendChild(who);
+        card.appendChild(head);
+        if (c.pre) card.appendChild(el('p', { 'class': 'pre' }, 'Làm sau: ' + c.pre + '.'));
+        var ol = el('ol'); c.steps.forEach(function (s) { ol.appendChild(el('li', null, s)); }); card.appendChild(ol);
+        var ex = el('p', { 'class': 'expect' }); ex.appendChild(el('b', null, 'Kết quả mong đợi: ')); ex.appendChild(document.createTextNode(c.expect)); card.appendChild(ex);
+        var act = el('div', { 'class': 'actions' }), btns = {};
+        [['pass', 'Đạt'], ['fail', 'Lỗi'], ['skip', 'Bỏ qua']].forEach(function (p) {
+          var b = el('button', { 'class': 'st', type: 'button', 'data-v': p[0], 'aria-pressed': 'false' }, p[1]);
+          b.addEventListener('click', function () { var cur = state.results[c.id] || {}; save('result', c.id, { status: cur.status === p[0] ? null : p[0], note: cur.note || '' }); });
+          btns[p[0]] = b; act.appendChild(b);
+        });
+        var stamp = el('span', { 'class': 'stamp' }); act.appendChild(stamp); card.appendChild(act);
+        var nr = el('div', { 'class': 'note-row' }), nid = 'note-' + c.id;
+        nr.appendChild(el('label', { 'for': nid }, 'Ghi chú (bắt buộc khi Lỗi: đã thấy gì, ở màn hình nào)'));
+        var ta = el('textarea', { id: nid, rows: '1' }), ss = el('span', { 'class': 'save-state', 'aria-live': 'polite' });
+        ta.addEventListener('change', function () { var cur = state.results[c.id] || {}; save('result', c.id, { status: cur.status || null, note: ta.value.trim() }, ss); });
+        nr.appendChild(ta); nr.appendChild(ss); card.appendChild(nr);
+        sec.appendChild(card);
+        caseNodes[c.id] = { card: card, btns: btns, stamp: stamp, note: ta, c: c };
+      });
+      host.appendChild(sec);
+    });
+  }
+
+  // ---------- Hiển thị ----------
+  function render() {
+    Array.prototype.forEach.call(document.querySelectorAll('#rolefilters .chip'), function (b) { b.setAttribute('aria-pressed', String(b.getAttribute('data-k') === state.filter)); });
+    $('onlyfail').setAttribute('aria-pressed', String(state.onlyFail));
+    ROLES.forEach(function (r) {
+      var inp = castInputs[r.key], v = (state.cast[r.key] && state.cast[r.key].name) || '';
+      if (document.activeElement !== inp) inp.value = v;
+      inp.disabled = !state.canWrite;
+      inp.placeholder = state.canWrite ? 'Họ tên người thực hiện' : 'Đăng nhập để xem';
+    });
+    GROUPS.forEach(function (g) {
+      var any = false;
+      CASES.filter(function (c) { return c.g === g.key; }).forEach(function (c) {
+        var n = caseNodes[c.id], r = state.results[c.id] || {};
+        var vis = (state.filter === 'ALL' || c.who.indexOf(state.filter) !== -1) && (!state.onlyFail || r.status === 'fail');
+        n.card.hidden = !vis; if (vis) any = true;
+        n.card.setAttribute('data-status', r.status || '');
+        Object.keys(n.btns).forEach(function (k) { n.btns[k].setAttribute('aria-pressed', String(r.status === k)); n.btns[k].disabled = !state.canWrite; });
+        n.stamp.textContent = r.at ? ((r.by_name || 'Một thành viên') + ' · ' + fmtTime(r.at)) : 'Chưa làm';
+        if (document.activeElement !== n.note) n.note.value = r.note || '';
+        n.note.disabled = !state.canWrite;
+      });
+      $('g-' + g.key).hidden = !any;
+    });
+    var tot = CASES.length, p = 0, f = 0, s = 0;
+    CASES.forEach(function (c) { var st = (state.results[c.id] || {}).status; if (st === 'pass') p++; else if (st === 'fail') f++; else if (st === 'skip') s++; });
+    $('bp').style.width = (p / tot * 100) + '%'; $('bf').style.width = (f / tot * 100) + '%'; $('bs').style.width = (s / tot * 100) + '%';
+    var lg = $('legend'); lg.textContent = '';
+    [['var(--pass)', 'Đạt', p], ['var(--fail)', 'Lỗi', f], ['var(--skip)', 'Bỏ qua', s], ['var(--line)', 'Chưa làm', tot - p - f - s]].forEach(function (x) {
+      var sp = el('span'); sp.appendChild(el('span', { 'class': 'dot', style: 'background:' + x[0] })); sp.appendChild(document.createTextNode(x[1] + ': ')); sp.appendChild(el('b', null, String(x[2]))); lg.appendChild(sp);
+    });
+    var gs = $('gstats'); gs.textContent = '';
+    GROUPS.forEach(function (g) {
+      var cs = CASES.filter(function (c) { return c.g === g.key; }), done = 0, fails = 0;
+      cs.forEach(function (c) { var st = (state.results[c.id] || {}).status; if (st) done++; if (st === 'fail') fails++; });
+      var a = el('a', { 'class': 'gstat' + (fails ? ' hasfail' : ''), href: '#g-' + g.key });
+      a.appendChild(el('span', null, g.key + '. ' + g.title));
+      a.appendChild(el('span', { 'class': 'n' }, done + '/' + cs.length + ' đã làm' + (fails ? ' · ' + fails + ' lỗi' : '')));
+      gs.appendChild(a);
+    });
+  }
+
+  // ---------- Dữ liệu (Supabase, bảng rrt_rehearsal) ----------
+  async function load() {
+    var res = await state.sb.from('rrt_rehearsal').select('kind, key, data, updated_at');
+    if (res.error) { conn('Chưa tải được kết quả (' + res.error.message + ').'); return; }
+    var results = {}, cast = {};
+    (res.data || []).forEach(function (row) {
+      var d = Object.assign({}, row.data || {}); d.at = row.updated_at;
+      if (row.kind === 'result') results[row.key] = d; else if (row.kind === 'cast') cast[row.key] = d;
+    });
+    state.results = results; state.cast = cast;
+    conn('Kết quả lưu chung · cập nhật mỗi 15 giây.');
+    render();
+  }
+  async function save(kind, key, data, ss) {
+    if (!state.canWrite) return;
+    if (kind === 'result') { data.by_name = state.myName; state.results[key] = Object.assign({}, data, { at: new Date().toISOString() }); render(); }
+    if (ss) ss.textContent = 'Đang lưu…';
+    var res = await state.sb.from('rrt_rehearsal').upsert({ kind: kind, key: key, data: data }, { onConflict: 'kind,key' });
+    if (ss) ss.textContent = res.error ? '' : 'Đã lưu';
+    if (res.error) conn('Chưa lưu được: ' + res.error.message);
+    load();
+  }
+  function startPolling() {
+    clearInterval(state.timer);
+    state.timer = setInterval(function () { if (!document.hidden) load(); }, POLL_MS);
+    document.addEventListener('visibilitychange', function () { if (!document.hidden && state.canWrite) load(); });
+  }
+
+  async function afterLogin(session) {
+    $('loginPanel').hidden = true; $('userbar').hidden = false;
+    var prof = await state.sb.from('profiles').select('full_name, role, registration_status').eq('id', session.user.id).maybeSingle();
+    var p = prof.data || {};
+    state.myName = p.full_name || session.user.email;
+    $('whoami').textContent = 'Đang đăng nhập: ' + state.myName;
+    var approved = p.registration_status === 'approved' || ['admin', 'super_admin'].indexOf(String(p.role || '').toLowerCase()) !== -1;
+    $('pendingBox').hidden = approved;
+    state.canWrite = approved;
+    render();
+    if (approved) { await load(); startPolling(); } else conn('');
+  }
+
+  async function start() {
+    buildCast(); buildFilters(); buildCases(); render();
+    if (!window.supabase || typeof window.supabase.createClient !== 'function') { $('loginPanel').hidden = false; $('loginErr').textContent = 'Không tải được thư viện kết nối. Kiểm tra mạng rồi tải lại trang.'; return; }
+    // Cùng storageKey với webapp RRT → đã đăng nhập webapp trên trình duyệt này thì trang tự nhận.
+    state.sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { storageKey: 'your-app-name-auth-token', persistSession: true, autoRefreshToken: true, detectSessionInUrl: false } });
+    var s = await state.sb.auth.getSession();
+    if (s.data && s.data.session) afterLogin(s.data.session); else $('loginPanel').hidden = false;
+
+    $('loginForm').addEventListener('submit', async function (e) {
+      e.preventDefault();
+      $('loginErr').textContent = ''; $('loginBtn').disabled = true;
+      var r = await state.sb.auth.signInWithPassword({ email: $('loginEmail').value.trim(), password: $('loginPass').value });
+      $('loginBtn').disabled = false;
+      if (r.error) { $('loginErr').textContent = 'Không đăng nhập được: sai email hoặc mật khẩu.'; return; }
+      $('loginPass').value = '';
+      afterLogin(r.data.session);
+    });
+    $('logout').addEventListener('click', async function () {
+      clearInterval(state.timer);
+      await state.sb.auth.signOut();
+      state.canWrite = false; state.results = {}; state.cast = {}; state.myName = '';
+      $('userbar').hidden = true; $('pendingBox').hidden = true; $('loginPanel').hidden = false;
+      render();
+    });
+  }
+  start();
+})();
+</script>
+</body>
+</html>
