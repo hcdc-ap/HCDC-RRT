@@ -64,7 +64,7 @@ test("onclick/on*=\"...'${x}'...\" phải bọc jsAttr() (utils/escape.js)", () 
 });
 
 test('thư viện CDN: cố định phiên bản; file từ jsdelivr/unpkg/code.jquery có SRI', () => {
-  for (const page of ['index.html', 'huong-dan.html']) {
+  for (const page of ['index.html', 'huong-dan.html', 'tap-duot.html']) {
     const src = fs.readFileSync(path.join(ROOT, page), 'utf8');
     const tags = [...src.matchAll(/<(script|link)\b[^>]*?(?:src|href)="(https:\/\/[^"]+)"[^>]*>/g)];
     for (const [tag, , url] of tags) {
