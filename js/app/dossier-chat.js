@@ -272,29 +272,34 @@ document.addEventListener('DOMContentLoaded', function () {
   // ========================================================================
   // MAIN: LOAD EVENT LOGS - FULL VERSION
   // ========================================================================
-  // Họ tên thành viên sự kiện theo email (RPC rrt_incident_member_cards — đọc
-  // được cả nhân sự HCDC/xã khác mà RLS profiles không cho đọc). Lưu tạm 60 giây
-  // vì khung chat tự làm mới liên tục.
-  const memberNameCache = {};
-  async function getMemberNames(incidentId) {
-    const hit = memberNameCache[incidentId];
-    if (hit && Date.now() - hit.at < 60000) return hit.names;
-    const names = {};
-    const { data, error } = await supabaseClient.rpc('rrt_incident_member_cards', {
+  // Người viết tin nhắn theo user_id (RPC rrt_incident_log_authors): incident_logs
+  // chỉ lưu user_id, RLS profiles không cho đọc hồ sơ HCDC/xã khác. Lưu tạm và
+  // chỉ gọi lại khi có người viết mới (khung chat tự làm mới liên tục).
+  const authorCache = {};
+  async function getLogAuthors(incidentId, logs) {
+    const hit = authorCache[incidentId];
+    const missing = logs.some((l) => l.user_id && !(hit && hit.authors[l.user_id]));
+    if (hit && !missing && Date.now() - hit.at < 300000) return hit.authors;
+    const authors = {};
+    const { data, error } = await supabaseClient.rpc('rrt_incident_log_authors', {
       p_incident_id: incidentId,
     });
-    if (error) console.warn('[chat] Không tải được tên thành viên:', error.message);
-    (data || []).forEach((m) => {
-      if (m.email && m.full_name) names[m.email.toLowerCase().trim()] = m.full_name;
+    if (error) console.warn('[chat] Không tải được tên người gửi:', error.message);
+    (data || []).forEach((a) => {
+      if (a.user_id) authors[a.user_id] = a;
     });
-    memberNameCache[incidentId] = { at: Date.now(), names };
-    return names;
+    authorCache[incidentId] = { at: Date.now(), authors };
+    return authors;
   }
+  // Đơn vị của nhân sự hỗ trợ: HCDC, hoặc tên phường/xã nơi công tác
+  const authorUnit = (a) =>
+    /kiểm soát bệnh tật|hcdc/i.test(String(a?.unit || ''))
+      ? 'HCDC'
+      : a?.workplace_ward || a?.unit || 'đơn vị khác';
 
   window.loadEventLogs = async function (incidentId, isSilentUpdate = false) {
     const chatBox = document.getElementById('dossier-chat-box');
     if (!chatBox) return;
-    const memberNames = await getMemberNames(incidentId).catch(() => ({}));
 
     try {
       // 1. Fetch logs từ Supabase
@@ -307,6 +312,7 @@ document.addEventListener('DOMContentLoaded', function () {
       if (error) throw error;
 
       window.currentIncidentLogs = logs;
+      const authors = await getLogAuthors(incidentId, logs).catch(() => ({}));
 
       // 2. Render UI
       if (!isSilentUpdate) {
@@ -317,12 +323,14 @@ document.addEventListener('DOMContentLoaded', function () {
         // ✅ Xác định người gửi (dùng UUID)
         const isMe = log.user_id === window.userSession?.id;
         const side = isMe ? 'right' : 'left';
-        const displayName = isMe
-          ? 'Tôi'
-          : memberNames[String(log.user_email || '').toLowerCase().trim()] ||
-            log.user_email ||
-            log.user ||
-            'Thành viên';
+        const author = authors[log.user_id];
+        const displayName = isMe ? 'Tôi' : author?.full_name || 'Thành viên';
+        const senderTag =
+          !isMe && author?.is_external
+            ? ` <span class="badge" style="background:#fd7e14; font-size:10px;">Hỗ trợ · ${window.escapeHtml(
+                authorUnit(author)
+              )}</span>`
+            : '';
 
         let htmlContent = '';
         const reportTypes = [
@@ -488,7 +496,7 @@ document.addEventListener('DOMContentLoaded', function () {
           <div class="msg-sender" style="font-size: 11px; opacity: 0.7; margin-bottom: 4px; ${
             side === 'right' ? 'text-align: right' : 'text-align: left'
           };">
-            ${window.escapeHtml(displayName)}
+            ${window.escapeHtml(displayName)}${senderTag}
           </div>
           ${htmlContent}
           <div class="msg-time" style="font-size: 10px; opacity: 0.5; margin-top: 4px; ${
@@ -587,6 +595,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const reportsData = reportsRes.data || [];
     const deployHistory = deployRes.data || [];
     const logsData = logsRes.data || [];
+    const aarAuthors = await getLogAuthors(incidentId, logsData).catch(() => ({}));
 
     const safeParseJson = (val, fallback = {}) => {
       if (!val) return fallback;
@@ -765,7 +774,7 @@ document.addEventListener('DOMContentLoaded', function () {
       textIssues += `* Ghi nhận từ trao đổi / SOS (${chatIssues.length} tin nhắn):\n`;
       chatIssues.forEach((log, idx) => {
         const time = new Date(log.created_at).toLocaleTimeString('vi-VN');
-        const user = log.user_email || 'Thành viên';
+        const user = aarAuthors[log.user_id]?.full_name || 'Thành viên';
         let content = stripHtml(log.content);
         const isSOS = log.log_type === 'SOS' ? '[🚨 SOS] ' : '';
         textIssues += `${
@@ -835,7 +844,7 @@ document.addEventListener('DOMContentLoaded', function () {
       textLessons += `\n* Đề xuất từ trao đổi:\n`;
       chatProposals.forEach((log, idx) => {
         const time = new Date(log.created_at).toLocaleTimeString('vi-VN');
-        const user = log.user_email || 'Thành viên';
+        const user = aarAuthors[log.user_id]?.full_name || 'Thành viên';
         let content = stripHtml(log.content);
         textLessons += `${idx + 1}. [${time}] ${user}: ${content.substring(
           0,
@@ -1034,6 +1043,7 @@ document.addEventListener('DOMContentLoaded', function () {
       const reportsData = reportsRes.data || [];
       const deployHistory = deployRes.data || [];
       const logsData = logsRes.data || []; // ✅ Chat logs
+      const aarAuthors = await getLogAuthors(incidentId, logsData).catch(() => ({}));
 
       console.log('📊 Fetched:', {
         objectives: objectivesData.length,
@@ -1189,7 +1199,7 @@ document.addEventListener('DOMContentLoaded', function () {
         aarIssues += `* Ghi nhận từ trao đổi (${chatIssues.length} tin nhắn):\n`;
         chatIssues.forEach((log, idx) => {
           const time = new Date(log.created_at).toLocaleTimeString('vi-VN');
-          const user = log.user_email || 'Thành viên';
+          const user = aarAuthors[log.user_id]?.full_name || 'Thành viên';
           // Strip HTML nếu có
           let content = log.content;
           if (content?.includes('<')) {
@@ -1249,7 +1259,7 @@ document.addEventListener('DOMContentLoaded', function () {
         aarLessons += `\n* Đề xuất từ trao đổi:\n`;
         chatProposals.forEach((log, idx) => {
           const time = new Date(log.created_at).toLocaleTimeString('vi-VN');
-          const user = log.user_email || 'Thành viên';
+          const user = aarAuthors[log.user_id]?.full_name || 'Thành viên';
           let content = log.content;
           if (content?.includes('<')) {
             const temp = document.createElement('div');
