@@ -591,6 +591,44 @@ window.applySuggestion = function (date, team) {
   );
 };
 // ==========================================
+// BÁO QUẢN TRỊ TRẠM Y TẾ KHI HCDC TẠO SỰ KIỆN TRÊN ĐỊA BÀN
+// Chỉ HCDC (admin) gọi: sự kiện có mã xã → quản trị tuyến cơ sở của xã đó
+// nhận thông báo nội bộ để phối hợp (không thêm họ vào danh sách điều động).
+// Lỗi ở bước này chỉ cảnh báo, không chặn kích hoạt.
+// ==========================================
+window.notifyWardAdminsOfIncident = async function (
+  incidentId,
+  maXa,
+  eventName,
+  excludeEmails = []
+) {
+  try {
+    if (String(window.userSession?.role || '').toLowerCase() !== 'admin') return;
+    if (!incidentId || !maXa) return;
+    const { data: admins, error } = await window.supabaseClient
+      .from('profiles')
+      .select('email')
+      .eq('role', 'ward_admin')
+      .eq('workplace_ma_xa', String(maXa));
+    if (error) throw error;
+    const skip = new Set(excludeEmails.map((e) => String(e).toLowerCase().trim()));
+    const emails = (admins || [])
+      .map((a) => String(a.email || '').toLowerCase().trim())
+      .filter((e) => e && !skip.has(e));
+    if (!emails.length) return;
+    await window.createSystemNotification(
+      emails,
+      `HCDC vừa kích hoạt sự kiện "${eventName || ''}" trên địa bàn xã/phường của bạn. ` +
+        'Vui lòng mở "Theo dõi sự kiện" để phối hợp: bổ sung nhân sự của Trạm, cập nhật IAP, theo dõi nhật ký.',
+      'thong_tin',
+      incidentId,
+      null
+    );
+  } catch (e) {
+    console.warn('[notify] Không báo được quản trị Trạm Y tế:', e.message || e);
+  }
+};
+// ==========================================
 // HÀM TẠO THÔNG BÁO NỘI BỘ (CHUẨN HÓA THEO DB)
 // ==========================================
 // Thêm tham số type (mặc định là 'thong_tin'), incidentId, và scheduleId vào khai báo hàm
