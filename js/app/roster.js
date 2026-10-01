@@ -173,18 +173,20 @@ document.addEventListener('DOMContentLoaded', function () {
             return;
           }
 
-          const { data: profiles } = await window.supabaseClient
-            .from('profiles')
-            .select('id, full_name, email, role, position')
-            .in('email', emails);
+          // Thẻ thành viên sự kiện (đọc được cả nhân sự HCDC/xã khác — RLS profiles
+          // chỉ cho tuyến cơ sở đọc hồ sơ trong phường/xã mình)
+          const { data: profiles } = await window.supabaseClient.rpc(
+            'rrt_incident_member_cards',
+            { p_incident_id: incidentId }
+          );
 
           container.innerHTML = '';
           emails.forEach((email) => {
             const p = profiles?.find(
-              (prof) => prof.email.toLowerCase() === email
+              (prof) => String(prof.email || '').toLowerCase() === email
             ) || { email: email, full_name: email, position: 'Thành viên' };
             const name = p.full_name || email;
-            const role = p.position || p.role || 'Thành viên';
+            const role = p.position || 'Thành viên';
             const roleClass = role.toLowerCase().includes('leader')
               ? 'bg-danger'
               : 'bg-info text-dark';
@@ -192,25 +194,25 @@ document.addEventListener('DOMContentLoaded', function () {
             container.insertAdjacentHTML(
               'beforeend',
               `
-                    <div class="card mb-2 shadow-sm border-0 member-hover-effect wiz-select-old-member-btn" 
-                         style="cursor: pointer;" 
-                         data-userid="${p.id || ''}" 
-                         data-email="${email}" 
-                         data-name="${name}">
+                    <div class="card mb-2 shadow-sm border-0 member-hover-effect wiz-select-old-member-btn"
+                         style="cursor: pointer;"
+                         data-userid="${window.escapeHtml(p.id || '')}"
+                         data-email="${window.escapeHtml(email)}"
+                         data-name="${window.escapeHtml(name)}">
                         <div class="card-body p-3 d-flex align-items-center">
                             <div class="me-3 d-flex align-items-center justify-content-center text-white fw-bold rounded-circle shadow-sm"
                                  style="width: 45px; height: 45px; background-color: #6c757d; font-size: 18px;">
-                                ${name.charAt(0).toUpperCase()}
+                                ${window.escapeHtml(name.charAt(0).toUpperCase())}
                             </div>
                             <div class="flex-grow-1">
-                                <div class="fw-bold text-dark">${
-                                  window.escapeHtml
-                                    ? window.escapeHtml(name)
-                                    : name
+                                <div class="fw-bold text-dark">${window.escapeHtml(name)}${
+                                  p.is_external
+                                    ? ' <span class="badge" style="background:#fd7e14; font-size:10px;">Hỗ trợ</span>'
+                                    : ''
                                 }</div>
                                 <div class="text-muted small">
-                                    <span class="badge ${roleClass} rounded-pill me-1">${role}</span>
-                                    ${email}
+                                    <span class="badge ${roleClass} rounded-pill me-1">${window.escapeHtml(role)}</span>
+                                    ${window.escapeHtml(email)}
                                 </div>
                             </div>
                             <div class="text-primary"><i class='bx bx-chevron-right fs-4'></i></div>
@@ -646,37 +648,17 @@ document.addEventListener('DOMContentLoaded', function () {
           .eq('user_id', wizardData.oldUserId);
         if (updateErr) throw updateErr;
       } else {
-        const { data: inc } = await window.supabaseClient
-          .from('incidents')
-          .select('initial_selected_members')
-          .eq('id', targetId)
-          .single();
-        let membersArr = (inc?.initial_selected_members || '')
-          .split(';')
-          .map((e) => e.trim())
-          .filter(Boolean);
-
-        membersArr = membersArr.filter(
-          (e) => e.toLowerCase() !== wizardData.oldEmail.toLowerCase()
-        );
-        if (!membersArr.includes(wizardData.newEmail))
-          membersArr.push(wizardData.newEmail);
-
-        const { error: incErr } = await window.supabaseClient
-          .from('incidents')
-          .update({ initial_selected_members: membersArr.join(';') })
-          .eq('id', targetId);
-        if (incErr) throw incErr;
-
-        await window.supabaseClient.from('deployment_history').insert([
+        // Thay người + ghi lịch sử điều động trong 1 giao dịch ở database
+        // (trước đây ghi lịch sử riêng, không kiểm lỗi → mất dấu lần thay quân)
+        const { error: repErr } = await window.supabaseClient.rpc(
+          'rrt_replace_incident_member',
           {
-            incident_id: targetId,
-            user_id: wizardData.oldUserId,
-            replaced_by: wizardData.newUserId,
-            action_type: 'replace_in',
-            reason: 'Cập nhật nhân sự bằng AI',
-          },
-        ]);
+            p_incident_id: targetId,
+            p_old_email: wizardData.oldEmail,
+            p_new_email: wizardData.newEmail,
+          }
+        );
+        if (repErr) throw repErr;
       }
 
       // 2. Định nghĩa nội dung thông báo (để tránh lỗi ReferenceError)
@@ -822,6 +804,7 @@ document.addEventListener('DOMContentLoaded', function () {
         });
       }
       teamSelect.innerHTML = opts;
+      window.loadShiftTeamMembers(teamSelect.value);
     }
     window.reloadData({ showSpinner: true, refreshUI: true });
   };
@@ -1289,10 +1272,88 @@ document.addEventListener('DOMContentLoaded', function () {
   };
 
 
+  // ------------------------------------------------------------------
+  // Chọn thành viên trực: chọn Đội → hiện danh sách thành viên của đội
+  // (mặc định chọn hết), bỏ chọn người không trực. RLS profiles giới hạn
+  // tuyến cơ sở trong phường/xã mình.
+  // ------------------------------------------------------------------
+  const POSITION_LABELS = {
+    Leader: 'Đội trưởng',
+    Epidemic: 'Cán bộ Dịch tễ',
+    Member: 'Cán bộ Lấy mẫu',
+    Engineer: 'Cán bộ Xử lý môi trường',
+    Media: 'Cán bộ Truyền thông',
+    Logistic: 'Hậu cần',
+    Driver: 'Lái xe',
+  };
+  let shiftMembersTeam = null; // đội đang hiện danh sách (null = chưa tải)
+
+  function updateShiftMemberCount() {
+    const boxes = document.querySelectorAll('#new-shift-members input[type=checkbox]');
+    const checked = [...boxes].filter((b) => b.checked).length;
+    const el = document.getElementById('new-shift-members-count');
+    if (el) el.textContent = boxes.length ? `(${checked}/${boxes.length})` : '';
+  }
+
+  window.rosterSelectAllMembers = function (on) {
+    document
+      .querySelectorAll('#new-shift-members input[type=checkbox]')
+      .forEach((b) => (b.checked = !!on));
+    updateShiftMemberCount();
+  };
+
+  window.loadShiftTeamMembers = async function (team) {
+    const group = document.getElementById('new-shift-members-group');
+    const box = document.getElementById('new-shift-members');
+    if (!group || !box) return;
+    shiftMembersTeam = null;
+    if (!team) {
+      group.style.display = 'none';
+      box.innerHTML = '';
+      return;
+    }
+    group.style.display = '';
+    box.innerHTML = '<div class="text-muted">Đang tải thành viên…</div>';
+    const { data, error } = await window.supabaseClient
+      .from('profiles')
+      .select('id, full_name, email, position')
+      .eq('team', team)
+      .order('full_name', { ascending: true });
+    // Người dùng đã đổi đội trong lúc chờ → bỏ kết quả cũ
+    if (document.getElementById('new-shift-team')?.value !== team) return;
+    if (error) {
+      box.innerHTML = `<div class="text-danger">Không tải được thành viên: ${window.escapeHtml(error.message)}</div>`;
+      return;
+    }
+    if (!data || !data.length) {
+      box.innerHTML = '<div class="text-muted">Đội chưa có thành viên.</div>';
+      shiftMembersTeam = team;
+      updateShiftMemberCount();
+      return;
+    }
+    box.innerHTML = data
+      .map((m) => {
+        const pos = POSITION_LABELS[m.position] || m.position || '';
+        return `<label class="d-flex align-items-center gap-2 py-1" style="cursor:pointer;">
+            <input type="checkbox" class="form-check-input m-0" value="${window.escapeHtml(m.id)}" checked>
+            <span>${window.escapeHtml(m.full_name || m.email || '')}${
+              pos ? ` <small class="text-muted">· ${window.escapeHtml(pos)}</small>` : ''
+            }</span>
+          </label>`;
+      })
+      .join('');
+    box.querySelectorAll('input[type=checkbox]').forEach((b) =>
+      b.addEventListener('change', updateShiftMemberCount)
+    );
+    shiftMembersTeam = team;
+    updateShiftMemberCount();
+  };
+
   window.submitNewShift = async function () {
     const date = document.getElementById('new-shift-date').value;
     const team = document.getElementById('new-shift-team').value;
     const note = document.getElementById('new-shift-note').value;
+    const location = (document.getElementById('new-shift-location')?.value || '').trim();
 
     if (!date || !team)
       return showToast('Vui lòng chọn ngày và đội.', 'warning');
@@ -1303,6 +1364,16 @@ document.addEventListener('DOMContentLoaded', function () {
         'Bạn chỉ được tạo lịch trực cho đội thuộc xã mình.',
         'error'
       );
+    }
+    // Thành viên được chọn (null = danh sách chưa tải → giữ cách cũ: cả đội)
+    let selectedIds = null;
+    if (shiftMembersTeam === team) {
+      const boxes = [...document.querySelectorAll('#new-shift-members input[type=checkbox]')];
+      if (boxes.length) {
+        selectedIds = new Set(boxes.filter((b) => b.checked).map((b) => b.value));
+        if (!selectedIds.size)
+          return showToast('Vui lòng chọn ít nhất một thành viên trực.', 'warning');
+      }
     }
     showLoadingSpinner();
 
@@ -1320,6 +1391,7 @@ document.addEventListener('DOMContentLoaded', function () {
             duty_date: date,
             team_name: team,
             note: note,
+            location_text: location || null,
             shift_type: 'roster',
             status: 'active',
             created_by: currentUserId, // ✅ THÊM DÒNG NÀY
@@ -1330,14 +1402,17 @@ document.addEventListener('DOMContentLoaded', function () {
 
       if (shiftErr) throw shiftErr;
 
-      // 2. Lấy danh sách thành viên của team
-      const { data: teamMembers, error: profileErr } =
+      // 2. Lấy danh sách thành viên của team (chỉ người được chọn)
+      const { data: allTeamMembers, error: profileErr } =
         await window.supabaseClient
           .from('profiles')
           .select('id, email, team')
           .eq('team', team);
 
       if (profileErr) throw profileErr;
+      const teamMembers = selectedIds
+        ? (allTeamMembers || []).filter((m) => selectedIds.has(m.id))
+        : allTeamMembers;
 
       if (teamMembers && teamMembers.length > 0) {
         // 3. Tạo assignments
@@ -1359,7 +1434,10 @@ document.addEventListener('DOMContentLoaded', function () {
 
         const notificationsPayload = memberEmails.map((email) => ({
           user_email: email,
-          message: `📅 Lịch trực định kỳ: Bạn được phân công trực ngày ${displayDate} cùng ${team}.`,
+          message:
+            `📅 Lịch trực định kỳ: Bạn được phân công trực ngày ${displayDate} cùng ${team}.` +
+            (location ? ` Địa điểm: ${location}.` : '') +
+            (note && note.trim() ? ` Ghi chú: ${note.trim()}` : ''),
           // Nếu notifications có thêm cột, có thể thêm:
           notification_type: 'truc_ban',
           schedule_id: newShift.id,

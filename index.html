@@ -932,11 +932,25 @@
                 </div>
                 <div class="form-group mb-2">
                   <label for="new-shift-team" class="form-label">Chọn Đội</label>
-                  <select id="new-shift-team" class="form-select">
+                  <select id="new-shift-team" class="form-select" onchange="loadShiftTeamMembers(this.value)">
                   </select>
                 </div>
+                <div class="form-group mb-2" id="new-shift-members-group" style="display:none;">
+                  <label class="form-label d-flex justify-content-between align-items-center mb-1">
+                    <span>Thành viên trực <small class="text-muted" id="new-shift-members-count"></small></span>
+                    <span style="font-size:12px;">
+                      <a href="#" onclick="rosterSelectAllMembers(true); return false;">Chọn hết</a> ·
+                      <a href="#" onclick="rosterSelectAllMembers(false); return false;">Bỏ chọn</a>
+                    </span>
+                  </label>
+                  <div id="new-shift-members" class="border rounded p-2" style="max-height:200px; overflow:auto; background:#fff; font-size:13px;"></div>
+                </div>
+                <div class="form-group mb-2">
+                  <label for="new-shift-location" class="form-label">Địa điểm trực</label>
+                  <input type="text" id="new-shift-location" class="form-control" maxlength="300" placeholder="VD: Trạm Y tế phường / Theo phân công">
+                </div>
                 <div class="form-group mb-3">
-                  <team class="new-shift-note">Ghi chú</label>
+                  <label for="new-shift-note" class="form-label">Ghi chú</label>
                     <textarea id="new-shift-note" class="form-control" rows="2" placeholder="VD: Trực sự kiện..."></textarea>
                 </div>
                 <button class="btn btn-primary w-100" onclick="submitNewShift()" data-permission="admin, ward_admin"><i class='bx bx-save'></i> XÁC NHẬN</button>

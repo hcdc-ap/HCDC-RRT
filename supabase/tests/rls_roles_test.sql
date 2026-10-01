@@ -493,3 +493,43 @@ SELECT rrt_test.eq('tuyến cơ sở A: thấy tên người được điều đ
   (SELECT count(*) FROM public.rrt_incident_log_authors('10000000-0000-0000-0000-00000000000a')
    WHERE user_id = '00000000-0000-0000-0000-000000000002'), 1);
 RESET ROLE;
+
+-- ============================================================================
+\echo '--- Thay quân trong sự kiện (rrt_replace_incident_member) ---'
+SET ROLE authenticated;
+SELECT rrt_test.login('00000000-0000-0000-0000-000000000001');
+SELECT rrt_test.denied('nhân viên: không thay quân được',
+  $$SELECT public.rrt_replace_incident_member('10000000-0000-0000-0000-00000000000a', 's1@t.vn', 's2@t.vn')$$);
+SELECT rrt_test.login('00000000-0000-0000-0000-0000000000a1');
+SELECT rrt_test.denied('tuyến cơ sở A: không đưa người phường B (s3) vào',
+  $$SELECT public.rrt_replace_incident_member('10000000-0000-0000-0000-00000000000a', 's1@t.vn', 's3@t.vn')$$);
+SELECT rrt_test.denied('tuyến cơ sở B: không thay quân sự kiện A',
+  $$SELECT 1 FROM (SELECT rrt_test.login('00000000-0000-0000-0000-0000000000b1')) x,
+    LATERAL (SELECT public.rrt_replace_incident_member('10000000-0000-0000-0000-00000000000a', 's1@t.vn', 's3@t.vn')) y$$);
+SELECT rrt_test.login('00000000-0000-0000-0000-0000000000a1');
+SELECT rrt_test.allowed('tuyến cơ sở A: thay s1 bằng s2 (cùng phường)',
+  $$SELECT public.rrt_replace_incident_member('10000000-0000-0000-0000-00000000000a', 's1@t.vn', 's2@t.vn')$$);
+RESET ROLE;
+SELECT rrt_test.eq('sau thay: s1 rời danh sách mời, s2 có mặt',
+  (SELECT count(*) FROM public.incidents WHERE id = '10000000-0000-0000-0000-00000000000a'
+     AND NOT public.rrt_email_in_list('s1@t.vn', initial_selected_members)
+     AND public.rrt_email_in_list('s2@t.vn', initial_selected_members)), 1);
+SELECT rrt_test.eq('sau thay: lịch sử ghi s1 → s2, có người thực hiện',
+  (SELECT count(*) FROM public.deployment_history
+   WHERE incident_id = '10000000-0000-0000-0000-00000000000a' AND action_type = 'replace_in'
+     AND user_id = '00000000-0000-0000-0000-000000000001'
+     AND replaced_by = '00000000-0000-0000-0000-000000000002'
+     AND reason LIKE 'Thay quân bởi tuyến cơ sở%'), 1);
+SET ROLE authenticated;
+SELECT rrt_test.login('00000000-0000-0000-0000-00000000000a');
+SELECT rrt_test.allowed('HCDC: đưa nhân sự HCDC (h1) thay s2',
+  $$SELECT public.rrt_replace_incident_member('10000000-0000-0000-0000-00000000000a', 's2@t.vn', 'h1@t.vn')$$);
+RESET ROLE;
+SELECT rrt_test.eq('lịch sử ghi thay quân bởi HCDC',
+  (SELECT count(*) FROM public.deployment_history
+   WHERE incident_id = '10000000-0000-0000-0000-00000000000a' AND action_type = 'replace_in'
+     AND replaced_by = '00000000-0000-0000-0000-0000000000c1' AND reason LIKE 'Thay quân bởi HCDC%'), 1);
+SET ROLE anon;
+SELECT rrt_test.denied('anon: không gọi được thay quân',
+  $$SELECT public.rrt_replace_incident_member('10000000-0000-0000-0000-00000000000a', 's1@t.vn', 's2@t.vn')$$);
+RESET ROLE;

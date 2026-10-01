@@ -568,23 +568,26 @@ window.applySuggestion = function (date, team) {
     }
   }
 
-  showToastConfirm(
-    `Xác nhận xếp lịch cho <strong>${team}</strong> vào ngày <strong>${displayDate}</strong>?`,
-    function () {
-      const dateInput = document.getElementById('new-shift-date');
-      const teamInput = document.getElementById('new-shift-team');
-      const noteInput = document.getElementById('new-shift-note');
+  // Điền ngày + đội vào form "Lịch trực" rồi để người dùng chọn thành viên,
+  // địa điểm trực trước khi bấm XÁC NHẬN (không tạo lịch ngay cho cả đội).
+  const dateInput = document.getElementById('new-shift-date');
+  const teamInput = document.getElementById('new-shift-team');
+  const noteInput = document.getElementById('new-shift-note');
 
-      if (dateInput) dateInput.value = date;
-      if (teamInput) teamInput.value = team;
-      if (noteInput) noteInput.value = 'Được xếp tự động bởi AP Assistant';
+  if (dateInput) dateInput.value = String(date || '').split('T')[0];
+  if (teamInput) teamInput.value = team;
+  if (noteInput && !noteInput.value.trim())
+    noteInput.value = 'Được xếp tự động bởi AP Assistant';
+  if (typeof window.loadShiftTeamMembers === 'function')
+    window.loadShiftTeamMembers(team);
 
-      if (typeof window.submitNewShift === 'function') {
-        window.submitNewShift();
-      } else {
-        console.error('Lỗi: submitNewShift không tồn tại');
-      }
-    }
+  document
+    .querySelector('#new-shift-team')
+    ?.closest('.control-box')
+    ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  showToast(
+    `Đã điền ${team} ngày ${displayDate}. Chọn thành viên, địa điểm trực rồi bấm XÁC NHẬN.`,
+    'info'
   );
 };
 // ==========================================
