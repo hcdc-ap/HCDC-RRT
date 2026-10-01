@@ -72,7 +72,8 @@ async function recordDeploymentHistory(incidentId, userId, actionType) {
     .update({ action_type: stdAction, reason: stdReason })
     .eq('incident_id', incidentId)
     .eq('user_id', userId)
-    .in('action_type', ['deployed', 'replace_in', 'declined'])
+    // Không gồm 'replace_in': dòng thay quân (user_id = người bị thay) phải giữ nguyên
+    .in('action_type', ['deployed', 'declined'])
     .select('id');
   if (updErr) {
     console.warn('Lỗi lưu lịch sử thực chiến:', updErr);

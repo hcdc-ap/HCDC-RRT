@@ -500,12 +500,14 @@ document.addEventListener('DOMContentLoaded', function () {
           const deploymentPayloads = newTeamMembers.map((newMem, index) => {
             const oldUserId = oldTeamUsers[index]; // Map 1-1 theo thứ tự (có thể null nếu đội mới đông hơn)
 
+            // Cùng quy ước với rrt_replace_incident_member và AAR ("🔄 Thay thế: cũ → mới"):
+            // user_id = người bị thay, replaced_by = người thay. Thêm mới: user_id = người mới.
             return {
               incident_id: incidentId,
-              user_id: newMem.id, // UUID người mới
+              user_id: oldUserId || newMem.id,
               profile_id: newMem.id, // Cột profile_id (theo constraint foreign key)
               action_type: oldUserId ? 'replace_in' : 'mobilize', // Dùng đúng Check Constraint
-              replaced_by: oldUserId || null, // UUID người cũ bị thay (null nếu là thêm mới)
+              replaced_by: oldUserId ? newMem.id : null,
               reason: `Luân chuyển đội: ${oldTeam} -> ${newTeam}`,
             };
           });

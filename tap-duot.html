@@ -265,7 +265,7 @@
     { id: 'C1', g: 'C', who: ['TCS'], t: 'Tạo ca trực',
       steps: ['Vào "Lịch trực", chọn ngày mai, chọn đội của xã có NV1 và DT, ghi chú "[TẬP HUẤN]", bấm "XÁC NHẬN".'],
       expect: 'Chỉ thấy các đội thuộc xã mình. Ca xuất hiện trên lịch; NV1 và DT nhận thông báo lịch trực qua ứng dụng, email (và Telegram nếu đã liên kết).',
-      known: 'Đạt. Góp ý: địa điểm do HCDC/tuyến cơ sở tự nhập; phân lịch trực theo đội rồi tới từng thành viên.' },
+      known: 'Đạt. Góp ý đã làm: thêm ô "Địa điểm trực" (hiện ở email/Telegram thay cho "Trực tại đơn vị / Theo phân công"); chọn Đội rồi chọn từng thành viên trực; Trợ lý xếp lịch điền sẵn đội/ngày để chọn thành viên trước khi xác nhận.' },
     { id: 'C2', g: 'C', who: ['NV1'], t: 'Nhận ca trên Dashboard', pre: 'C1',
       steps: ['Mở Dashboard, dòng "Lịch trực [tên đội]" có nhãn "Chờ xác nhận", bấm "Phản hồi ngay".', 'Chọn nhận ca.'],
       expect: 'Dòng chuyển sang "Đã nhận". TCS thấy NV1 đã nhận ca.' },
@@ -319,7 +319,7 @@
     { id: 'E6', g: 'E', who: ['TCS'], t: 'Thay quân một người',
       steps: ['Trong sự kiện, bấm cụm nút thay quân "Người", thay NV1 bằng một người khác trong xã.'],
       expect: 'Chỉ chọn được người cùng xã; người mới nhận thông báo điều động.',
-      known: 'Đạt, nhưng mục biến động nhân sự chưa ghi nhận lần thay quân do HCDC thực hiện. Chưa sửa, đã đưa vào danh sách cải tiến.' },
+      known: 'Đạt, nhưng mục biến động nhân sự chưa ghi nhận lần thay quân. Đã sửa: thay quân giờ ghi lịch sử ngay trong database ("🔄 Thay thế: người cũ → người mới", kèm ai thực hiện: HCDC hay tuyến cơ sở).' },
 
     { id: 'F0', g: 'F', who: ['HCDC'], t: 'Tạo PXN thử',
       steps: ['Vào "Phòng Xét nghiệm", "Thêm Phòng Xét nghiệm", tên "[TẬP HUẤN] PXN thử", email đầu mối là email của người đóng vai PXN, vị trí gần xã tập dượt.', 'Bấm "Quản lý năng lực", khai một kỹ thuật và công suất.'],
