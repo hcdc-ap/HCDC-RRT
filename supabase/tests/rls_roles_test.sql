@@ -411,7 +411,7 @@ SELECT rrt_test.denied('s1: kind lạ bị từ chối',
 RESET ROLE;
 INSERT INTO auth.users (id, email) VALUES ('00000000-0000-0000-0000-0000000000fe', 'pending2@t.vn');
 INSERT INTO public.profiles (id, email, role, registration_status, approval_status, fax, workplace_ward, team)
-  VALUES ('00000000-0000-0000-0000-0000000000fe', 'pending2@t.vn', 'user', 'pending', 'pending', 'Trạm Y tế Phường/Xã/ Đặc khu', 'Phường A', 'Đội A');
+  VALUES ('00000000-0000-0000-0000-0000000000fe', 'pending2@t.vn', 'user', 'pending', 'pending', 'Trạm Y tế Phường/Xã/ Đặc khu', 'Phường A', 'Team Phường A 01');
 SET ROLE authenticated;
 SELECT rrt_test.login('00000000-0000-0000-0000-0000000000fe');
 SELECT rrt_test.eq('pending: không đọc được kết quả tập dượt',
@@ -562,7 +562,7 @@ RESET ROLE;
 
 -- ============================================================================
 \echo '--- Hồ sơ: trường không được tự đổi (rrt_profiles_guard) ---'
-UPDATE public.profiles SET team = 'Đội A', deployment_status = 'Sẵn sàng', edit_comment = 'ghi chú duyệt',
+UPDATE public.profiles SET team = 'Team Phường A 01', deployment_status = 'Sẵn sàng', edit_comment = 'ghi chú duyệt',
        telegram_chat_id = '111', phone = '0900000000'
 WHERE id = '00000000-0000-0000-0000-000000000001';
 SET ROLE authenticated;
@@ -576,7 +576,7 @@ SELECT rrt_test.eq('nhân viên tự sửa: đổi được số điện thoại
   (SELECT count(*) FROM public.profiles WHERE id = '00000000-0000-0000-0000-000000000001' AND phone = '0911111111'), 1);
 SELECT rrt_test.eq('nhân viên tự sửa: đội, sẵn sàng, ghi chú duyệt, Telegram giữ nguyên',
   (SELECT count(*) FROM public.profiles WHERE id = '00000000-0000-0000-0000-000000000001'
-     AND team = 'Đội A' AND deployment_status = 'Sẵn sàng' AND edit_comment = 'ghi chú duyệt'
+     AND team = 'Team Phường A 01' AND deployment_status = 'Sẵn sàng' AND edit_comment = 'ghi chú duyệt'
      AND telegram_chat_id = '111' AND created_at > '2001-01-01'), 1);
 SELECT rrt_test.eq('nhân viên tự sửa: đơn vị, xã công tác giữ nguyên',
   (SELECT count(*) FROM public.profiles WHERE id = '00000000-0000-0000-0000-000000000001'
@@ -593,11 +593,11 @@ SELECT rrt_test.denied('nhân viên HCDC: không sửa hồ sơ người khác',
   $$SELECT 1 FROM (SELECT rrt_test.login('00000000-0000-0000-0000-0000000000c1')) x,
     LATERAL (SELECT rrt_test.exec('UPDATE public.profiles SET phone = ''0'' WHERE id = ''00000000-0000-0000-0000-000000000001''') n) y WHERE y.n > 0$$);
 SELECT rrt_test.login('00000000-0000-0000-0000-0000000000a1');
-UPDATE public.profiles SET telegram_chat_id = '777', team = 'Đội A2' WHERE id = '00000000-0000-0000-0000-000000000001';
+UPDATE public.profiles SET telegram_chat_id = '777', team = 'Team Phường A 02' WHERE id = '00000000-0000-0000-0000-000000000001';
 RESET ROLE;
 SELECT rrt_test.eq('tuyến cơ sở sửa nhân viên: đổi đội được, KHÔNG gắn được Telegram',
   (SELECT count(*) FROM public.profiles WHERE id = '00000000-0000-0000-0000-000000000001'
-     AND team = 'Đội A2' AND telegram_chat_id = '111'), 1);
+     AND team = 'Team Phường A 02' AND telegram_chat_id = '111'), 1);
 SET ROLE authenticated;
 SELECT rrt_test.login('00000000-0000-0000-0000-0000000000a1');
 SELECT rrt_test.denied('tuyến cơ sở: không đổi vai trò nhân viên',
@@ -606,5 +606,31 @@ SELECT rrt_test.denied('tuyến cơ sở: không sửa nhân viên phường kh�
   $$UPDATE public.profiles SET phone = '0' WHERE id = '00000000-0000-0000-0000-000000000003'$$);
 SELECT rrt_test.login('00000000-0000-0000-0000-00000000000a');
 SELECT rrt_test.allowed('HCDC: đổi được Telegram, đội',
-  $$UPDATE public.profiles SET telegram_chat_id = '222', team = 'Đội A' WHERE id = '00000000-0000-0000-0000-000000000001'$$);
+  $$UPDATE public.profiles SET telegram_chat_id = '222', team = 'Team Phường A 01' WHERE id = '00000000-0000-0000-0000-000000000001'$$);
 RESET ROLE;
+
+-- ============================================================================
+\echo '--- Tên đội Trạm Y tế theo mẫu "Team <xã> NN" ---'
+SET ROLE authenticated;
+SELECT rrt_test.login('00000000-0000-0000-0000-0000000000a1');
+SELECT rrt_test.denied('tuyến cơ sở: không gán nhân viên vào đội HCDC ("Team 5")',
+  $$UPDATE public.profiles SET team = 'Team 5' WHERE id = '00000000-0000-0000-0000-000000000001'$$);
+SELECT rrt_test.denied('tuyến cơ sở: không đặt tên đội tùy ý',
+  $$UPDATE public.profiles SET team = 'Đội phản ứng nhanh' WHERE id = '00000000-0000-0000-0000-000000000001'$$);
+SELECT rrt_test.denied('tuyến cơ sở: không dùng tên đội của phường khác',
+  $$UPDATE public.profiles SET team = 'Team Phường B 01' WHERE id = '00000000-0000-0000-0000-000000000001'$$);
+SELECT rrt_test.allowed('tuyến cơ sở: tạo / gán đội đúng mẫu',
+  $$UPDATE public.profiles SET team = 'Team Phường A 03' WHERE id = '00000000-0000-0000-0000-000000000001'$$);
+SELECT rrt_test.allowed('tuyến cơ sở: đưa về "Chưa có đội"',
+  $$UPDATE public.profiles SET team = 'No team' WHERE id = '00000000-0000-0000-0000-000000000001'$$);
+SELECT rrt_test.login('00000000-0000-0000-0000-00000000000a');
+SELECT rrt_test.denied('HCDC: cũng không gán nhân viên Trạm vào "Team 5"',
+  $$UPDATE public.profiles SET team = 'Team 5' WHERE id = '00000000-0000-0000-0000-000000000001'$$);
+SELECT rrt_test.allowed('HCDC: nhân sự HCDC vẫn dùng "Team 5"',
+  $$UPDATE public.profiles SET team = 'Team 5' WHERE id = '00000000-0000-0000-0000-0000000000c1'$$);
+SELECT rrt_test.allowed('HCDC: chuyển nhân sự HCDC về Trạm Y tế Phường A',
+  $$UPDATE public.profiles SET fax = 'Trạm Y tế Phường/Xã/ Đặc khu', workplace_ward = 'Phường A' WHERE id = '00000000-0000-0000-0000-0000000000c1'$$);
+RESET ROLE;
+SELECT rrt_test.eq('chuyển về Trạm: đội HCDC cũ tự về "Chưa có đội"',
+  (SELECT count(*) FROM public.profiles WHERE id = '00000000-0000-0000-0000-0000000000c1' AND team = 'No team'), 1);
+UPDATE public.profiles SET fax = 'HCDC', workplace_ward = NULL, team = 'HCDC' WHERE id = '00000000-0000-0000-0000-0000000000c1';

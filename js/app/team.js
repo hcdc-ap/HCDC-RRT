@@ -445,14 +445,60 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   };
 
+  // Đội của nhân sự Trạm Y tế / UBND xã phải theo mẫu "Team <xã công tác> NN"
+  // (database chặn tên khác — migration 20261002050000_rrt_ward_team_naming)
+  const GRASSROOTS_UNITS = ['trạm y tế phường/xã/ đặc khu', 'ubnd phường/xã/ đặc khu'];
+  window.isGrassrootsMember = (m) =>
+    GRASSROOTS_UNITS.includes(String(m?.fax || '').toLowerCase().trim());
+  window.wardTeamsFor = function (ward) {
+    const w = String(ward || '').trim();
+    if (!w) return [];
+    const prefix = `Team ${w} `;
+    return [
+      ...new Set(
+        (window.appState?.teamData || [])
+          .map((m) => String(m.team || ''))
+          .filter((t) => t.startsWith(prefix) && /^\d{2,3}$/.test(t.slice(prefix.length)))
+      ),
+    ].sort();
+  };
+  window.nextWardTeamName = function (ward) {
+    let maxNum = 0;
+    window.wardTeamsFor(ward).forEach((t) => {
+      const m = String(t).match(/(\d+)\s*$/);
+      if (m) maxNum = Math.max(maxNum, parseInt(m[1], 10));
+    });
+    return `Team ${String(ward).trim()} ${String(maxNum + 1).padStart(2, '0')}`;
+  };
+
   window.buildTeamOptionsUniversal = function (
     currentTeam,
     role = 'admin',
-    userWorkplaceMaXa = ''
+    userWorkplaceMaXa = '',
+    member = null
   ) {
-    const availableTeams = window.getAllAvailableTeams(role, userWorkplaceMaXa);
     const esc = (s) =>
       window.escapeHtml ? window.escapeHtml(String(s ?? '')) : String(s ?? '');
+
+    // HCDC chọn đội cho nhân sự Trạm Y tế: chỉ các đội đúng mẫu của xã người đó
+    if (role === 'admin' && member && window.isGrassrootsMember(member)) {
+      const wardTeams = window.wardTeamsFor(member.workplace_ward);
+      let opts = `<option value="No team" ${
+        !currentTeam || currentTeam === 'No team' ? 'selected' : ''
+      }>Chưa có đội</option>`;
+      wardTeams.forEach((t) => {
+        opts += `<option value="${esc(t)}" ${currentTeam === t ? 'selected' : ''}>${esc(t)}</option>`;
+      });
+      if (member.workplace_ward)
+        opts += `<option value="__NEW__">➕ Tạo đội mới (${esc(
+          window.nextWardTeamName(member.workplace_ward)
+        )})</option>`;
+      if (currentTeam && currentTeam !== 'No team' && !wardTeams.includes(currentTeam))
+        opts += `<option value="${esc(currentTeam)}" selected>${esc(currentTeam)} (sai mẫu)</option>`;
+      return opts;
+    }
+
+    const availableTeams = window.getAllAvailableTeams(role, userWorkplaceMaXa);
 
     let options = `<option value="No team" ${
       !currentTeam || currentTeam === 'No team' ? 'selected' : ''
@@ -660,7 +706,8 @@ document.addEventListener('DOMContentLoaded', function () {
              }">${window.buildTeamOptionsUniversal(
             r.team,
             'admin',
-            userMaXa
+            userMaXa,
+            r
           )}</select>`;
         } else if (isWardAdmin) {
           teamCell = `<span class="team-hidden" style="display:none">${safeEscapeHtml(
@@ -796,11 +843,31 @@ document.addEventListener('DOMContentLoaded', function () {
             currentMember?.position ||
             'No position';
 
-          if (typeof updateTeamData === 'function') {
-            updateTeamData(userId, newTeam, newPos, $tr, dataTableInstance, {
-              role: 'admin',
-            });
+          const save = (team) => {
+            if (typeof updateTeamData === 'function') {
+              updateTeamData(userId, team, newPos, $tr, dataTableInstance, {
+                role: 'admin',
+              });
+            }
+          };
+
+          // Tạo đội mới cho nhân sự Trạm Y tế: tên tự đặt theo mẫu "Team <xã> NN"
+          if (newTeam === '__NEW__') {
+            const name = window.nextWardTeamName(currentMember?.workplace_ward);
+            const $sel = $tr.find('.update-team');
+            const revert = () => $sel.val(currentMember?.team || 'No team');
+            if (typeof window.showToastConfirm === 'function') {
+              window.showToastConfirm(
+                `Tạo đội mới: <strong>${window.escapeHtml(name)}</strong> và gán người này vào đội?`,
+                () => save(name),
+                revert
+              );
+            } else {
+              save(name);
+            }
+            return;
           }
+          save(newTeam);
         }
       );
 
@@ -958,7 +1025,8 @@ document.addEventListener('DOMContentLoaded', function () {
           const teamOptions = window.buildTeamOptionsUniversal(
             finalTeam,
             role,
-            userWorkplaceMaXa
+            userWorkplaceMaXa,
+            oldMember
           );
           const selectClass =
             role === 'ward_admin' ? 'update-team-ward' : 'update-team';
@@ -1043,6 +1111,12 @@ document.addEventListener('DOMContentLoaded', function () {
     } catch (err) {
       console.error('Lỗi cập nhật thông tin:', err);
       showToast('Lỗi khi cập nhật: ' + err.message, 'error');
+      // Trả ô chọn về giá trị đang lưu (vd. tên đội sai mẫu bị database từ chối)
+      const saved = (window.appState?.teamData || []).find((m) => m.id === userId);
+      if ($tr && $tr.length && saved) {
+        $tr.find('.update-team, .update-team-ward').val(saved.team || 'No team');
+        $tr.find('.update-position, .update-position-ward').val(saved.position || 'No position');
+      }
     }
   }
 
