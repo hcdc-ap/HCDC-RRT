@@ -430,3 +430,33 @@ SELECT rrt_test.allowed('admin: xóa được để dọn dẹp',
   $$DELETE FROM public.rrt_rehearsal WHERE kind = 'result' AND key = 'A1'$$);
 
 RESET ROLE;
+
+-- ============================================================================
+\echo '--- Thẻ thành viên sự kiện (rrt_incident_member_cards) ---'
+SET ROLE authenticated;
+SELECT rrt_test.login('00000000-0000-0000-0000-000000000001');
+SELECT rrt_test.eq('s1: không đọc trực tiếp được hồ sơ h1 (HCDC)',
+  (SELECT count(*) FROM public.profiles WHERE email = 'h1@t.vn'), 0);
+SELECT rrt_test.eq('s1: thấy thẻ thành viên sự kiện A (có s1, h1)',
+  (SELECT count(*) FROM public.rrt_incident_member_cards('10000000-0000-0000-0000-00000000000a')
+   WHERE email IN ('s1@t.vn', 'h1@t.vn')), 2);
+SELECT rrt_test.eq('s1: h1 được đánh dấu khác đơn vị, có đội',
+  (SELECT count(*) FROM public.rrt_incident_member_cards('10000000-0000-0000-0000-00000000000a')
+   WHERE email = 'h1@t.vn' AND is_external AND team = 'HCDC'), 1);
+SELECT rrt_test.eq('s1: chính mình không phải khác đơn vị',
+  (SELECT count(*) FROM public.rrt_incident_member_cards('10000000-0000-0000-0000-00000000000a')
+   WHERE email = 's1@t.vn' AND NOT is_external), 1);
+SELECT rrt_test.eq('s1: không xem thẻ sự kiện B (không tham gia)',
+  (SELECT count(*) FROM public.rrt_incident_member_cards('10000000-0000-0000-0000-00000000000b')), 0);
+SELECT rrt_test.login('00000000-0000-0000-0000-0000000000b1');
+SELECT rrt_test.eq('tuyến cơ sở B: không xem thẻ sự kiện A',
+  (SELECT count(*) FROM public.rrt_incident_member_cards('10000000-0000-0000-0000-00000000000a')), 0);
+SELECT rrt_test.login('00000000-0000-0000-0000-00000000000a');
+SELECT rrt_test.eq('admin: xem thẻ sự kiện A (có s1, h1)',
+  (SELECT count(*) FROM public.rrt_incident_member_cards('10000000-0000-0000-0000-00000000000a')
+   WHERE email IN ('s1@t.vn', 'h1@t.vn')), 2);
+RESET ROLE;
+SET ROLE anon;
+SELECT rrt_test.denied('anon: không gọi được thẻ thành viên',
+  $$SELECT * FROM public.rrt_incident_member_cards('10000000-0000-0000-0000-00000000000a')$$);
+RESET ROLE;

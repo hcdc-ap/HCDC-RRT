@@ -291,18 +291,35 @@ document.addEventListener('DOMContentLoaded', function () {
     const memberListEl = document.getElementById('dossier-member-list');
     if (!memberListEl) return;
 
-    // 1. Lấy dữ liệu mới nhất từ Supabase (Đảm bảo không dùng dữ liệu cũ)
-    const { data: profiles } = await window.supabaseClient
-      .from('profiles')
-      .select('*');
-
-    // Tạo Map tra cứu (Map trực tiếp từ data vừa fetch)
+    // 1. Thẻ thành viên của đúng sự kiện này (RPC rrt_incident_member_cards):
+    // RLS profiles chỉ cho đọc hồ sơ cùng phường/xã, nên nhân sự HCDC/xã khác
+    // được điều động sẽ chỉ hiện email nếu đọc thẳng bảng profiles.
     const memberMap = {};
-    if (profiles) {
-      profiles.forEach((m) => {
-        if (m.email) memberMap[m.email.toLowerCase().trim()] = m;
-      });
-    }
+    const { data: cards, error: cardsErr } = await window.supabaseClient.rpc(
+      'rrt_incident_member_cards',
+      { p_incident_id: inc.id }
+    );
+    if (cardsErr) console.warn('[members] Không tải được thẻ thành viên:', cardsErr.message);
+    (cards || []).forEach((m) => {
+      if (m.email) memberMap[m.email.toLowerCase().trim()] = m;
+    });
+
+    const POSITION_LABELS = {
+      'No position': 'Chưa có vị trí',
+      Leader: 'Đội trưởng',
+      Epidemic: 'Cán bộ Dịch tễ',
+      Member: 'Cán bộ Lấy mẫu',
+      Engineer: 'Cán bộ Xử lý môi trường',
+      Media: 'Cán bộ Truyền thông',
+      Logistic: 'Hậu cần',
+      Driver: 'Lái xe',
+    };
+    // Đơn vị của nhân sự hỗ trợ: HCDC, hoặc tên phường/xã nơi công tác
+    const unitLabel = (m) => {
+      const unit = String(m?.unit || '');
+      if (/kiểm soát bệnh tật|hcdc/i.test(unit) || /hcdc/i.test(m?.team || '')) return 'HCDC';
+      return m?.workplace_ward || unit || 'Đơn vị khác';
+    };
 
     memberListEl.innerHTML = '';
     const splitEmails = (s) =>
@@ -341,10 +358,14 @@ document.addEventListener('DOMContentLoaded', function () {
       const emailLower = email.toLowerCase();
       const memInfo = memberMap[emailLower];
 
-      // Lấy thông tin từ profiles (nếu có)
+      // Lấy thông tin từ thẻ thành viên (nếu có)
       const fullName = memInfo?.full_name || email;
       const teamName = memInfo?.team || 'Chưa phân đội';
-      const position = memInfo?.position || 'Thành viên';
+      const position = memInfo
+        ? POSITION_LABELS[memInfo.position] || memInfo.position || 'Chưa có vị trí'
+        : 'Thành viên';
+      // Nhân sự đơn vị khác (HCDC / phường-xã khác) điều động hỗ trợ: tô màu riêng
+      const isExternal = !!memInfo?.is_external;
 
       const isMe =
         window.userSession?.email &&
@@ -381,17 +402,29 @@ document.addEventListener('DOMContentLoaded', function () {
       memberListEl.insertAdjacentHTML(
         'beforeend',
         `
-            <div class="member-row" style="${
-              isMe ? 'background-color: #f0f7ff;' : ''
+            <div class="member-row${isExternal ? ' member-row-external' : ''}" style="${
+              isExternal
+                ? 'background-color: #fff4e6; border-left: 4px solid #fd7e14 !important;'
+                : isMe
+                ? 'background-color: #f0f7ff;'
+                : ''
             } padding: 12px; margin-bottom: 8px; display: flex; align-items: center; border-radius: 8px; border: 1px solid #f0f0f0;">
                 <div class="me-3 d-flex align-items-center justify-content-center text-white fw-bold rounded"
-                     style="width: 40px; height: 40px; background-color: #6c757d;">
-                    ${(fullName || 'U').charAt(0).toUpperCase()}
+                     style="width: 40px; height: 40px; background-color: ${
+                       isExternal ? '#fd7e14' : '#6c757d'
+                     };">
+                    ${window.escapeHtml((fullName || 'U').charAt(0).toUpperCase())}
                 </div>
                 <div style="flex-grow: 1; overflow: hidden;">
                     <div class="fw-bold text-dark">${window.escapeHtml(
                       displayName
-                    )}</div>
+                    )}${
+          isExternal
+            ? ` <span class="badge" style="background:#fd7e14; font-size:10px; vertical-align:middle;" title="Nhân sự đơn vị khác được điều động hỗ trợ"><i class='bx bx-transfer-alt'></i> Hỗ trợ · ${window.escapeHtml(
+                unitLabel(memInfo)
+              )}</span>`
+            : ''
+        }</div>
                     <div style="font-size: 11px; color: #666;">
                         <i class='bx bx-group'></i> ${window.escapeHtml(
                           teamName
@@ -1096,6 +1129,11 @@ document.addEventListener('DOMContentLoaded', function () {
         break;
       case 'page-training':
         if (typeof renderTrainingPage === 'function') renderTrainingPage();
+        break;
+      case 'page-tracking':
+        // Luôn tải mới khi mở trang: danh sách lưu tạm có thể đã cũ (sự kiện
+        // phường vừa tạo khi trang đang đóng — realtime chỉ vẽ lại trang đang mở)
+        if (typeof window.renderTrackingPage === 'function') window.renderTrackingPage(true);
         break;
       case 'page-team':
         if (typeof renderTeamPage === 'function') renderTeamPage();
