@@ -460,3 +460,26 @@ SET ROLE anon;
 SELECT rrt_test.denied('anon: không gọi được thẻ thành viên',
   $$SELECT * FROM public.rrt_incident_member_cards('10000000-0000-0000-0000-00000000000a')$$);
 RESET ROLE;
+
+-- ============================================================================
+\echo '--- Người viết tin nhắn sự kiện (rrt_incident_log_authors) ---'
+INSERT INTO public.incident_logs (incident_id, user_id, content) VALUES
+  ('10000000-0000-0000-0000-00000000000a', '00000000-0000-0000-0000-0000000000c1', 'HCDC tới hỗ trợ');
+SET ROLE authenticated;
+SELECT rrt_test.login('00000000-0000-0000-0000-000000000001');
+SELECT rrt_test.eq('s1: thấy tên người viết h1 (HCDC), đánh dấu khác đơn vị',
+  (SELECT count(*) FROM public.rrt_incident_log_authors('10000000-0000-0000-0000-00000000000a')
+   WHERE user_id = '00000000-0000-0000-0000-0000000000c1' AND is_external), 1);
+SELECT rrt_test.eq('s1: chỉ trả người đã viết trong sự kiện (không có s3)',
+  (SELECT count(*) FROM public.rrt_incident_log_authors('10000000-0000-0000-0000-00000000000a')
+   WHERE user_id = '00000000-0000-0000-0000-000000000003'), 0);
+SELECT rrt_test.eq('s1: không xem người viết sự kiện B',
+  (SELECT count(*) FROM public.rrt_incident_log_authors('10000000-0000-0000-0000-00000000000b')), 0);
+SELECT rrt_test.login('00000000-0000-0000-0000-0000000000b1');
+SELECT rrt_test.eq('tuyến cơ sở B: không xem người viết sự kiện A',
+  (SELECT count(*) FROM public.rrt_incident_log_authors('10000000-0000-0000-0000-00000000000a')), 0);
+RESET ROLE;
+SET ROLE anon;
+SELECT rrt_test.denied('anon: không gọi được người viết tin nhắn',
+  $$SELECT * FROM public.rrt_incident_log_authors('10000000-0000-0000-0000-00000000000a')$$);
+RESET ROLE;
