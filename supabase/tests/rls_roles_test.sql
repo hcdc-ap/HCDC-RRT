@@ -533,3 +533,29 @@ SET ROLE anon;
 SELECT rrt_test.denied('anon: không gọi được thay quân',
   $$SELECT public.rrt_replace_incident_member('10000000-0000-0000-0000-00000000000a', 's1@t.vn', 's2@t.vn')$$);
 RESET ROLE;
+
+-- ============================================================================
+\echo '--- Xóa sự kiện (rrt_delete_incident) ---'
+INSERT INTO public.incidents (id, event_name, status, ma_xa, initial_selected_members) VALUES
+  ('10000000-0000-0000-0000-0000000000de', 'TEST – xóa', 'closed', 'XA', 's1@t.vn');
+INSERT INTO public.notifications (user_email, message, incident_id) VALUES
+  ('s1@t.vn', 'thông báo sự kiện xóa', '10000000-0000-0000-0000-0000000000de');
+SET ROLE authenticated;
+SELECT rrt_test.login('00000000-0000-0000-0000-0000000000a1');
+SELECT rrt_test.denied('tuyến cơ sở: không xóa được sự kiện',
+  $$SELECT public.rrt_delete_incident('10000000-0000-0000-0000-0000000000de', 'TEST – xóa')$$);
+SELECT rrt_test.login('00000000-0000-0000-0000-00000000000a');
+SELECT rrt_test.denied('admin: gõ sai tên thì không xóa',
+  $$SELECT public.rrt_delete_incident('10000000-0000-0000-0000-0000000000de', 'TEST')$$);
+SELECT rrt_test.allowed('admin: gõ đúng tên thì xóa',
+  $$SELECT public.rrt_delete_incident('10000000-0000-0000-0000-0000000000de', 'TEST – xóa')$$);
+RESET ROLE;
+SELECT rrt_test.eq('sự kiện và thông báo của nó đã bị xóa',
+  (SELECT count(*) FROM public.incidents WHERE id = '10000000-0000-0000-0000-0000000000de')
+  + (SELECT count(*) FROM public.notifications WHERE incident_id = '10000000-0000-0000-0000-0000000000de'), 0);
+SELECT rrt_test.eq('sự kiện khác còn nguyên',
+  (SELECT count(*) FROM public.incidents WHERE id IN ('10000000-0000-0000-0000-00000000000a', '10000000-0000-0000-0000-00000000000b')), 2);
+SET ROLE anon;
+SELECT rrt_test.denied('anon: không gọi được xóa sự kiện',
+  $$SELECT public.rrt_delete_incident('10000000-0000-0000-0000-00000000000a', 'Ổ dịch A')$$);
+RESET ROLE;

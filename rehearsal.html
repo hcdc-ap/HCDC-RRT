@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex">
-<title>Tập dượt RRT-HCDC</title>
+<title>Diễn tập RRT-HCDC</title>
 <link rel="icon" type="image/png" href="https://github.com/hcdc-ap/images-host/blob/main/images/productivity.png?raw=true">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -109,9 +109,9 @@
 <body>
 <div class="wrap">
   <header class="top">
-    <p class="eyebrow">RRT-HCDC · Tập dượt trước tập huấn tháng 10/2026</p>
-    <h1>Kịch bản tập dượt theo vai trò</h1>
-    <p class="lead">Mỗi người đăng nhập đúng tài khoản được phân vai trên webapp RRT, làm lần lượt các tình huống của vai mình và đánh dấu <b>Đạt</b>, <b>Lỗi</b> hoặc <b>Bỏ qua</b> ở trang này. Kết quả lưu chung cho cả tổ. Tình huống nào ghi <b>Lỗi</b> thì mô tả ngắn điều đã thấy ở ô ghi chú.</p>
+    <p class="eyebrow">RRT-HCDC · Diễn tập công cụ RRT tại Trạm Y tế</p>
+    <h1>Kịch bản diễn tập: lịch trực, kích hoạt nội bộ, phối hợp HCDC</h1>
+    <p class="lead">Hai Trạm Y tế (Xuân Thới Sơn, Hóc Môn) và HCDC cùng thao tác trên webapp RRT thật. Mỗi người đăng nhập đúng tài khoản được phân vai, làm các tình huống của vai mình theo thứ tự, rồi đánh dấu <b>Đạt</b>, <b>Lỗi</b> hoặc <b>Bỏ qua</b> ở trang này. Kết quả lưu chung, tự cập nhật. Tình huống <b>Lỗi</b> thì ghi ngắn điều đã thấy ở ô ghi chú.</p>
     <div class="userbar" id="userbar" hidden><span id="whoami"></span><button class="linkbtn" id="logout" type="button">Đăng xuất</button><span class="muted" id="conn"></span></div>
   </header>
 
@@ -128,16 +128,16 @@
 
   <div class="warnbox" role="note" id="pendingBox" hidden>
     <h3>Tài khoản chưa được duyệt</h3>
-    <p>Tài khoản này chưa được duyệt nên chưa xem và ghi được kết quả tập dượt. Người đóng vai MOI nhờ người ghi nhận đánh dấu hộ các tình huống A1 cho tới khi được duyệt (A2).</p>
+    <p>Tài khoản này chưa được duyệt nên chưa xem và ghi được kết quả diễn tập. Nhờ quản trị Trạm Y tế hoặc HCDC duyệt hồ sơ trước.</p>
   </div>
 
   <div class="warnbox" role="note">
     <h3>Đây là hệ thống thật: thông báo, email và Telegram đều gửi thật</h3>
     <ul>
-      <li>Đặt tên mọi sự kiện, ca trực bắt đầu bằng <b>[TẬP HUẤN]</b> để dễ nhận biết và dọn dẹp.</li>
-      <li>Báo trước trong <b>nhóm Telegram chung</b> của RRT: kích hoạt khẩn cấp sẽ đăng tin lên nhóm này.</li>
-      <li>Chỉ điều động người trong tổ tập dượt. Chỉ gửi yêu cầu điều phối mẫu tới <b>PXN thử</b>, không gửi PXN thật.</li>
-      <li>Hệ thống giới hạn số email khôi phục mật khẩu mỗi giờ: tình huống quên mật khẩu chỉ làm một lần.</li>
+      <li>Đặt tên mọi sự kiện bắt đầu bằng <b>TEST –</b>, ghi chú lịch trực có chữ <b>TEST</b> để dễ nhận biết và dọn dẹp.</li>
+      <li>Tin kích hoạt khẩn cấp cũng được đăng lên <b>nhóm Telegram chung</b> của RRT: báo trước cho nhóm. Tin nhóm không phải là điều động; người được điều động nhận thêm thông báo riêng.</li>
+      <li>Chỉ chọn người trong tổ diễn tập. Xã Xuân Thới Sơn có một <b>sự kiện thật đã đóng</b>: không sửa, không xóa sự kiện này.</li>
+      <li>Chỉ <b>quản trị hệ thống HCDC</b> xóa được sự kiện và ca trực. Phần Phòng xét nghiệm làm ở buổi khác, khi có nhân sự PXN.</li>
     </ul>
   </div>
 
@@ -150,35 +150,34 @@
 
   <section class="panel" aria-labelledby="h-cast">
     <h2 id="h-cast">Phân vai</h2>
-    <p class="muted">Người thực hiện lấy từ dữ liệu phân vai (chỉ tài khoản đã đăng nhập mới thấy). Cột "Cần chuẩn bị" là điều kiện tài khoản phải có trước buổi tập dượt.</p>
+    <p class="muted">Người thực hiện lấy từ dữ liệu phân vai (chỉ tài khoản đã đăng nhập mới thấy). Cột "Thiết lập trên hệ thống" là trạng thái tài khoản phải có trước giờ diễn tập.</p>
     <div class="tablewrap">
       <table>
-        <thead><tr><th>Vai</th><th>Tài khoản / vai trò trên hệ thống</th><th>Cần chuẩn bị</th><th style="min-width:200px">Người thực hiện</th></tr></thead>
+        <thead><tr><th>Vai</th><th>Đơn vị · vai trò</th><th>Thiết lập trên hệ thống</th><th style="min-width:200px">Người thực hiện</th></tr></thead>
         <tbody id="cast"></tbody>
       </table>
     </div>
   </section>
 
   <section class="panel" aria-labelledby="h-prep">
-    <h2 id="h-prep">Trước và sau buổi tập dượt</h2>
+    <h2 id="h-prep">Trước và sau buổi diễn tập</h2>
     <div class="cols">
       <div>
         <h3>Trước giờ bắt đầu</h3>
         <ul>
-          <li>Kiểm tra các tài khoản ở bảng Phân vai đăng nhập được và đúng vai trò, xã/phường.</li>
-          <li>Tạm chuyển người đóng vai <b>DT</b> về Trạm Y tế và xã/phường tập dượt, đội của xã, vị trí Đội trưởng (ghi lại giá trị cũ để khôi phục).</li>
-          <li>Tạo <b>PXN thử</b> ở trang Phòng Xét nghiệm, email đầu mối là email của người đóng vai PXN (F0).</li>
-          <li>Người đóng vai <b>MOI</b> chuẩn bị một email cá nhân <b>chưa từng</b> đăng ký RRT.</li>
-          <li>Mỗi người mở sẵn email và Telegram (nếu đã liên kết bot) trên điện thoại.</li>
+          <li>Quản trị kỹ thuật chuyển hồ sơ các vai Trạm Y tế về đúng xã, đội, vai trò (bảng Phân vai), ghi lại giá trị cũ để khôi phục.</li>
+          <li>Mỗi người đăng xuất rồi đăng nhập lại webapp sau khi hồ sơ được chuyển; kiểm tra menu đúng vai trò.</li>
+          <li>Ai chưa liên kết Telegram thì liên kết trước (bot RRT, gửi đúng email đăng nhập).</li>
+          <li>Màn hình trình chiếu dùng tài khoản <b>HCDC</b>, mở sẵn <b>Theo dõi sự kiện</b> và <b>Lịch trực</b>: dữ liệu mới tự hiện, không cần bấm Refresh.</li>
+          <li>Mỗi người mở sẵn email và Telegram trên điện thoại.</li>
         </ul>
       </div>
       <div>
         <h3>Sau khi xong</h3>
         <ul>
-          <li>Xóa sự kiện <b>[TẬP HUẤN]</b>, ca trực <b>[TẬP HUẤN]</b> và PXN thử.</li>
-          <li>Khôi phục đơn vị, đội, vị trí của người đóng vai DT; quyết định giữ hay xóa tài khoản MOI.</li>
-          <li>Thông báo, lịch sử điều động của buổi tập dượt vẫn còn trong database: nhờ quản trị hệ thống dọn nếu cần.</li>
-          <li>Rà các tình huống <b>Lỗi</b> trên trang này và gửi cho 10.</li>
+          <li>Đóng các sự kiện TEST (tình huống 3.8), rồi HCDC xóa sự kiện TEST và ca trực TEST (3.9).</li>
+          <li>Quản trị kỹ thuật khôi phục hồ sơ các vai về đơn vị, đội, vai trò ban đầu.</li>
+          <li>Rà các tình huống <b>Lỗi</b> trên trang này và gửi cho người phụ trách kỹ thuật.</li>
         </ul>
       </div>
     </div>
@@ -202,154 +201,96 @@
   var POLL_MS = 15000;
 
   var ROLES = [
-    { key: 'HCDC', name: 'Quản trị RRT (HCDC)', acct: 'Tài khoản test quản trị HCDC · Quản trị RRT (HCDC)', prep: 'Vào được trang Phòng Xét nghiệm và Vật tư.' },
-    { key: 'TCS', name: 'Quản trị tuyến cơ sở', acct: 'Tài khoản test quản trị tuyến cơ sở · Quản trị tuyến cơ sở', prep: 'Đơn vị Trạm Y tế/UBND Phường-Xã; đúng xã/phường tập dượt.' },
-    { key: 'NV1', name: 'Nhân viên RRT cùng xã', acct: 'Tài khoản test nhân viên · Nhân viên RRT', prep: 'Đã duyệt; cùng xã/phường với TCS; có đội trong xã.' },
-    { key: 'DT', name: 'Đội trưởng', acct: 'Nhân viên khoa Giám sát cảnh báo · Nhân viên RRT, vị trí Đội trưởng', prep: 'Tạm chuyển về Trạm Y tế và xã/phường tập dượt, đội của xã; đã liên kết Telegram.' },
-    { key: 'NV2', name: 'Nhân viên ngoài xã', acct: 'Nhân viên khoa Giám sát cảnh báo · Nhân viên RRT', prep: 'Đã duyệt; KHÔNG thuộc xã/phường tập dượt.' },
-    { key: 'MOI', name: 'Người mới đăng ký', acct: 'Nhân viên khoa Giám sát cảnh báo · đăng ký mới bằng email khác', prep: 'Email cá nhân chưa từng đăng ký RRT; tự đăng ký trong buổi (A1).' },
-    { key: 'PXN', name: 'Đầu mối PXN thử', acct: 'Nhân viên khoa Giám sát cảnh báo · không cần tài khoản RRT', prep: 'Email được khai làm đầu mối của PXN thử (F0).' },
-    { key: 'GHI', name: 'Ghi nhận, dự phòng', acct: 'Nhân viên khoa Giám sát cảnh báo', prep: 'Theo dõi trang này, ghi lỗi; đánh dấu hộ vai MOI và PXN.' }
+    { key: 'HCDC', name: 'Quản trị RRT (HCDC)', acct: 'HCDC · Quản trị RRT (HCDC)', prep: 'Giữ nguyên. Màn hình trình chiếu: Theo dõi sự kiện, Lịch trực.' },
+    { key: 'HCDC-NV', name: 'Nhân sự RRT HCDC', acct: 'HCDC · Nhân viên RRT', prep: 'Giữ nguyên (thuộc HCDC, không thuộc xã nào); liên kết Telegram.' },
+    { key: 'XTS-QT', name: 'Quản trị TYT Xuân Thới Sơn', acct: 'TYT Xuân Thới Sơn · Quản trị tuyến cơ sở', prep: 'Vai trò Quản trị tuyến cơ sở; Trạm Y tế, Xã Xuân Thới Sơn; Team Xã Xuân Thới Sơn 01.' },
+    { key: 'XTS-DT', name: 'Đội trưởng TYT Xuân Thới Sơn', acct: 'TYT Xuân Thới Sơn · Nhân viên RRT, vị trí Đội trưởng', prep: 'Trạm Y tế, Xã Xuân Thới Sơn; Team Xã Xuân Thới Sơn 01; vị trí Đội trưởng.' },
+    { key: 'XTS-NV', name: 'Nhân viên TYT Xuân Thới Sơn', acct: 'TYT Xuân Thới Sơn · Nhân viên RRT', prep: 'Trạm Y tế, Xã Xuân Thới Sơn; Team Xã Xuân Thới Sơn 01; liên kết Telegram.' },
+    { key: 'HM-QT', name: 'Quản trị TYT Hóc Môn', acct: 'TYT Hóc Môn · Quản trị tuyến cơ sở', prep: 'Vai trò Quản trị tuyến cơ sở; Trạm Y tế, Xã Hóc Môn; Team Xã Hóc Môn 01.' },
+    { key: 'HM-DT', name: 'Đội trưởng TYT Hóc Môn', acct: 'TYT Hóc Môn · Nhân viên RRT, vị trí Đội trưởng', prep: 'Trạm Y tế, Xã Hóc Môn; Team Xã Hóc Môn 01; vị trí Đội trưởng; liên kết Telegram.' },
+    { key: 'HM-NV', name: 'Nhân viên TYT Hóc Môn', acct: 'TYT Hóc Môn · Nhân viên RRT', prep: 'Trạm Y tế, Xã Hóc Môn; Team Xã Hóc Môn 01; liên kết Telegram.' }
   ];
 
   var GROUPS = [
-    { key: 'A', title: 'Tài khoản và đăng nhập', note: 'Đăng ký, duyệt, mật khẩu, liên kết Telegram.' },
-    { key: 'B', title: 'Phân quyền theo vai trò', note: 'Mỗi vai chỉ thấy và làm được đúng phạm vi của mình.' },
-    { key: 'C', title: 'Lịch trực', note: 'Tạo ca, nhận ca, báo bận, thay người.' },
-    { key: 'D', title: 'Kích hoạt khẩn cấp', note: 'Điều động và xác nhận qua ứng dụng, Telegram, Email.' },
-    { key: 'E', title: 'Trong sự kiện', note: 'Nhật ký, phương án, báo cáo, SOS, thay quân.' },
-    { key: 'F', title: 'Điều phối mẫu xét nghiệm', note: 'Đề xuất PXN và chốt điều phối với PXN thử.' },
-    { key: 'G', title: 'Kết thúc và dọn dẹp', note: 'Đóng sự kiện, xóa dữ liệu tập dượt.' }
+    { key: '1', title: 'Quản lý lịch trực', note: 'Tạo ca, chọn thành viên, thay người, kiểm tra phạm vi giữa hai Trạm Y tế.' },
+    { key: '2', title: 'Kích hoạt nội bộ tại Trạm Y tế', note: 'Mỗi Trạm Y tế kích hoạt sự kiện riêng; hai sự kiện chạy độc lập.' },
+    { key: '3', title: 'HCDC phối hợp vào sự kiện Trạm Y tế', note: 'Tiếp tục dùng sự kiện Xuân Thới Sơn đang hoạt động ở mục 2.' }
   ];
 
   var CASES = [
-    { id: 'A1', g: 'A', who: ['MOI'], t: 'Tự đăng ký tài khoản mới',
-      steps: ['Ở trang đăng nhập webapp, bấm "Đăng ký", điền thông tin bằng email cá nhân CHƯA từng đăng ký, bấm "Đăng ký".', 'Đăng nhập, vào "Biểu mẫu RRT", mục 6 chọn Đơn vị "Trạm Y tế Phường/Xã/ Đặc khu" và đúng xã/phường tập dượt, nộp hồ sơ.'],
-      expect: 'Thấy thông báo "Tài khoản đang chờ duyệt". Chỉ xem/sửa được hồ sơ của mình; các trang khác trống (không phải lỗi).' },
-    { id: 'A2', g: 'A', who: ['TCS'], t: 'Duyệt người mới đăng ký', pre: 'A1',
-      steps: ['Vào "Biểu mẫu RRT", tìm hồ sơ của MOI.', 'Ở cột Phê duyệt chọn "Đã duyệt".', 'MOI đăng xuất rồi đăng nhập lại.'],
-      expect: 'TCS thấy hồ sơ MOI (vì cùng xã). Sau khi duyệt, MOI dùng được đầy đủ chức năng của Nhân viên RRT.' },
-    { id: 'A3', g: 'A', who: ['TCS'], t: 'Không thấy hồ sơ ngoài xã',
-      steps: ['Vào "Biểu mẫu RRT" và "Thành viên", tìm tên NV2.'],
-      expect: 'Không tìm thấy NV2 ở cả hai trang (NV2 không thuộc xã tập dượt).' },
-    { id: 'A4', g: 'A', who: ['NV1'], t: 'Quên mật khẩu (làm một lần)',
-      steps: ['Đăng xuất, bấm "Quên mật khẩu?", nhập email, bấm "Gửi liên kết" một lần.', 'Mở email mới nhất (xem cả Spam), bấm liên kết, đặt mật khẩu mới.', 'Đăng nhập bằng mật khẩu mới; mở lại liên kết cũ trong email.'],
-      expect: 'Liên kết mở đúng trang RRT với form "Đặt lại mật khẩu"; đăng nhập được bằng mật khẩu mới; liên kết cũ báo đã hết hạn hoặc đã dùng.',
-      known: 'Không nhận được email khôi phục, kể cả tài khoản quản trị. Nguyên nhân: hệ thống đang dùng máy chủ email mặc định, chỉ gửi được rất ít email mỗi giờ và chỉ tới một số địa chỉ. Cần cấu hình máy chủ email riêng (SMTP) trước đợt tập huấn; trước khi cấu hình xong, đánh dấu Bỏ qua.' },
-    { id: 'A5', g: 'A', who: ['NV1'], t: 'Đổi mật khẩu trong ứng dụng',
-      steps: ['Bấm ảnh hồ sơ góc phải → "Đổi mật khẩu", nhập mật khẩu cũ và mới, xác nhận.'],
-      expect: 'Báo đổi thành công, tự đăng xuất sau vài giây; đăng nhập lại được bằng mật khẩu mới.' },
-    { id: 'A6', g: 'A', who: ['NV1'], t: 'Sửa hồ sơ, thử đổi nơi công tác',
-      steps: ['Mở "Biểu mẫu RRT", sửa số điện thoại và thử đổi Đơn vị công tác/Phường-Xã, nộp.'],
-      expect: 'Số điện thoại lưu được; Đơn vị và Phường-Xã giữ nguyên như cũ. Trạng thái hồ sơ về "Chờ duyệt" nhưng tài khoản vẫn dùng bình thường.' },
-    { id: 'A7', g: 'A', who: ['NV1'], t: 'Liên kết Telegram',
-      steps: ['Mở bot Telegram của hệ thống, bấm Start hoặc gõ /start.', 'Gõ đúng email đăng nhập RRT và gửi.'],
-      expect: 'Bot trả lời "HỒ SƠ HỢP LỆ" kèm tên.' },
+    { id: '1-1', g: '1', who: ['XTS-QT', 'HCDC'], t: 'Tạo lịch trực cho nhân viên Xuân Thới Sơn',
+      steps: ['XTS-QT vào "Lịch trực": chọn Ngày trực (ngày mai), Chọn Đội "Team Xã Xuân Thới Sơn 01".', 'Ở "Thành viên trực" bấm "Bỏ chọn", chỉ tick XTS-NV.', 'Nhập "Địa điểm trực" (vd. Trạm Y tế Xuân Thới Sơn) và Ghi chú "TEST – diễn tập, ca sáng 7h–11h30", bấm "XÁC NHẬN".', 'HCDC để sẵn màn hình "Lịch trực".'],
+      expect: 'Ca hiện đúng ngày, đúng đội; chỉ XTS-NV được phân công và nhận thông báo (ứng dụng, email, Telegram) có đúng Địa điểm. Webapp chưa có giờ trực: giờ ghi ở Ghi chú. Màn hình HCDC tự hiện ca mới trong vài giây, không bấm Refresh.' },
+    { id: '1-2', g: '1', who: ['XTS-NV', 'HCDC'], t: 'Xem và nhận lịch trực được phân công', pre: '1.1',
+      steps: ['XTS-NV mở Dashboard: dòng "Lịch trực Team Xã Xuân Thới Sơn 01" có nhãn "Chờ xác nhận", bấm "Phản hồi ngay", chọn nhận ca (hoặc bấm nút xác nhận trong email/Telegram).', 'HCDC trên "Lịch trực" bấm vào ca vừa tạo.'],
+      expect: 'Nhân viên không có menu "Lịch trực": xem ca của mình ở Dashboard, email, Telegram. Sau khi nhận ca, chi tiết ca trên màn hình HCDC hiện XTS-NV "Đã nhận" (tự cập nhật). HCDC xem được lịch của mọi Trạm Y tế.' },
+    { id: '1-3', g: '1', who: ['XTS-QT', 'XTS-NV', 'XTS-DT'], t: 'Thay nhân viên bằng Đội trưởng trong ca trực', pre: '1.2',
+      steps: ['XTS-QT ở "Lịch trực" bấm "Tạo yêu cầu Thay thế", chọn ca TEST vừa tạo.', 'Chọn XTS-NV là người cần thay, chọn XTS-DT là người thay, xác nhận.', 'XTS-NV và XTS-DT kiểm tra thông báo; XTS-DT nhận ca.'],
+      expect: 'XTS-NV nhận "Bạn đã được thay thế bởi … cho ca trực"; XTS-DT nhận "Bạn được phân công thay cho …". Chi tiết ca chỉ còn XTS-DT, không còn phân công cũ của XTS-NV.' },
+    { id: '1-4', g: '1', who: ['HM-QT', 'HM-DT'], t: 'Tạo lịch trực tại Hóc Môn',
+      steps: ['HM-QT vào "Lịch trực", Chọn Đội "Team Xã Hóc Môn 01", chỉ tick HM-DT, nhập Địa điểm, Ghi chú "TEST", bấm "XÁC NHẬN".', 'HM-DT xem và nhận ca ở Dashboard.'],
+      expect: 'Ca lưu đúng đội của Hóc Môn; chỉ HM-DT nhận thông báo; HM-DT nhận ca được. Màn hình HCDC thấy thêm ca của Hóc Môn.' },
+    { id: '1-5', g: '1', who: ['XTS-QT', 'HM-QT'], t: 'Không xem, không phân công ngoài Trạm Y tế mình', pre: '1.4',
+      steps: ['XTS-QT mở "Lịch trực": tìm ca TEST của Hóc Môn; mở "Chọn Đội" tìm đội Hóc Môn; vào "Thành viên" tìm HM-DT.', 'HM-QT làm tương tự với ca, đội, nhân sự của Xuân Thới Sơn.'],
+      expect: 'Không thấy ca, đội, nhân sự của Trạm Y tế kia; không phân công hay thay người ngoài Trạm Y tế được.' },
 
-    { id: 'B1', g: 'B', who: ['NV1'], t: 'Menu của nhân viên',
-      steps: ['Xem danh sách menu bên trái.'],
-      expect: 'Có: Dashboard, Biểu mẫu RRT, Theo dõi sự kiện, Đào tạo, Thư viện, Bản đồ, Tin nhắn. Không có: Lịch trực, Kích hoạt khẩn cấp, Thành viên, Vật tư, Phòng Xét nghiệm.' },
-    { id: 'B2', g: 'B', who: ['TCS'], t: 'Menu và nút của tuyến cơ sở',
-      steps: ['Xem menu bên trái; mở "Thư viện" và "Đào tạo".'],
-      expect: 'Có Lịch trực, Kích hoạt khẩn cấp, Thành viên; không có Vật tư, Phòng Xét nghiệm. Thư viện không có nút "Đăng tải"; Đào tạo không có nút "Khóa Đào tạo".' },
-    { id: 'B3', g: 'B', who: ['TCS'], t: 'Thành viên: chỉ trong xã, không phong Đội trưởng',
-      steps: ['Vào "Thành viên", xem danh sách.', 'Thử đổi Vị trí của NV1 thành "Đội trưởng".'],
-      expect: 'Chỉ thấy người cùng xã/phường. Không có lựa chọn "Đội trưởng" (hoặc báo không có quyền phong Đội trưởng).' },
-    { id: 'B4', g: 'B', who: ['HCDC'], t: 'HCDC gán Đội trưởng',
-      steps: ['Vào "Thành viên", tìm người đóng vai DT, đổi Vị trí thành "Đội trưởng" (nếu chưa gán trước buổi).'],
-      expect: 'Lưu được. DT đăng xuất/đăng nhập lại thấy nút "Lập báo cáo" trong sự kiện đang tham gia (kiểm tra ở E3).' },
-    { id: 'B5', g: 'B', who: ['NV2'], t: 'Nhân viên ngoài xã',
-      steps: ['Vào "Biểu mẫu RRT", "Theo dõi sự kiện", "Bản đồ".'],
-      expect: 'Chỉ thấy hồ sơ của mình; chưa thấy sự kiện [TẬP HUẤN] (cho tới D6); bản đồ không hiện nhân sự xã tập dượt.' },
+    { id: '2-1', g: '2', who: ['XTS-QT', 'XTS-NV'], t: 'Kích hoạt nội bộ: chỉ một nhân viên',
+      steps: ['XTS-QT vào "Kích hoạt khẩn cấp", chỉ tick XTS-NV, bấm "KÍCH HOẠT (1)".', 'Chọn "Sự kiện Mới", tên "TEST – Sự kiện Xuân Thới Sơn", chọn địa điểm trên bản đồ trong xã, bấm "Tiếp tục" rồi "XÁC NHẬN".', 'XTS-NV vào "Theo dõi sự kiện", mở sự kiện, bấm "XÁC NHẬN" ở thanh vàng (hoặc xác nhận qua email/Telegram).'],
+      expect: 'Danh sách chọn chỉ có người của Xuân Thới Sơn. XTS-NV nhận thông báo riêng và xác nhận được. XTS-DT, HM-DT, HCDC-NV không nhận thông báo riêng và không thấy sự kiện (tin trong nhóm Telegram chung là tin nhóm, không phải điều động).' },
+    { id: '2-2', g: '2', who: ['HCDC'], t: 'HCDC theo dõi Trạm Y tế đang kích hoạt', pre: '2.1',
+      steps: ['HCDC để sẵn "Theo dõi sự kiện" từ trước khi 2.1 bắt đầu, không bấm Refresh.', 'Khi sự kiện xuất hiện, mở hồ sơ: xem địa điểm, nhân sự, "Thống kê Phản hồi", nhật ký.'],
+      expect: 'Sự kiện tự xuất hiện vài giây sau khi kích hoạt. Hồ sơ đúng tên, địa điểm; danh sách nhân sự có XTS-NV; trạng thái chuyển "Xác nhận" ngay khi XTS-NV xác nhận.' },
+    { id: '2-3', g: '2', who: ['XTS-QT', 'XTS-NV', 'XTS-DT'], t: 'Thay nhân viên bằng Đội trưởng trong sự kiện', pre: '2.1',
+      steps: ['XTS-QT mở hồ sơ "TEST – Sự kiện Xuân Thới Sơn", bấm nút "Người" (cụm thay quân).', 'Chọn XTS-NV cần thay, chọn XTS-DT thay thế, xác nhận.', 'XTS-DT xác nhận tham gia.'],
+      expect: 'XTS-NV nhận "Bạn đã được rút khỏi sự kiện này, người thay thế: …"; XTS-DT nhận "Bạn được điều động thay thế cho … Vui lòng xác nhận tham gia." Danh sách nhân sự chỉ còn XTS-DT. Mục Biến động nhân sự (AAR) ghi "🔄 Thay thế: … → … – Thay quân bởi tuyến cơ sở".' },
+    { id: '2-4', g: '2', who: ['XTS-DT', 'XTS-QT', 'HCDC'], t: 'Sửa hồ sơ cá nhân khi đang tham gia sự kiện', pre: '2.3',
+      steps: ['XTS-DT vào "Biểu mẫu RRT", sửa số điện thoại (thử đổi cả Đơn vị/Xã), nộp.', 'XTS-QT và HCDC mở lại hồ sơ sự kiện.', 'XTS-QT duyệt lại hồ sơ ở "Biểu mẫu RRT" (cột Phê duyệt).'],
+      expect: 'Số điện thoại lưu được; Đơn vị, Xã giữ nguyên. Hồ sơ chuyển "Chờ duyệt" nhưng tài khoản vẫn dùng bình thường, vẫn trong sự kiện, phản hồi giữ nguyên; XTS-QT duyệt lại được.' },
+    { id: '2-5', g: '2', who: ['HM-QT', 'HM-DT'], t: 'Kích hoạt sự kiện thứ hai tại Hóc Môn', pre: '2.1',
+      steps: ['Trong khi sự kiện Xuân Thới Sơn còn hoạt động: HM-QT vào "Kích hoạt khẩn cấp", tick HM-DT, tạo "TEST – Sự kiện Hóc Môn".', 'HM-DT xác nhận tham gia.'],
+      expect: 'Chỉ HM-DT nhận thông báo riêng. Hai sự kiện hoạt động độc lập; người Xuân Thới Sơn không nhận thông báo, không thấy sự kiện Hóc Môn.' },
+    { id: '2-6', g: '2', who: ['HM-DT', 'HM-QT', 'HCDC'], t: 'Đội trưởng phản hồi, báo cáo; quản trị lập IAP', pre: '2.5',
+      steps: ['HM-DT trong sự kiện: gửi tin nhắn, bấm "Lập báo cáo" nhập số liệu giả định và gửi; mở "Phương án (IAP)".', 'HM-QT mở "Phương án (IAP)", thêm mục tiêu, bấm "LƯU IAP".', 'HCDC mở hồ sơ sự kiện Hóc Môn.'],
+      expect: 'Đội trưởng lập báo cáo được; IAP mở chế độ chỉ xem (không có "LƯU IAP"). HM-QT lưu IAP được. Tin nhắn hiện họ tên người gửi; báo cáo và IAP gắn đúng sự kiện Hóc Môn; màn hình HCDC thấy tin nhắn, báo cáo mới mà không cần Refresh.' },
+    { id: '2-7', g: '2', who: ['HCDC', 'XTS-QT', 'HM-QT'], t: 'Phạm vi khi hai Trạm Y tế cùng kích hoạt', pre: '2.5',
+      steps: ['Cả ba mở "Theo dõi sự kiện" và "Bản đồ".', 'XTS-QT, HM-QT thử mở sự kiện của Trạm Y tế kia (nếu thấy).'],
+      expect: 'HCDC thấy cả hai sự kiện TEST. XTS-QT chỉ thấy sự kiện của Xuân Thới Sơn (cùng sự kiện thật đã đóng của xã); HM-QT chỉ thấy sự kiện Hóc Môn. Không ai thao tác được sự kiện ngoài phạm vi.' },
+    { id: '2-8', g: '2', who: ['XTS-QT'], t: 'Cảnh báo khi chọn người đang tham gia sự kiện khác', pre: '2.3',
+      steps: ['XTS-QT vào "Kích hoạt khẩn cấp", tick XTS-DT (đang trong sự kiện Xuân Thới Sơn), bấm "KÍCH HOẠT".', 'Chọn "Sự kiện Mới", tên "TEST – Sự kiện Xuân Thới Sơn 2", bấm "Tiếp tục".', 'Đọc màn hình duyệt cuối rồi bấm Hủy (không tạo sự kiện thứ hai).'],
+      expect: 'Màn hình duyệt ghi "Đang tham gia: TEST – Sự kiện Xuân Thới Sơn" cạnh XTS-DT và hiện cảnh báo "Có 1 nhân sự đang tham gia sự kiện khác chưa kết thúc".' },
 
-    { id: 'C1', g: 'C', who: ['TCS'], t: 'Tạo ca trực',
-      steps: ['Vào "Lịch trực", chọn ngày mai, chọn đội của xã có NV1 và DT, ghi chú "[TẬP HUẤN]", bấm "XÁC NHẬN".'],
-      expect: 'Chỉ thấy các đội thuộc xã mình. Ca xuất hiện trên lịch; NV1 và DT nhận thông báo lịch trực qua ứng dụng, email (và Telegram nếu đã liên kết).',
-      known: 'Đạt. Góp ý đã làm: thêm ô "Địa điểm trực" (hiện ở email/Telegram thay cho "Trực tại đơn vị / Theo phân công"); chọn Đội rồi chọn từng thành viên trực; Trợ lý xếp lịch điền sẵn đội/ngày để chọn thành viên trước khi xác nhận.' },
-    { id: 'C2', g: 'C', who: ['NV1'], t: 'Nhận ca trên Dashboard', pre: 'C1',
-      steps: ['Mở Dashboard, dòng "Lịch trực [tên đội]" có nhãn "Chờ xác nhận", bấm "Phản hồi ngay".', 'Chọn nhận ca.'],
-      expect: 'Dòng chuyển sang "Đã nhận". TCS thấy NV1 đã nhận ca.' },
-    { id: 'C3', g: 'C', who: ['DT'], t: 'Báo bận qua email hoặc Telegram', pre: 'C1',
-      steps: ['Không mở ứng dụng. Trong email (hoặc tin Telegram) thông báo lịch trực, bấm nút báo bận.'],
-      expect: 'Trang xác nhận hiện ghi nhận. TCS thấy DT báo bận; bấm lại nút lần hai báo đã phản hồi trước đó.' },
-    { id: 'C4', g: 'C', who: ['TCS', 'MOI'], t: 'Thay người báo bận', pre: 'C3 và A2',
-      steps: ['TCS bấm "Tạo yêu cầu Thay thế", chọn ca [TẬP HUẤN], thay DT bằng MOI, làm hết các bước.', 'MOI xác nhận thay ca.'],
-      expect: 'MOI nhận thông báo điều động thay thế; sau khi MOI xác nhận, lịch hiện MOI trong ca.' },
-
-    { id: 'D1', g: 'D', who: ['TCS'], t: 'Kích hoạt sự kiện mới',
-      steps: ['Vào "Kích hoạt khẩn cấp", tick NV1, DT, MOI, bấm "KÍCH HOẠT (3)".', 'Chọn "Sự kiện Mới", tên "[TẬP HUẤN] Ổ dịch giả định", chọn địa điểm, bấm "Tiếp tục" rồi "XÁC NHẬN".'],
-      expect: 'Danh sách chọn chỉ có người cùng xã; không có ô chọn xã. Báo kích hoạt thành công. Nhóm Telegram chung có tin kích hoạt; 3 người nhận thông báo qua ứng dụng và email.' },
-    { id: 'D2', g: 'D', who: ['NV1'], t: 'Xác nhận trong ứng dụng', pre: 'D1',
-      steps: ['Vào "Theo dõi sự kiện", mở sự kiện [TẬP HUẤN].', 'Thanh vàng "YÊU CẦU TỪ HỆ THỐNG" hiện ra, bấm "XÁC NHẬN".'],
-      expect: 'Thanh vàng biến mất; NV1 được tính là đã xác nhận.' },
-    { id: 'D3', g: 'D', who: ['DT'], t: 'Xác nhận qua Telegram', pre: 'D1',
-      steps: ['Trong tin nhắn riêng của bot, bấm "TÔI XÁC NHẬN".'],
-      expect: 'Tin nhắn cập nhật "ĐÃ XÁC NHẬN"; nhóm Telegram chung có tin cập nhật; trong ứng dụng DT được tính là đã xác nhận.' },
-    { id: 'D4', g: 'D', who: ['MOI'], t: 'Báo không tham gia qua email', pre: 'D1',
-      steps: ['Trong email kích hoạt, bấm "Báo không thể tham gia".'],
-      expect: 'Trang xác nhận hiện ghi nhận; MOI không còn thấy sự kiện trong "Theo dõi sự kiện".',
-      known: 'Ghi nhận đúng nhưng trang kết quả hiện nhãn "LỖI HỆ THỐNG" gây hiểu lầm. Đã sửa: giờ hiện "ĐÃ GHI NHẬN".' },
-    { id: 'D5', g: 'D', who: ['TCS'], t: 'Theo dõi phản hồi và bổ sung người', pre: 'D2 đến D4',
-      steps: ['Mở sự kiện, xem thẻ "Thống kê Phản hồi".', 'Vào "Kích hoạt khẩn cấp", chọn "Bổ sung nhân sự" cho sự kiện này.'],
-      expect: 'Thống kê: 2 xác nhận, 1 không tham gia. Khi bổ sung nhân sự, hệ thống cảnh báo sự kiện có người báo không tham gia.' },
-    { id: 'D6', g: 'D', who: ['HCDC', 'NV2'], t: 'HCDC bổ sung người ngoài xã', pre: 'D1',
-      steps: ['HCDC vào "Kích hoạt khẩn cấp", chọn NV2, "Bổ sung nhân sự" vào sự kiện [TẬP HUẤN].', 'NV2 xác nhận trong ứng dụng.'],
-      expect: 'HCDC chọn được người ngoài xã; NV2 nhận thông báo và giờ thấy sự kiện.',
-      known: 'Đạt, kèm hai lỗi, đều đã sửa: (1) danh sách thành viên chỉ hiện email và chữ "Thành viên" với người ngoài xã: nay hiện họ tên, vị trí, nền cam và nhãn "Hỗ trợ · HCDC" (hoặc tên phường/xã); (2) trang Theo dõi sự kiện không hiện ngay sự kiện phường vừa tạo, có lúc mất sự kiện đã đóng: nay mỗi lần mở trang đều tải lại.' },
-
-    { id: 'E1', g: 'E', who: ['NV1'], t: 'Nhật ký, tin nhắn, đính kèm', pre: 'D2',
-      steps: ['Trong sự kiện, gửi một tin nhắn, đính kèm một ảnh nhỏ.'],
-      expect: 'Tin nhắn và file hiện cho các thành viên sự kiện khác (TCS, DT) thấy.',
-      known: 'Đạt. Đề nghị hiện tên người gửi thay cho email/"Thành viên": đã sửa, tin nhắn hiện họ tên người gửi.' },
-    { id: 'E2', g: 'E', who: ['NV1'], t: 'Phương án chỉ xem',
-      steps: ['Trong sự kiện, bấm "Phương án (IAP)".'],
-      expect: 'Mở ở chế độ chỉ xem, không có nút "LƯU IAP". Không có nút "Lập báo cáo".',
-      known: 'Nhân viên không thấy nút "Phương án (IAP)" (lỗi webapp, trái hướng dẫn). Đã sửa: nhân viên thấy nút và mở ở chế độ chỉ xem. Làm lại ở buổi sau.' },
-    { id: 'E3', g: 'E', who: ['DT'], t: 'Đội trưởng lập báo cáo tình hình', pre: 'B4 và D3',
-      steps: ['Trong sự kiện, bấm "Lập báo cáo", nhập số liệu giả định, gửi.'],
-      expect: 'Gửi được báo cáo. Không sửa hay xóa được báo cáo đã gửi.',
-      known: 'Thấy và dùng được nút "Lập báo cáo". Không thấy nút IAP: cùng lỗi với E2, đã sửa.' },
-    { id: 'E4', g: 'E', who: ['TCS'], t: 'Tuyến cơ sở lập phương án',
-      steps: ['Trong sự kiện, bấm "Phương án (IAP)", thêm một mục tiêu, bấm "LƯU IAP".'],
-      expect: 'Lưu được; NV1 mở lại thấy nội dung mới (chỉ xem).',
-      known: 'Lưu được, nhưng NV1 và DT không mở được IAP để xem: cùng lỗi với E2, đã sửa.' },
-    { id: 'E5', g: 'E', who: ['TCS'], t: 'Yêu cầu hỗ trợ SOS',
-      steps: ['Trong sự kiện, bấm "Yêu cầu hỗ trợ SOS", chọn "Vật tư", ghi "[TẬP HUẤN]", "XÁC NHẬN".'],
-      expect: 'Yêu cầu hiện trong nhật ký sự kiện; HCDC thấy yêu cầu.' },
-    { id: 'E6', g: 'E', who: ['TCS'], t: 'Thay quân một người',
-      steps: ['Trong sự kiện, bấm cụm nút thay quân "Người", thay NV1 bằng một người khác trong xã.'],
-      expect: 'Chỉ chọn được người cùng xã; người mới nhận thông báo điều động.',
-      known: 'Đạt, nhưng mục biến động nhân sự chưa ghi nhận lần thay quân. Đã sửa: thay quân giờ ghi lịch sử ngay trong database ("🔄 Thay thế: người cũ → người mới", kèm ai thực hiện: HCDC hay tuyến cơ sở).' },
-
-    { id: 'F0', g: 'F', who: ['HCDC'], t: 'Tạo PXN thử',
-      steps: ['Vào "Phòng Xét nghiệm", "Thêm Phòng Xét nghiệm", tên "[TẬP HUẤN] PXN thử", email đầu mối là email của người đóng vai PXN, vị trí gần xã tập dượt.', 'Bấm "Quản lý năng lực", khai một kỹ thuật và công suất.'],
-      expect: 'PXN thử xuất hiện trong danh sách và trên Bản đồ.',
-      known: 'Nhóm F (F0–F3) và G3 chưa làm ở buổi 01/10. Ưu tiên làm ở buổi sau.' },
-    { id: 'F1', g: 'F', who: ['TCS'], t: 'Đề xuất PXN cho HCDC', pre: 'F0 và D1',
-      steps: ['Trong sự kiện, bấm "Xét nghiệm", chọn kỹ thuật đã khai ở F0, bấm "Tìm Phòng xét nghiệm phù hợp".', 'Trên thẻ PXN thử, bấm "Đề xuất lên điều phối".'],
-      expect: 'Thẻ chuyển "Đã đề xuất"; HCDC nhận thông báo "[Điều phối Phòng Xét nghiệm]". TCS không có nút gửi yêu cầu hay chốt điều phối.' },
-    { id: 'F2', g: 'F', who: ['HCDC', 'PXN'], t: 'Gửi yêu cầu và chốt điều phối', pre: 'F1',
-      steps: ['HCDC mở công cụ Xét nghiệm của sự kiện, trên thẻ PXN thử bấm "Gửi".', 'Người đóng vai PXN mở email yêu cầu, bấm nhận mẫu.', 'HCDC bấm "Chốt điều phối (Đủ mẫu)" và xác nhận.'],
-      expect: 'Thẻ tự đổi từ "Đang chờ PXN..." sang cho phép chốt (nếu không tự đổi, đóng rồi mở lại hộp thoại). Sau khi chốt, thành viên sự kiện nhận thông báo kết quả điều phối.' },
-    { id: 'F3', g: 'F', who: ['NV1'], t: 'Nhân viên không điều phối mẫu',
-      steps: ['Mở sự kiện, tìm nút "Xét nghiệm"; mở "Bản đồ", tìm nút "Tìm Phòng Xét nghiệm".'],
-      expect: 'Không có hai nút này.' },
-
-    { id: 'G1', g: 'G', who: ['TCS'], t: 'Đánh giá và đóng sự kiện',
-      steps: ['Trong sự kiện, bấm "Đánh giá (AAR)", thử "Tự động tổng hợp", rồi "LƯU & ĐÓNG SỰ KIỆN".'],
-      expect: 'Sự kiện chuyển "Đã kết thúc"; thành viên nhận thông báo kết thúc; trên Bản đồ marker sự kiện chuyển màu xám.',
-      known: 'Không thấy "LƯU & ĐÓNG SỰ KIỆN". Hai nguyên nhân, đều đã sửa: (1) hộp thoại AAR bị lệch, tràn mép phải nên nút bị cắt trên laptop và điện thoại; (2) nút "Đánh giá (AAR)" chỉ hiện cho HCDC, trái hướng dẫn, nay tuyến cơ sở của xã/phường sự kiện cũng thấy; (3) hộp thoại AAR khóa chế độ chỉ xem với mọi người không phải HCDC nên ẩn nút lưu, nay tuyến cơ sở lưu và đóng được sự kiện của xã/phường mình. Nếu sự kiện đã đóng, nút đổi thành "Xem kết quả AAR" và không có nút lưu.' },
-    { id: 'G2', g: 'G', who: ['TCS'], t: 'Tuyến cơ sở không xóa được sự kiện',
-      steps: ['Tìm thao tác xóa sự kiện [TẬP HUẤN].'],
-      expect: 'Không xóa được (chỉ HCDC xóa).' },
-    { id: 'G3', g: 'G', who: ['HCDC', 'GHI'], t: 'Dọn dữ liệu tập dượt',
-      steps: ['Xóa sự kiện [TẬP HUẤN], ca trực [TẬP HUẤN], PXN thử.', 'Khôi phục đơn vị, đội, vị trí của người đóng vai DT.'],
-      expect: 'Không còn dữ liệu [TẬP HUẤN] trên Lịch trực, Theo dõi sự kiện, Bản đồ, Phòng Xét nghiệm.' }
+    { id: '3-1', g: '3', who: ['HCDC'], t: 'HCDC bổ sung nhân sự HCDC vào sự kiện Trạm Y tế', pre: '2.3',
+      steps: ['HCDC vào "Kích hoạt khẩn cấp", tick HCDC-NV, bấm "KÍCH HOẠT".', 'Chọn "Bổ sung nhân sự", chọn "TEST – Sự kiện Xuân Thới Sơn", bấm "Tiếp tục" rồi "XÁC NHẬN".'],
+      expect: 'HCDC chọn được người ngoài xã. Không tạo sự kiện mới: HCDC-NV được thêm vào đúng sự kiện Xuân Thới Sơn và nhận thông báo.' },
+    { id: '3-2', g: '3', who: ['XTS-QT', 'HCDC'], t: 'Danh sách lực lượng sau khi HCDC bổ sung', pre: '3.1',
+      steps: ['XTS-QT và HCDC xem khung "Nhân sự Điều động" của sự kiện (không bấm Refresh).'],
+      expect: 'HCDC-NV tự xuất hiện, nền cam, nhãn "Hỗ trợ · HCDC", có họ tên và vị trí; nhân sự Trạm Y tế hiện bình thường; không trùng, không mất người.' },
+    { id: '3-3', g: '3', who: ['HCDC-NV', 'HCDC', 'XTS-QT'], t: 'Nhân sự HCDC phản hồi tham gia', pre: '3.1',
+      steps: ['HCDC-NV xác nhận tham gia (ứng dụng, email hoặc Telegram).', 'HCDC và XTS-QT xem "Thống kê Phản hồi" và nút "Thống kê theo đội".'],
+      expect: 'Phản hồi gắn đúng sự kiện Xuân Thới Sơn; trạng thái HCDC-NV thành "Xác nhận", số lượng cập nhật tự động trên cả hai màn hình; thống kê theo đội có HCDC-NV.' },
+    { id: '3-4', g: '3', who: ['HCDC-NV'], t: 'Nhân sự HCDC mở hồ sơ sự kiện', pre: '3.1',
+      steps: ['HCDC-NV mở thông báo, vào "Theo dõi sự kiện", mở "TEST – Sự kiện Xuân Thới Sơn": xem nhật ký, nhắn tin, mở "Phương án (IAP)".'],
+      expect: 'Thấy thông tin cần thiết: địa điểm, nhân sự, nhật ký; nhắn tin được (tin hiện họ tên); IAP chỉ xem; không có nút thay quân, AAR.' },
+    { id: '3-5', g: '3', who: ['HCDC-NV', 'XTS-QT', 'HM-QT', 'HM-DT'], t: 'Phạm vi truy cập sau khi bổ sung', pre: '3.1',
+      steps: ['HCDC-NV xem danh sách sự kiện của mình.', 'XTS-QT vào "Thành viên" tìm HCDC-NV.', 'HM-QT, HM-DT tìm sự kiện Xuân Thới Sơn.'],
+      expect: 'HCDC-NV chỉ thấy sự kiện được giao. XTS-QT thấy họ tên, vị trí HCDC-NV trong sự kiện nhưng trang "Thành viên" không có HCDC-NV (không mở rộng quyền xem nhân sự HCDC). Hóc Môn không thấy sự kiện Xuân Thới Sơn.' },
+    { id: '3-6', g: '3', who: ['XTS-QT', 'HCDC-NV', 'HCDC', 'XTS-DT'], t: 'IAP, báo cáo, trao đổi trong cùng sự kiện', pre: '3.1',
+      steps: ['XTS-QT cập nhật IAP, bấm "LƯU IAP". HCDC mở lại IAP, sửa thêm một dòng và lưu.', 'XTS-DT bấm "Lập báo cáo" gửi báo cáo. HCDC-NV tìm nút "Lập báo cáo".', 'Mỗi người gửi một tin nhắn.'],
+      expect: 'XTS-QT và HCDC sửa được IAP, nội dung lưu chung. XTS-DT (Đội trưởng) lập báo cáo được; HCDC-NV không có nút "Lập báo cáo" và IAP chỉ xem. Tin nhắn, báo cáo hiện ngay trên màn hình mọi người đang mở hồ sơ.' },
+    { id: '3-7', g: '3', who: ['HCDC', 'HCDC-NV', 'HM-QT'], t: 'Một người được điều động vào hai sự kiện', pre: '3.3 và 2.5',
+      steps: ['HCDC vào "Kích hoạt khẩn cấp", tick HCDC-NV, "Bổ sung nhân sự" vào "TEST – Sự kiện Hóc Môn", bấm "Tiếp tục".', 'Đọc màn hình duyệt (cảnh báo), rồi vẫn "XÁC NHẬN".', 'HCDC-NV phản hồi thông báo của sự kiện Hóc Môn; HM-QT xem danh sách nhân sự.'],
+      expect: 'Màn hình duyệt ghi "Đang tham gia: TEST – Sự kiện Xuân Thới Sơn" và cảnh báo. Nếu vẫn xác nhận: HCDC-NV nhận thông báo riêng của sự kiện Hóc Môn; phản hồi gắn đúng từng sự kiện; HM-QT thấy HCDC-NV nhãn "Hỗ trợ · HCDC".' },
+    { id: '3-8', g: '3', who: ['XTS-QT', 'HM-QT', 'HCDC'], t: 'Kết thúc (ngừng kích hoạt) các sự kiện', pre: '3.1 đến 3.7',
+      steps: ['XTS-QT mở sự kiện Xuân Thới Sơn, bấm "Đánh giá (AAR)", thử "Tự động tổng hợp", chọn "Đóng sự cố này (Hoàn tất)", bấm "LƯU & ĐÓNG SỰ KIỆN".', 'HM-QT làm tương tự với sự kiện Hóc Môn.', 'Mọi thành viên kiểm tra thông báo; HCDC xem màn hình Theo dõi sự kiện.'],
+      expect: 'Webapp không có nút "ngừng kích hoạt" riêng: đóng sự kiện là ngừng kích hoạt. Mọi thành viên nhận thông báo "Sự kiện … đã kết thúc" đúng tên sự kiện mình tham gia. Trạng thái "Đã kết thúc" hiện đồng bộ trên mọi màn hình; nhật ký, phản hồi, biến động nhân sự vẫn còn ("Xem kết quả AAR").' },
+    { id: '3-9', g: '3', who: ['HCDC', 'XTS-QT', 'HM-QT'], t: 'Dọn dữ liệu diễn tập', pre: '3.8',
+      steps: ['XTS-QT mở hồ sơ sự kiện TEST: tìm nút "Xóa sự kiện".', 'HCDC mở từng sự kiện TEST, bấm "Xóa sự kiện", gõ đúng tên sự kiện để xác nhận.', 'XTS-QT, HM-QT xóa ca trực TEST của Trạm mình (Lịch trực → bấm vào ca → Xóa); HCDC kiểm tra lại Lịch trực.', 'Quản trị kỹ thuật khôi phục hồ sơ các vai.'],
+      expect: 'Chỉ HCDC có nút "Xóa sự kiện"; gõ sai tên thì không xóa. Sau khi xóa, sự kiện TEST biến mất khỏi Theo dõi sự kiện, Bản đồ trên mọi màn hình (kèm nhật ký, thông báo của sự kiện). Ca trực TEST được xóa bởi quản trị Trạm Y tế của ca. Sự kiện thật của Xuân Thới Sơn vẫn nguyên vẹn.' }
   ];
 
   var ROLEMAP = {}; ROLES.forEach(function (r) { ROLEMAP[r.key] = r; });
   var state = { results: {}, cast: {}, filter: 'ALL', onlyFail: false, canWrite: false, sb: null, myName: '', timer: null };
-  try { var saved = localStorage.getItem('tapduot-filter'); if (saved) state.filter = saved; } catch (e) {}
+  try { var saved = localStorage.getItem('rehearsal-filter'); if (saved) state.filter = saved; } catch (e) {}
 
   function $(id) { return document.getElementById(id); }
   function el(tag, attrs, text) {
@@ -382,7 +323,7 @@
     var box = $('rolefilters');
     [{ key: 'ALL', label: 'Tất cả' }].concat(ROLES.map(function (r) { return { key: r.key, label: r.key }; })).forEach(function (f) {
       var b = el('button', { 'class': 'chip', type: 'button', 'data-k': f.key, title: f.key === 'ALL' ? 'Tất cả vai' : ROLEMAP[f.key].name }, f.label);
-      b.addEventListener('click', function () { state.filter = f.key; try { localStorage.setItem('tapduot-filter', f.key); } catch (e) {} render(); });
+      b.addEventListener('click', function () { state.filter = f.key; try { localStorage.setItem('rehearsal-filter', f.key); } catch (e) {} render(); });
       box.appendChild(b);
     });
     $('onlyfail').addEventListener('click', function () { state.onlyFail = !state.onlyFail; render(); });
@@ -395,13 +336,13 @@
       CASES.filter(function (c) { return c.g === g.key; }).forEach(function (c) {
         var card = el('article', { 'class': 'case', id: 'c-' + c.id });
         var head = el('div', { 'class': 'head' });
-        head.appendChild(el('span', { 'class': 'cid' }, c.id)); head.appendChild(el('h3', null, c.t));
+        head.appendChild(el('span', { 'class': 'cid' }, c.id.replace('-', '.'))); head.appendChild(el('h3', null, c.t));
         var who = el('div', { 'class': 'who' }); c.who.forEach(function (k) { who.appendChild(el('span', { 'class': 'rolechip', title: ROLEMAP[k].name }, k)); }); head.appendChild(who);
         card.appendChild(head);
         if (c.pre) card.appendChild(el('p', { 'class': 'pre' }, 'Làm sau: ' + c.pre + '.'));
         var ol = el('ol'); c.steps.forEach(function (s) { ol.appendChild(el('li', null, s)); }); card.appendChild(ol);
         var ex = el('p', { 'class': 'expect' }); ex.appendChild(el('b', null, 'Kết quả mong đợi: ')); ex.appendChild(document.createTextNode(c.expect)); card.appendChild(ex);
-        if (c.known) { var kn = el('p', { 'class': 'known' }); kn.appendChild(el('b', null, 'Ghi nhận buổi tập dượt 01/10: ')); kn.appendChild(document.createTextNode(c.known)); card.appendChild(kn); }
+        if (c.known) { var kn = el('p', { 'class': 'known' }); kn.appendChild(el('b', null, 'Ghi chú: ')); kn.appendChild(document.createTextNode(c.known)); card.appendChild(kn); }
         var act = el('div', { 'class': 'actions' }), btns = {};
         [['pass', 'Đạt'], ['fail', 'Lỗi'], ['skip', 'Bỏ qua']].forEach(function (p) {
           var b = el('button', { 'class': 'st', type: 'button', 'data-v': p[0], 'aria-pressed': 'false' }, p[1]);

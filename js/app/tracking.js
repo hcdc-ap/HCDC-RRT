@@ -14,7 +14,10 @@ document.addEventListener('DOMContentLoaded', function () {
   //   Nguồn: created_at (SỚM NHẤT) của notification 'ket_thuc' theo incident_id.
   //   Query 1 LẦN cho các sự kiện closed đang hiển thị, rồi tra map khi render.
   // ============================================================================
-  window.renderTrackingPage = async function (forceFetch = false) {
+  // opts.silent (realtime / kiểm tra định kỳ): không hiện vòng tải, không vẽ lại
+  // nếu dữ liệu không đổi — tránh nháy màn hình khi HCDC đang theo dõi.
+  let lastIncidentsJson = null;
+  window.renderTrackingPage = async function (forceFetch = false, opts = {}) {
     const container = document.getElementById('event-grid-container');
     if (!container) return;
 
@@ -24,17 +27,24 @@ document.addEventListener('DOMContentLoaded', function () {
       !window.appState.trackingIncidents ||
       window.appState.trackingIncidents.length === 0
     ) {
-      container.innerHTML =
-        '<div class="text-center p-4"><span class="spinner-border text-primary"></span><p>Đang tải sự kiện...</p></div>';
+      if (!opts.silent)
+        container.innerHTML =
+          '<div class="text-center p-4"><span class="spinner-border text-primary"></span><p>Đang tải sự kiện...</p></div>';
       const { data, error } = await window.supabaseClient
         .from('incidents')
         .select('*')
         .order('created_at', { ascending: false });
       if (error) {
         console.error('Lỗi Supabase:', error);
-        container.innerHTML = `<p class="text-center text-danger">Lỗi tải dữ liệu: ${error.message}</p>`;
+        if (!opts.silent)
+          container.innerHTML = `<p class="text-center text-danger">Lỗi tải dữ liệu: ${window.escapeHtml(
+            error.message
+          )}</p>`;
         return;
       }
+      const json = JSON.stringify(data || []);
+      if (opts.silent && json === lastIncidentsJson && container.children.length) return;
+      lastIncidentsJson = json;
       window.appState.trackingIncidents = data || [];
     }
 
@@ -418,7 +428,39 @@ document.addEventListener('DOMContentLoaded', function () {
     // 4. Nút Điều phối (Chỉ Admin)
     const rotationControls = document.getElementById('admin-rotation-controls');
     if (rotationControls) {
-      rotationControls.style.display = isAdmin && !isClosed ? 'flex' : 'none';
+      // HCDC và tuyến cơ sở của phường/xã sự kiện (RPC rrt_replace_incident_member kiểm quyền)
+      rotationControls.style.display =
+        window.canManageIncident?.(inc) && !isClosed ? 'flex' : 'none';
+    }
+
+    // 5. Nút Xóa sự kiện — chỉ Quản trị RRT (HCDC); phải gõ đúng tên để xác nhận
+    // (RPC rrt_delete_incident kiểm quyền + tên, xóa kèm thông báo của sự kiện)
+    const btnDelete = document.getElementById('btn-delete-incident');
+    if (btnDelete) {
+      btnDelete.style.display = isAdmin ? 'inline-block' : 'none';
+      btnDelete.onclick = async function () {
+        const name = String(inc.event_name || '').trim();
+        const typed = window.prompt(
+          `XÓA VĨNH VIỄN sự kiện này cùng nhật ký, IAP, báo cáo, lịch sử điều động, thông báo.\n\n` +
+            `Gõ đúng tên sự kiện để xác nhận:\n${name}`
+        );
+        if (typed === null) return;
+        if (typed.trim() !== name) {
+          showToast('Tên không khớp — không xóa.', 'warning');
+          return;
+        }
+        const { data, error } = await window.supabaseClient.rpc('rrt_delete_incident', {
+          p_incident_id: inc.id,
+          p_confirm_name: typed.trim(),
+        });
+        if (error) {
+          showToast('Không xóa được: ' + error.message, 'error');
+          return;
+        }
+        showToast(`Đã xóa sự kiện "${data?.deleted || name}".`, 'success');
+        window.closeDossierView?.();
+        window.renderTrackingPage?.(true);
+      };
     }
 
     // --- ĐIỀN DANH SÁCH NHÂN SỰ ---
