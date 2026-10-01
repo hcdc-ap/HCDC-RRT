@@ -399,7 +399,8 @@ document.addEventListener('DOMContentLoaded', function () {
     // 3. Nút AAR (Màu xanh)
     const btnAar = document.getElementById('btn-open-aar-modal');
     if (btnAar) {
-      btnAar.style.display = isAdmin ? 'inline-block' : 'none';
+      // HCDC và tuyến cơ sở của phường/xã sự kiện (khớp RLS incidents_update)
+      btnAar.style.display = window.canManageIncident?.(inc) ? 'inline-block' : 'none';
 
       if (isClosed) {
         btnAar.innerHTML = "<i class='bx bx-check-double'></i> Xem kết quả AAR";

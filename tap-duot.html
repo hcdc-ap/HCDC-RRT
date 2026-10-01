@@ -91,6 +91,8 @@
   .expect { background: var(--surface-2); border-radius: 8px; padding: 10px 12px; font-size: 14px; }
   .expect b { color: var(--brand); }
   .pre { font-size: 13px; color: var(--muted); }
+  .known { background: var(--warn-soft); color: var(--warn-ink); border-radius: 8px; padding: 10px 12px; font-size: 14px; }
+  .known b { font-weight: 600; }
   .actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
   .st { font: inherit; font-size: 13px; font-weight: 600; border-radius: 8px; padding: 6px 14px; cursor: pointer; border: 1px solid var(--line); background: var(--surface); color: var(--ink); }
   .st[data-v="pass"][aria-pressed="true"] { background: var(--pass); border-color: var(--pass); color: #fff; }
@@ -232,7 +234,8 @@
       expect: 'Không tìm thấy NV2 ở cả hai trang (NV2 không thuộc xã tập dượt).' },
     { id: 'A4', g: 'A', who: ['NV1'], t: 'Quên mật khẩu (làm một lần)',
       steps: ['Đăng xuất, bấm "Quên mật khẩu?", nhập email, bấm "Gửi liên kết" một lần.', 'Mở email mới nhất (xem cả Spam), bấm liên kết, đặt mật khẩu mới.', 'Đăng nhập bằng mật khẩu mới; mở lại liên kết cũ trong email.'],
-      expect: 'Liên kết mở đúng trang RRT với form "Đặt lại mật khẩu"; đăng nhập được bằng mật khẩu mới; liên kết cũ báo đã hết hạn hoặc đã dùng.' },
+      expect: 'Liên kết mở đúng trang RRT với form "Đặt lại mật khẩu"; đăng nhập được bằng mật khẩu mới; liên kết cũ báo đã hết hạn hoặc đã dùng.',
+      known: 'Không nhận được email khôi phục, kể cả tài khoản quản trị. Nguyên nhân: hệ thống đang dùng máy chủ email mặc định, chỉ gửi được rất ít email mỗi giờ và chỉ tới một số địa chỉ. Cần cấu hình máy chủ email riêng (SMTP) trước đợt tập huấn; trước khi cấu hình xong, đánh dấu Bỏ qua.' },
     { id: 'A5', g: 'A', who: ['NV1'], t: 'Đổi mật khẩu trong ứng dụng',
       steps: ['Bấm ảnh hồ sơ góc phải → "Đổi mật khẩu", nhập mật khẩu cũ và mới, xác nhận.'],
       expect: 'Báo đổi thành công, tự đăng xuất sau vài giây; đăng nhập lại được bằng mật khẩu mới.' },
@@ -261,7 +264,8 @@
 
     { id: 'C1', g: 'C', who: ['TCS'], t: 'Tạo ca trực',
       steps: ['Vào "Lịch trực", chọn ngày mai, chọn đội của xã có NV1 và DT, ghi chú "[TẬP HUẤN]", bấm "XÁC NHẬN".'],
-      expect: 'Chỉ thấy các đội thuộc xã mình. Ca xuất hiện trên lịch; NV1 và DT nhận thông báo lịch trực qua ứng dụng, email (và Telegram nếu đã liên kết).' },
+      expect: 'Chỉ thấy các đội thuộc xã mình. Ca xuất hiện trên lịch; NV1 và DT nhận thông báo lịch trực qua ứng dụng, email (và Telegram nếu đã liên kết).',
+      known: 'Đạt. Góp ý: địa điểm do HCDC/tuyến cơ sở tự nhập; phân lịch trực theo đội rồi tới từng thành viên.' },
     { id: 'C2', g: 'C', who: ['NV1'], t: 'Nhận ca trên Dashboard', pre: 'C1',
       steps: ['Mở Dashboard, dòng "Lịch trực [tên đội]" có nhãn "Chờ xác nhận", bấm "Phản hồi ngay".', 'Chọn nhận ca.'],
       expect: 'Dòng chuyển sang "Đã nhận". TCS thấy NV1 đã nhận ca.' },
@@ -283,36 +287,44 @@
       expect: 'Tin nhắn cập nhật "ĐÃ XÁC NHẬN"; nhóm Telegram chung có tin cập nhật; trong ứng dụng DT được tính là đã xác nhận.' },
     { id: 'D4', g: 'D', who: ['MOI'], t: 'Báo không tham gia qua email', pre: 'D1',
       steps: ['Trong email kích hoạt, bấm "Báo không thể tham gia".'],
-      expect: 'Trang xác nhận hiện ghi nhận; MOI không còn thấy sự kiện trong "Theo dõi sự kiện".' },
+      expect: 'Trang xác nhận hiện ghi nhận; MOI không còn thấy sự kiện trong "Theo dõi sự kiện".',
+      known: 'Ghi nhận đúng nhưng trang kết quả hiện nhãn "LỖI HỆ THỐNG" gây hiểu lầm. Đã sửa: giờ hiện "ĐÃ GHI NHẬN".' },
     { id: 'D5', g: 'D', who: ['TCS'], t: 'Theo dõi phản hồi và bổ sung người', pre: 'D2 đến D4',
       steps: ['Mở sự kiện, xem thẻ "Thống kê Phản hồi".', 'Vào "Kích hoạt khẩn cấp", chọn "Bổ sung nhân sự" cho sự kiện này.'],
       expect: 'Thống kê: 2 xác nhận, 1 không tham gia. Khi bổ sung nhân sự, hệ thống cảnh báo sự kiện có người báo không tham gia.' },
     { id: 'D6', g: 'D', who: ['HCDC', 'NV2'], t: 'HCDC bổ sung người ngoài xã', pre: 'D1',
       steps: ['HCDC vào "Kích hoạt khẩn cấp", chọn NV2, "Bổ sung nhân sự" vào sự kiện [TẬP HUẤN].', 'NV2 xác nhận trong ứng dụng.'],
-      expect: 'HCDC chọn được người ngoài xã; NV2 nhận thông báo và giờ thấy sự kiện.' },
+      expect: 'HCDC chọn được người ngoài xã; NV2 nhận thông báo và giờ thấy sự kiện.',
+      known: 'Đạt, nhưng hồ sơ sự kiện tải chậm, có lúc mất hồ sơ sự kiện cũ; danh sách thành viên không hiện tên người ngoài xã (đề nghị hiện dấu HCDC và vị trí). Chưa sửa, đã đưa vào danh sách cải tiến.' },
 
     { id: 'E1', g: 'E', who: ['NV1'], t: 'Nhật ký, tin nhắn, đính kèm', pre: 'D2',
       steps: ['Trong sự kiện, gửi một tin nhắn, đính kèm một ảnh nhỏ.'],
-      expect: 'Tin nhắn và file hiện cho các thành viên sự kiện khác (TCS, DT) thấy.' },
+      expect: 'Tin nhắn và file hiện cho các thành viên sự kiện khác (TCS, DT) thấy.',
+      known: 'Đạt. Đề nghị hiện tên người gửi thay cho chữ "Thành viên". Chưa sửa, đã đưa vào danh sách cải tiến.' },
     { id: 'E2', g: 'E', who: ['NV1'], t: 'Phương án chỉ xem',
       steps: ['Trong sự kiện, bấm "Phương án (IAP)".'],
-      expect: 'Mở ở chế độ chỉ xem, không có nút "LƯU IAP". Không có nút "Lập báo cáo".' },
+      expect: 'Mở ở chế độ chỉ xem, không có nút "LƯU IAP". Không có nút "Lập báo cáo".',
+      known: 'Nhân viên không thấy nút "Phương án (IAP)" (lỗi webapp, trái hướng dẫn). Đã sửa: nhân viên thấy nút và mở ở chế độ chỉ xem. Làm lại ở buổi sau.' },
     { id: 'E3', g: 'E', who: ['DT'], t: 'Đội trưởng lập báo cáo tình hình', pre: 'B4 và D3',
       steps: ['Trong sự kiện, bấm "Lập báo cáo", nhập số liệu giả định, gửi.'],
-      expect: 'Gửi được báo cáo. Không sửa hay xóa được báo cáo đã gửi.' },
+      expect: 'Gửi được báo cáo. Không sửa hay xóa được báo cáo đã gửi.',
+      known: 'Thấy và dùng được nút "Lập báo cáo". Không thấy nút IAP: cùng lỗi với E2, đã sửa.' },
     { id: 'E4', g: 'E', who: ['TCS'], t: 'Tuyến cơ sở lập phương án',
       steps: ['Trong sự kiện, bấm "Phương án (IAP)", thêm một mục tiêu, bấm "LƯU IAP".'],
-      expect: 'Lưu được; NV1 mở lại thấy nội dung mới (chỉ xem).' },
+      expect: 'Lưu được; NV1 mở lại thấy nội dung mới (chỉ xem).',
+      known: 'Lưu được, nhưng NV1 và DT không mở được IAP để xem: cùng lỗi với E2, đã sửa.' },
     { id: 'E5', g: 'E', who: ['TCS'], t: 'Yêu cầu hỗ trợ SOS',
       steps: ['Trong sự kiện, bấm "Yêu cầu hỗ trợ SOS", chọn "Vật tư", ghi "[TẬP HUẤN]", "XÁC NHẬN".'],
       expect: 'Yêu cầu hiện trong nhật ký sự kiện; HCDC thấy yêu cầu.' },
     { id: 'E6', g: 'E', who: ['TCS'], t: 'Thay quân một người',
       steps: ['Trong sự kiện, bấm cụm nút thay quân "Người", thay NV1 bằng một người khác trong xã.'],
-      expect: 'Chỉ chọn được người cùng xã; người mới nhận thông báo điều động.' },
+      expect: 'Chỉ chọn được người cùng xã; người mới nhận thông báo điều động.',
+      known: 'Đạt, nhưng mục biến động nhân sự chưa ghi nhận lần thay quân do HCDC thực hiện. Chưa sửa, đã đưa vào danh sách cải tiến.' },
 
     { id: 'F0', g: 'F', who: ['HCDC'], t: 'Tạo PXN thử',
       steps: ['Vào "Phòng Xét nghiệm", "Thêm Phòng Xét nghiệm", tên "[TẬP HUẤN] PXN thử", email đầu mối là email của người đóng vai PXN, vị trí gần xã tập dượt.', 'Bấm "Quản lý năng lực", khai một kỹ thuật và công suất.'],
-      expect: 'PXN thử xuất hiện trong danh sách và trên Bản đồ.' },
+      expect: 'PXN thử xuất hiện trong danh sách và trên Bản đồ.',
+      known: 'Nhóm F (F0–F3) và G3 chưa làm ở buổi 01/10. Ưu tiên làm ở buổi sau.' },
     { id: 'F1', g: 'F', who: ['TCS'], t: 'Đề xuất PXN cho HCDC', pre: 'F0 và D1',
       steps: ['Trong sự kiện, bấm "Xét nghiệm", chọn kỹ thuật đã khai ở F0, bấm "Tìm Phòng xét nghiệm phù hợp".', 'Trên thẻ PXN thử, bấm "Đề xuất lên điều phối".'],
       expect: 'Thẻ chuyển "Đã đề xuất"; HCDC nhận thông báo "[Điều phối Phòng Xét nghiệm]". TCS không có nút gửi yêu cầu hay chốt điều phối.' },
@@ -325,7 +337,8 @@
 
     { id: 'G1', g: 'G', who: ['TCS'], t: 'Đánh giá và đóng sự kiện',
       steps: ['Trong sự kiện, bấm "Đánh giá (AAR)", thử "Tự động tổng hợp", rồi "LƯU & ĐÓNG SỰ KIỆN".'],
-      expect: 'Sự kiện chuyển "Đã kết thúc"; thành viên nhận thông báo kết thúc; trên Bản đồ marker sự kiện chuyển màu xám.' },
+      expect: 'Sự kiện chuyển "Đã kết thúc"; thành viên nhận thông báo kết thúc; trên Bản đồ marker sự kiện chuyển màu xám.',
+      known: 'Không thấy "LƯU & ĐÓNG SỰ KIỆN". Hai nguyên nhân, đều đã sửa: (1) hộp thoại AAR bị lệch, tràn mép phải nên nút bị cắt trên laptop và điện thoại; (2) nút "Đánh giá (AAR)" chỉ hiện cho HCDC, trái hướng dẫn, nay tuyến cơ sở của xã/phường sự kiện cũng thấy. Nếu sự kiện đã đóng, nút đổi thành "Xem kết quả AAR" và không có nút lưu.' },
     { id: 'G2', g: 'G', who: ['TCS'], t: 'Tuyến cơ sở không xóa được sự kiện',
       steps: ['Tìm thao tác xóa sự kiện [TẬP HUẤN].'],
       expect: 'Không xóa được (chỉ HCDC xóa).' },
@@ -388,6 +401,7 @@
         if (c.pre) card.appendChild(el('p', { 'class': 'pre' }, 'Làm sau: ' + c.pre + '.'));
         var ol = el('ol'); c.steps.forEach(function (s) { ol.appendChild(el('li', null, s)); }); card.appendChild(ol);
         var ex = el('p', { 'class': 'expect' }); ex.appendChild(el('b', null, 'Kết quả mong đợi: ')); ex.appendChild(document.createTextNode(c.expect)); card.appendChild(ex);
+        if (c.known) { var kn = el('p', { 'class': 'known' }); kn.appendChild(el('b', null, 'Ghi nhận buổi tập dượt 01/10: ')); kn.appendChild(document.createTextNode(c.known)); card.appendChild(kn); }
         var act = el('div', { 'class': 'actions' }), btns = {};
         [['pass', 'Đạt'], ['fail', 'Lỗi'], ['skip', 'Bỏ qua']].forEach(function (p) {
           var b = el('button', { 'class': 'st', type: 'button', 'data-v': p[0], 'aria-pressed': 'false' }, p[1]);

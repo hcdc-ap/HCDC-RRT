@@ -98,3 +98,13 @@ test("lab_dispatch_log: không select('*') / .select() — cột action_token b�
     }
   }
 });
+
+test('trang kết quả email/PXN: không gán thẳng tham số URL vào innerHTML', () => {
+  // response.html / lab-result.html cùng origin với webapp (chung phiên đăng nhập
+  // trong localStorage) — link giả mạo ?msg=<img onerror=...> sẽ chiếm được phiên.
+  for (const page of ['response.html', 'lab-result.html']) {
+    const src = fs.readFileSync(path.join(ROOT, page), 'utf8');
+    assert.doesNotMatch(src, /innerHTML\s*=\s*msgText/, `${page}: innerHTML = msgText`);
+    assert.match(src, /innerHTML\s*=\s*safeMsg\(msgText\)/, `${page}: thiếu safeMsg()`);
+  }
+});

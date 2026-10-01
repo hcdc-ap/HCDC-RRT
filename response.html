@@ -41,16 +41,35 @@
     // Tự động bắt thông số từ thanh địa chỉ để hiển thị
     document.addEventListener("DOMContentLoaded", () => {
       const params = new URLSearchParams(window.location.search);
-      const isSuccess = params.get('status') === 'true';
+      const status = params.get('status');
+      const isSuccess = status === 'true';
       const msgText = params.get('msg') || "Không có thông báo.";
       
       const iconEl = document.getElementById('icon');
       const badgeEl = document.getElementById('badge');
       const msgEl = document.getElementById('msg');
 
-      msgEl.innerHTML = msgText;
+      // Nội dung lấy từ URL: chỉ hiện chữ, cho phép lại thẻ <b> và <br> (máy chủ dùng để in đậm).
+      // Không gán thẳng innerHTML — link giả mạo có thể chèn mã chạy trên trang này.
+      function safeMsg(t) {
+        return String(t)
+          .replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c])
+          .replace(/&lt;(\/?)b&gt;/g, '<$1b>')
+          .replace(/&lt;br\s*\/?&gt;/g, '<br>');
+      }
+      msgEl.innerHTML = safeMsg(msgText);
 
-      if (isSuccess) {
+      // Báo không thể tham gia là phản hồi hợp lệ, không phải lỗi (máy chủ gửi status=false cho trường hợp này).
+      const isDeclined =
+        status === 'declined' || (status === 'false' && /^Đã ghi nhận bạn không thể tham gia/.test(msgText));
+
+      if (isDeclined) {
+        iconEl.textContent = "📝";
+        badgeEl.textContent = "ĐÃ GHI NHẬN";
+        badgeEl.style.background = "#fef3c7";
+        badgeEl.style.color = "#b45309";
+        msgEl.style.borderLeftColor = "#f59e0b";
+      } else if (isSuccess) {
         iconEl.innerHTML = "✅";
         badgeEl.innerHTML = "THÀNH CÔNG";
         badgeEl.style.background = "#dcfce7";

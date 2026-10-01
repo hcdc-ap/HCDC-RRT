@@ -1039,7 +1039,6 @@ window.applyRolePermissions = function (role) {
     'btn-map-find-lab',
     'btn-export-logistics',
     'btn-delete-roster',
-    'btn-open-plan-modal',
     'btn-open-aar-modal',
     'btn-auto-trigger',
   ];
