@@ -338,7 +338,7 @@
     { id: 'G1', g: 'G', who: ['TCS'], t: 'Đánh giá và đóng sự kiện',
       steps: ['Trong sự kiện, bấm "Đánh giá (AAR)", thử "Tự động tổng hợp", rồi "LƯU & ĐÓNG SỰ KIỆN".'],
       expect: 'Sự kiện chuyển "Đã kết thúc"; thành viên nhận thông báo kết thúc; trên Bản đồ marker sự kiện chuyển màu xám.',
-      known: 'Không thấy "LƯU & ĐÓNG SỰ KIỆN". Hai nguyên nhân, đều đã sửa: (1) hộp thoại AAR bị lệch, tràn mép phải nên nút bị cắt trên laptop và điện thoại; (2) nút "Đánh giá (AAR)" chỉ hiện cho HCDC, trái hướng dẫn, nay tuyến cơ sở của xã/phường sự kiện cũng thấy. Nếu sự kiện đã đóng, nút đổi thành "Xem kết quả AAR" và không có nút lưu.' },
+      known: 'Không thấy "LƯU & ĐÓNG SỰ KIỆN". Hai nguyên nhân, đều đã sửa: (1) hộp thoại AAR bị lệch, tràn mép phải nên nút bị cắt trên laptop và điện thoại; (2) nút "Đánh giá (AAR)" chỉ hiện cho HCDC, trái hướng dẫn, nay tuyến cơ sở của xã/phường sự kiện cũng thấy; (3) hộp thoại AAR khóa chế độ chỉ xem với mọi người không phải HCDC nên ẩn nút lưu, nay tuyến cơ sở lưu và đóng được sự kiện của xã/phường mình. Nếu sự kiện đã đóng, nút đổi thành "Xem kết quả AAR" và không có nút lưu.' },
     { id: 'G2', g: 'G', who: ['TCS'], t: 'Tuyến cơ sở không xóa được sự kiện',
       steps: ['Tìm thao tác xóa sự kiện [TẬP HUẤN].'],
       expect: 'Không xóa được (chỉ HCDC xóa).' },

@@ -820,6 +820,17 @@ document.addEventListener('DOMContentLoaded', function () {
           showToast('Vui lòng nhập chi tiết sự kiện!', 'warning');
           return;
         }
+        // Sự kiện HCDC tạo chỉ hiện cho tuyến cơ sở khi có mã phường/xã (RLS incidents:
+        // ma_xa = phường/xã của tuyến cơ sở). Mã lấy từ vị trí chọn trên bản đồ.
+        const creatorRole = (window.userSession?.role || '').toLowerCase();
+        if (!ward && creatorRole !== 'ward_admin') {
+          const goOn = window.confirm(
+            'Chưa xác định được phường/xã của địa điểm (chưa định vị trên bản đồ).\n\n' +
+              'Tuyến cơ sở sẽ KHÔNG thấy sự kiện này, chỉ người được điều động mới thấy.\n\n' +
+              'Bấm Hủy để chọn lại địa điểm, hoặc OK để vẫn tạo.'
+          );
+          if (!goOn) return;
+        }
       } else {
         incidentId = $('#existingIncidentSelect').val();
         if (!incidentId) {
