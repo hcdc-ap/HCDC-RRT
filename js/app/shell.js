@@ -97,7 +97,7 @@ document.addEventListener('DOMContentLoaded', function () {
               notification_type: 'ket_thuc',
               message: `Sự kiện "${
                 currentIncident.event_name || 'Nhiệm vụ'
-              }" đã được Giám đốc đóng lại. Đội RRT kết thúc nhiệm vụ tại hiện trường.`,
+              }" đã kết thúc (đóng sự kiện sau đánh giá AAR). Đội RRT kết thúc nhiệm vụ tại hiện trường.`,
             }));
             const { error: notifErr } = await supabaseClient
               .from('notifications')

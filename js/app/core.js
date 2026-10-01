@@ -441,88 +441,185 @@ function refreshDashboardIfVisible() {
 }
 
 window.RealtimeManager = {
-  subscriptions: {
-    incidents: null,
-    rosterAssignments: null,
+  channel: null,
+  pollTimer: null,
+  isActive: false,
+  _timers: {},
+  _rosterSig: null,
+  POLL_MS: 20000,
+
+  // Gộp nhiều sự kiện realtime liên tiếp (vd. 5 thông báo cùng lúc) thành 1 lần làm mới
+  debounce(key, fn, ms = 400) {
+    clearTimeout(this._timers[key]);
+    this._timers[key] = setTimeout(() => {
+      Promise.resolve()
+        .then(fn)
+        .catch((e) => console.warn('[realtime] làm mới lỗi:', key, e));
+    }, ms);
   },
 
-  isActive: false,
+  // Phần tử đang hiện trên màn hình (trang/khung có thể bị ẩn bằng display:none ở cha)
+  isShown(id) {
+    const el = document.getElementById(id);
+    return !!el && el.getClientRects().length > 0;
+  },
+
+  // Hồ sơ sự kiện đang mở (đúng incidentId nếu truyền vào)
+  dossierOpenFor(incidentId) {
+    const cur = window.currentDossierId;
+    if (!cur || !this.isShown('tracking-view-dossier')) return null;
+    if (incidentId && String(incidentId) !== String(cur)) return null;
+    return cur;
+  },
 
   start() {
     if (!window.userSession || this.isActive) {
       console.log('ℹ️ Realtime sync skipped - no session or already active');
       return;
     }
-
     console.log('🟢 Starting Supabase Realtime sync...');
     this.isActive = true;
 
-    // 1. Subscribe to Incidents table
-    if (!this.subscriptions.incidents) {
-      this.subscriptions.incidents = window.supabaseClient
-        .channel('public:incidents')
-        .on(
-          'postgres_changes',
-          { event: '*', schema: 'public', table: 'incidents' },
-          (payload) => {
-            console.log('⚡ Realtime: Incidents updated', payload);
-            window.QueryCache?.invalidate('incidents');
-            refreshDashboardIfVisible();
-            // Refresh trang "Theo dõi sự kiện" nếu đang mở — forceFetch=true vì
-            // renderTrackingPage() mặc định chỉ tải lại khi appState.trackingIncidents
-            // rỗng, nên nếu không ép tải lại, sự kiện mới kích hoạt/vừa đóng sẽ
-            // không hiện ra cho tới khi người dùng F5 lại trang.
-            if (
-              document.getElementById('page-tracking')?.style.display !==
-                'none' &&
-              typeof window.renderTrackingPage === 'function'
-            ) {
-              window.renderTrackingPage(true);
-            }
-          }
-        )
-        .subscribe();
-    }
+    const ch = window.supabaseClient.channel('rrt-live');
+    const on = (table, handler, event = '*') =>
+      ch.on('postgres_changes', { event, schema: 'public', table }, handler);
+    const incOf = (p) => p?.new?.incident_id || p?.old?.incident_id;
 
-    // 2. Subscribe to Roster Assignments table
-    if (!this.subscriptions.rosterAssignments) {
-      this.subscriptions.rosterAssignments = window.supabaseClient
-        .channel('public:roster_assignments')
-        .on(
-          'postgres_changes',
-          { event: '*', schema: 'public', table: 'roster_assignments' },
-          (payload) => {
-            console.log('⚡ Realtime: Roster Assignments updated', payload);
-            refreshDashboardIfVisible();
-            if (
-              document.getElementById('page-tracking')?.style.display !==
-                'none' &&
-              typeof window.renderTrackingPage === 'function'
-            ) {
-              window.renderTrackingPage(true);
-            }
-          }
-        )
-        .subscribe();
+    // Sự kiện: danh sách Theo dõi sự kiện, hồ sơ đang mở, dashboard
+    on('incidents', (p) => {
+      window.QueryCache?.invalidate('incidents');
+      const id = p?.new?.id || p?.old?.id;
+      this.debounce('incidents', () => this.refreshIncidents(id));
+    });
+    // Tin nhắn / báo cáo trong sự kiện
+    on('incident_logs', (p) => {
+      const id = incOf(p);
+      this.debounce('logs:' + id, () => this.refreshDossier(id, { logs: true }), 250);
+    });
+    // Điều động / thay quân / xác nhận
+    on('deployment_history', (p) => {
+      const id = incOf(p);
+      this.debounce('deploy:' + id, () => this.refreshDossier(id, { members: true }));
+    });
+    // Lịch trực
+    on('roster_schedules', () => this.debounce('roster', () => this.refreshRoster(true)));
+    on('roster_assignments', () =>
+      this.debounce('roster', () => {
+        this.refreshRoster(true);
+        refreshDashboardIfVisible();
+        if (this.isShown('page-tracking')) window.renderTrackingPage?.(true, { silent: true });
+      })
+    );
+    // Chuông thông báo
+    on(
+      'notifications',
+      () => this.debounce('notif', () => window.loadUserNotifications?.(), 600),
+      'INSERT'
+    );
+
+    ch.subscribe((status) => {
+      console.log('[realtime] trạng thái kênh:', status);
+      // Kênh vừa nối lại sau khi rớt → kéo dữ liệu bị lỡ
+      if (status === 'SUBSCRIBED' && this._wasDown) this.pollVisible();
+      this._wasDown = status !== 'SUBSCRIBED';
+    });
+    this.channel = ch;
+
+    // Dự phòng: realtime có thể rớt (mạng yếu, máy ngủ) → kiểm tra định kỳ phần
+    // đang hiện trên màn hình, và ngay khi quay lại tab.
+    this.pollTimer = setInterval(() => {
+      if (!document.hidden) this.pollVisible();
+    }, this.POLL_MS);
+    this._onVisible = () => {
+      if (!document.hidden) this.pollVisible();
+    };
+    document.addEventListener('visibilitychange', this._onVisible);
+  },
+
+  async refreshIncidents(incidentId) {
+    refreshDashboardIfVisible();
+    if (this.isShown('page-tracking')) await window.renderTrackingPage?.(true, { silent: true });
+    if (this.dossierOpenFor(incidentId)) await this.refreshDossier(incidentId, { members: true });
+  },
+
+  // Làm mới hồ sơ sự kiện đang mở mà không đổi tab / không cuộn lại từ đầu
+  async refreshDossier(incidentId, what = {}) {
+    const id = this.dossierOpenFor(incidentId);
+    if (!id) return;
+    if (what.logs && typeof window.loadEventLogs === 'function') {
+      await window.loadEventLogs(id, true);
+    }
+    if (what.members) {
+      const { data: inc, error } = await window.supabaseClient
+        .from('incidents')
+        .select('*')
+        .eq('id', id)
+        .maybeSingle();
+      if (error || !inc || !this.dossierOpenFor(id)) return;
+      const list = window.appState?.trackingIncidents;
+      if (Array.isArray(list)) {
+        const i = list.findIndex((x) => String(x.id) === String(id));
+        if (i >= 0) list[i] = inc;
+      }
+      await window.updateDossierMemberList?.(inc);
+      window.bindTeamStatsButton?.(inc);
+      const badge = document.getElementById('dossier-status-badge');
+      if (badge) {
+        const closed = inc.status === 'closed';
+        badge.className = closed ? 'ev-status st-closed' : 'ev-status st-active';
+        badge.textContent = closed
+          ? '✔ ĐÃ KẾT THÚC'
+          : inc.admin_activate
+          ? '🔴 ĐANG HOẠT ĐỘNG'
+          : '⚠️ CHỜ KÍCH HOẠT';
+      }
+    }
+  },
+
+  // Lịch trực: chỉ vẽ lại khi dữ liệu thật sự đổi (tránh nháy lịch mỗi lần kiểm tra)
+  async refreshRoster(force) {
+    if (!this.isShown('page-roster') || typeof window.reloadData !== 'function') return;
+    const sb = window.supabaseClient;
+    const [s, a] = await Promise.all([
+      sb.from('roster_schedules').select('id, duty_date, team_name, note, location_text, status'),
+      sb.from('roster_assignments').select('id, schedule_id, user_id, assignment_status'),
+    ]);
+    if (s.error || a.error) return;
+    const key = (r) => JSON.stringify(r);
+    const sig = [...(s.data || []).map(key).sort(), '|', ...(a.data || []).map(key).sort()].join(',');
+    if (!force && sig === this._rosterSig) return;
+    const changed = sig !== this._rosterSig;
+    this._rosterSig = sig;
+    if (changed) await window.reloadData({ showSpinner: false, refreshUI: true });
+  },
+
+  async pollVisible() {
+    if (!this.isActive) return;
+    try {
+      if (this.isShown('page-tracking')) {
+        const id = this.dossierOpenFor();
+        if (id) await this.refreshDossier(id, { logs: true, members: true });
+        else await window.renderTrackingPage?.(true, { silent: true });
+      }
+      if (this.isShown('page-roster')) await this.refreshRoster(false);
+      refreshDashboardIfVisible();
+      window.loadUserNotifications?.();
+    } catch (e) {
+      console.warn('[realtime] kiểm tra định kỳ lỗi:', e);
     }
   },
 
   stop() {
     console.log('🛑 Stopping Supabase Realtime sync...');
     this.isActive = false;
-
-    // Unsubscribe from all channels
-    Object.values(this.subscriptions).forEach((subscription) => {
-      if (subscription) {
-        window.supabaseClient.removeChannel(subscription);
-      }
-    });
-
-    this.subscriptions = {
-      incidents: null,
-      rosterAssignments: null,
-    };
-
+    if (this.channel) window.supabaseClient.removeChannel(this.channel);
+    this.channel = null;
+    clearInterval(this.pollTimer);
+    this.pollTimer = null;
+    if (this._onVisible) document.removeEventListener('visibilitychange', this._onVisible);
+    Object.values(this._timers).forEach(clearTimeout);
+    this._timers = {};
+    this._rosterSig = null;
     console.log('✅ Realtime sync stopped');
   },
 };

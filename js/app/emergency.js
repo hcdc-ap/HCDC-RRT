@@ -949,42 +949,31 @@ document.addEventListener('DOMContentLoaded', function () {
 
         // D2. KIỂM TRA ĐANG THAM GIA SỰ KIỆN KHÁC CHƯA ĐÓNG
         // (trước đây helper getBusyInfo có sẵn nhưng không được gọi ở đây)
+        // Dựa vào danh sách thành viên của các sự kiện CHƯA ĐÓNG (được mời / đã
+        // xác nhận, chưa từ chối) — nguồn quyết định ai đang tham gia. Trước đây
+        // dựa vào deployment_history nên người vừa được thay vào (chưa xác nhận)
+        // không bị cảnh báo, còn người đã bị thay ra vẫn bị coi là đang tham gia.
         const deployedMap = new Map(); // user_id -> tên sự kiện đang tham gia
         if (userIdsToCheck.length > 0) {
-          const { data: deps } = await window.supabaseClient
-            .from('deployment_history')
-            .select('user_id, incident_id, action_type, confirmed_at')
-            .in('user_id', userIdsToCheck)
-            .in('action_type', [
-              'deployed',
-              'replace_in',
-              'mobilize',
-              'active',
-            ]);
-
-          const otherIncIds = [
-            ...new Set((deps || []).map((d) => d.incident_id).filter(Boolean)),
-          ].filter((id) => String(id) !== String(incidentId)); // bỏ qua chính sự kiện đang bổ sung
-
-          if (otherIncIds.length > 0) {
-            const { data: incs } = await window.supabaseClient
-              .from('incidents')
-              .select('id, event_name, status')
-              .in('id', otherIncIds)
-              .neq('status', 'closed');
-
-            const openIncs = new Map(
-              (incs || []).map((i) => [
-                String(i.id),
-                i.event_name || `#${String(i.id).substring(0, 5)}`,
-              ])
-            );
-            (deps || []).forEach((d) => {
-              const ev = openIncs.get(String(d.incident_id));
-              if (ev && !deployedMap.has(d.user_id))
-                deployedMap.set(d.user_id, ev);
+          const { data: openIncs } = await window.supabaseClient
+            .from('incidents')
+            .select('id, event_name, initial_selected_members, members, declined_members')
+            .neq('status', 'closed');
+          const inList = (email, list) =>
+            String(list || '')
+              .split(';')
+              .some((x) => _normEm(x) === email);
+          (openIncs || [])
+            .filter((i) => String(i.id) !== String(incidentId)) // bỏ qua chính sự kiện đang bổ sung
+            .forEach((i) => {
+              const ev = i.event_name || `#${String(i.id).substring(0, 5)}`;
+              dbUsers.forEach((u) => {
+                const em = _normEm(u.email);
+                if (deployedMap.has(u.id) || inList(em, i.declined_members)) return;
+                if (inList(em, i.initial_selected_members) || inList(em, i.members))
+                  deployedMap.set(u.id, ev);
+              });
             });
-          }
         }
 
         // E. HIỂN THỊ LÊN GIAO DIỆN REVIEW (bản gọn gàng, không tràn)

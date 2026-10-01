@@ -667,12 +667,12 @@ document.addEventListener('DOMContentLoaded', function () {
         ? `Bạn đã được thay thế bởi ${
             wizardData.newUserName || 'người mới'
           } cho ca trực${dateStr}.`
-        : `Bạn đã được rút khỏi lệnh điều động khẩn cấp${dateStr}.`;
+        : `Bạn đã được rút khỏi sự kiện này, người thay thế: ${wizardData.newUserName || wizardData.newEmail}. Không cần tiếp tục tham gia.`;
       const notifyNew = isRoster
         ? `Bạn được phân công thay cho ${
             wizardData.oldUserName || wizardData.oldEmail
           } vào ca trực${dateStr}.`
-        : `Bạn vừa được hệ thống tự động chọn tham gia dập dịch khẩn cấp${dateStr}!`;
+        : `Bạn được điều động thay thế cho ${wizardData.oldUserName || wizardData.oldEmail} trong sự kiện này. Vui lòng xác nhận tham gia.`;
 
       // 3. Tạo payload KHÔNG CÓ cột 'channels'
       // Thay đoạn tạo payload thành như thế này:

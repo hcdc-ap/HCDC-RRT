@@ -311,13 +311,20 @@ document.addEventListener('DOMContentLoaded', function () {
 
       if (error) throw error;
 
+      // Làm mới im lặng (realtime / kiểm tra định kỳ): bỏ qua nếu không có gì mới;
+      // có thì vẽ lại toàn bộ (trước đây nối thêm cả danh sách → tin nhắn bị lặp).
+      const sig = `${incidentId}:${logs.length}:${logs[logs.length - 1]?.id || ''}`;
+      if (isSilentUpdate && chatBox.dataset.sig === sig) return;
+      const wasAtBottom =
+        chatBox.scrollHeight - chatBox.scrollTop - chatBox.clientHeight < 80;
+
       window.currentIncidentLogs = logs;
       const authors = await getLogAuthors(incidentId, logs).catch(() => ({}));
+      if (String(window.currentDossierId || incidentId) !== String(incidentId)) return;
 
       // 2. Render UI
-      if (!isSilentUpdate) {
-        chatBox.innerHTML = '';
-      }
+      chatBox.innerHTML = '';
+      chatBox.dataset.sig = sig;
 
       logs.forEach((log) => {
         // ✅ Xác định người gửi (dùng UUID)
@@ -512,11 +519,11 @@ document.addEventListener('DOMContentLoaded', function () {
         );
       });
 
-      // Auto-scroll xuống cuối
-      chatBox.scrollTop = chatBox.scrollHeight;
+      // Auto-scroll xuống cuối (làm mới im lặng: chỉ khi người xem đang ở cuối)
+      if (!isSilentUpdate || wasAtBottom) chatBox.scrollTop = chatBox.scrollHeight;
     } catch (err) {
       console.error('❌ Lỗi tải logs:', err);
-      showToast('Lỗi tải lịch sử chat: ' + err.message, 'error');
+      if (!isSilentUpdate) showToast('Lỗi tải lịch sử chat: ' + err.message, 'error');
     }
   };
 
