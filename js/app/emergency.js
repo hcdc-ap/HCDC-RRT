@@ -1299,6 +1299,17 @@ document.addEventListener('DOMContentLoaded', function () {
           );
         }
 
+        // HCDC tạo sự kiện trên địa bàn một xã/phường → báo quản trị Trạm Y tế xã
+        // đó (thông báo nội bộ, chỉ "Xác nhận đã đọc", không tính là điều động)
+        if (data.type === 'new' && data.ma_xa) {
+          await window.notifyWardAdminsOfIncident?.(
+            activeIncidentId,
+            data.ma_xa,
+            data.eventName,
+            memberEmails
+          );
+        }
+
         if (typeof showActivationSuccessModal === 'function') {
           const allUsers =
             window.appState.users || window.appState.teamData || [];

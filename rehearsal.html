@@ -175,7 +175,7 @@
       <div>
         <h3>Sau khi xong</h3>
         <ul>
-          <li>Đóng các sự kiện TEST (tình huống 3.8), rồi HCDC xóa sự kiện TEST và ca trực TEST (3.9).</li>
+          <li>Đóng các sự kiện TEST (tình huống 3.8, 4.6), rồi HCDC xóa sự kiện TEST, các Trạm xóa ca trực TEST (5.1).</li>
           <li>Quản trị kỹ thuật khôi phục hồ sơ các vai về đơn vị, đội, vai trò ban đầu.</li>
           <li>Rà các tình huống <b>Lỗi</b> trên trang này và gửi cho người phụ trách kỹ thuật.</li>
         </ul>
@@ -214,7 +214,9 @@
   var GROUPS = [
     { key: '1', title: 'Quản lý lịch trực', note: 'Tạo ca, chọn thành viên, thay người, kiểm tra phạm vi giữa hai Trạm Y tế.' },
     { key: '2', title: 'Kích hoạt nội bộ tại Trạm Y tế', note: 'Mỗi Trạm Y tế kích hoạt sự kiện riêng; hai sự kiện chạy độc lập.' },
-    { key: '3', title: 'HCDC phối hợp vào sự kiện Trạm Y tế', note: 'Tiếp tục dùng sự kiện Xuân Thới Sơn đang hoạt động ở mục 2.' }
+    { key: '3', title: 'HCDC phối hợp vào sự kiện Trạm Y tế', note: 'Tiếp tục dùng sự kiện Xuân Thới Sơn đang hoạt động ở mục 2.' },
+    { key: '4', title: 'HCDC kích hoạt sự kiện tại Xã Hóc Môn', note: 'HCDC tạo sự kiện trên địa bàn xã; Trạm Y tế Hóc Môn nhận thông báo và tham gia điều hành.' },
+    { key: '5', title: 'Kết thúc buổi diễn tập', note: 'Dọn dữ liệu TEST, khôi phục hồ sơ.' }
   ];
 
   var CASES = [
@@ -283,7 +285,26 @@
     { id: '3-8', g: '3', who: ['XTS-QT', 'HM-QT', 'HCDC'], t: 'Kết thúc (ngừng kích hoạt) các sự kiện', pre: '3.1 đến 3.7',
       steps: ['XTS-QT mở sự kiện Xuân Thới Sơn, bấm "Đánh giá (AAR)", thử "Tự động tổng hợp", chọn "Đóng sự cố này (Hoàn tất)", bấm "LƯU & ĐÓNG SỰ KIỆN".', 'HM-QT làm tương tự với sự kiện Hóc Môn.', 'Mọi thành viên kiểm tra thông báo; HCDC xem màn hình Theo dõi sự kiện.'],
       expect: 'Webapp không có nút "ngừng kích hoạt" riêng: đóng sự kiện là ngừng kích hoạt. Mọi thành viên nhận thông báo "Sự kiện … đã kết thúc" đúng tên sự kiện mình tham gia. Trạng thái "Đã kết thúc" hiện đồng bộ trên mọi màn hình; nhật ký, phản hồi, biến động nhân sự vẫn còn ("Xem kết quả AAR").' },
-    { id: '3-9', g: '3', who: ['HCDC', 'XTS-QT', 'HM-QT'], t: 'Dọn dữ liệu diễn tập', pre: '3.8',
+    { id: '4-1', g: '4', who: ['HCDC', 'HCDC-NV', 'HM-NV'], t: 'HCDC kích hoạt sự kiện trên địa bàn Xã Hóc Môn', pre: '3.8',
+      steps: ['HCDC vào "Kích hoạt khẩn cấp", tick HCDC-NV và HM-NV, bấm "KÍCH HOẠT (2)".', 'Chọn "Sự kiện Mới", tên "TEST – Sự kiện HCDC tại Hóc Môn"; chọn địa điểm trên bản đồ trong Xã Hóc Môn, chờ dòng "🎯 Đã định vị ổ dịch tại Mã Xã … – Xã Hóc Môn"; bấm "Tiếp tục" rồi "XÁC NHẬN".', 'HCDC-NV và HM-NV xác nhận tham gia.'],
+      expect: 'Sự kiện gắn đúng Xã Hóc Môn. Nếu chưa định vị được xã, hệ thống hỏi lại vì Trạm Y tế sẽ không thấy sự kiện. HCDC-NV, HM-NV nhận thông báo điều động và xác nhận được.' },
+    { id: '4-2', g: '4', who: ['HM-QT', 'XTS-QT'], t: 'Trạm Y tế Hóc Môn được báo và thấy sự kiện', pre: '4.1',
+      steps: ['HM-QT kiểm tra chuông thông báo, email: thông báo "HCDC vừa kích hoạt sự kiện … trên địa bàn xã/phường của bạn", bấm "Xác nhận đã đọc".', 'HM-QT để sẵn "Theo dõi sự kiện" (không bấm Refresh), mở hồ sơ sự kiện.', 'XTS-QT tìm sự kiện này.'],
+      expect: 'HM-QT nhận thông báo nội bộ (không phải lệnh điều động, không có thanh vàng xác nhận tham gia). Sự kiện tự hiện trên Theo dõi sự kiện của HM-QT; hồ sơ có HCDC-NV nhãn "Hỗ trợ · HCDC", HM-NV bình thường; HM-QT có nút IAP (sửa được), "Đánh giá (AAR)", cụm thay quân; không có nút "Xóa sự kiện". XTS-QT không thấy sự kiện.' },
+    { id: '4-3', g: '4', who: ['HM-QT', 'HM-DT'], t: 'Trạm Y tế bổ sung lực lượng của mình', pre: '4.2',
+      steps: ['HM-QT vào "Kích hoạt khẩn cấp", tick HM-DT, bấm "KÍCH HOẠT".', 'Chọn "Bổ sung nhân sự", chọn "TEST – Sự kiện HCDC tại Hóc Môn", bấm "Tiếp tục" rồi "XÁC NHẬN".', 'HM-DT xác nhận tham gia.'],
+      expect: 'Danh sách chọn chỉ có người của Hóc Môn; danh sách sự kiện có sự kiện do HCDC tạo trên địa bàn. HM-DT được thêm vào đúng sự kiện, không tạo sự kiện mới; màn hình HCDC thấy HM-DT xuất hiện ngay.' },
+    { id: '4-4', g: '4', who: ['HM-QT', 'HM-DT', 'HCDC'], t: 'Trạm Y tế điều hành tại chỗ', pre: '4.3',
+      steps: ['HM-QT mở "Phương án (IAP)", thêm mục tiêu và phân công tại chỗ, bấm "LƯU IAP"; gửi tin nhắn phân công trong sự kiện.', 'HM-DT bấm "Lập báo cáo", gửi báo cáo tình hình ban đầu.', 'HCDC theo dõi hồ sơ sự kiện, trả lời tin nhắn.'],
+      expect: 'HM-QT lưu IAP được (sự kiện thuộc địa bàn mình dù do HCDC tạo). Báo cáo của HM-DT, tin nhắn hai bên hiện ngay trên màn hình mọi người đang mở hồ sơ, có họ tên người gửi.' },
+    { id: '4-5', g: '4', who: ['HM-QT', 'HM-NV', 'HM-DT'], t: 'Trạm Y tế thay quân trong sự kiện của HCDC', pre: '4.3',
+      steps: ['HM-QT bấm nút "Người", chọn HM-NV cần thay; thử chọn người thay là HCDC-NV hoặc người ngoài xã (nếu danh sách có).', 'Chọn người thay là người của Hóc Môn, xác nhận.'],
+      expect: 'HM-QT chỉ đưa được người của Hóc Môn vào (người ngoài xã bị từ chối). HM-NV nhận thông báo rút khỏi sự kiện; Biến động nhân sự ghi "Thay quân bởi tuyến cơ sở". Nhân sự HCDC do HCDC quản lý.' },
+    { id: '4-6', g: '4', who: ['HCDC', 'HM-QT'], t: 'Kết thúc sự kiện HCDC tại Hóc Môn', pre: '4.4',
+      steps: ['HM-QT báo cáo kết quả trong tin nhắn; HCDC (hoặc HM-QT theo phân công) bấm "Đánh giá (AAR)", "LƯU & ĐÓNG SỰ KIỆN".', 'Mọi thành viên kiểm tra thông báo kết thúc.'],
+      expect: 'HCDC và HM-QT đều đóng được sự kiện; mọi thành viên (HCDC-NV, HM-DT, …) nhận thông báo "Sự kiện … đã kết thúc". Trạng thái đồng bộ trên mọi màn hình; nhật ký, IAP, biến động nhân sự còn nguyên.' },
+
+    { id: '5-1', g: '5', who: ['HCDC', 'XTS-QT', 'HM-QT'], t: 'Dọn dữ liệu diễn tập', pre: '3.8 và 4.6',
       steps: ['XTS-QT mở hồ sơ sự kiện TEST: tìm nút "Xóa sự kiện".', 'HCDC mở từng sự kiện TEST, bấm "Xóa sự kiện", gõ đúng tên sự kiện để xác nhận.', 'XTS-QT, HM-QT xóa ca trực TEST của Trạm mình (Lịch trực → bấm vào ca → Xóa); HCDC kiểm tra lại Lịch trực.', 'Quản trị kỹ thuật khôi phục hồ sơ các vai.'],
       expect: 'Chỉ HCDC có nút "Xóa sự kiện"; gõ sai tên thì không xóa. Sau khi xóa, sự kiện TEST biến mất khỏi Theo dõi sự kiện, Bản đồ trên mọi màn hình (kèm nhật ký, thông báo của sự kiện). Ca trực TEST được xóa bởi quản trị Trạm Y tế của ca. Sự kiện thật của Xuân Thới Sơn vẫn nguyên vẹn.' }
   ];
