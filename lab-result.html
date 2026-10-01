@@ -51,7 +51,15 @@
       const iconEl = document.getElementById('icon');
       const badgeEl = document.getElementById('badge');
       const msgEl = document.getElementById('msg');
-      msgEl.innerHTML = msgText;
+      // Nội dung lấy từ URL: chỉ hiện chữ, cho phép lại thẻ <b> và <br> (máy chủ dùng để in đậm).
+      // Không gán thẳng innerHTML — link giả mạo có thể chèn mã chạy trên trang này.
+      function safeMsg(t) {
+        return String(t)
+          .replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c])
+          .replace(/&lt;(\/?)b&gt;/g, '<$1b>')
+          .replace(/&lt;br\s*\/?&gt;/g, '<br>');
+      }
+      msgEl.innerHTML = safeMsg(msgText);
 
       // Đồng bộ tông với lab-response: nền teal #006a75, header cam #fd7e14.
       // Trạng thái dùng màu ngữ nghĩa cho badge & viền trái.

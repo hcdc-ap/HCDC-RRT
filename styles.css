@@ -4011,6 +4011,10 @@ input.form-control:focus {
 }
 
 .sitrep-modal-content {
+  /* Bỏ left: 110px / padding: 30px của .modal-content chung — làm hộp thoại AAR, SITREP
+     tràn mép phải, che mất nút LƯU & ĐÓNG SỰ KIỆN trên laptop/điện thoại */
+  left: 0 !important;
+  padding: 0 !important;
   width: 100% !important;
   height: 100% !important;
   max-height: 100% !important;
@@ -4021,6 +4025,35 @@ input.form-control:focus {
   flex-direction: column !important;
   overflow: hidden !important; /* CỰC QUAN TRỌNG: Cắt bỏ phần thừa tràn ra */
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2) !important;
+}
+
+/* Header hộp thoại AAR / SITREP: cao cố định 60px (inline) cắt mất tiêu đề và nút lưu
+   trên điện thoại — cho tự giãn và xuống dòng */
+.sitrep-modal-content > .modal-header {
+  height: auto !important;
+  min-height: 60px;
+  flex-wrap: wrap;
+  row-gap: 8px;
+}
+.sitrep-modal-content > .modal-header .btn {
+  white-space: nowrap;
+}
+@media (max-width: 576px) {
+  .sitrep-modal-dialog {
+    max-width: calc(100% - 16px) !important;
+    margin: 8px auto !important;
+    height: calc(100vh - 16px) !important;
+  }
+  .sitrep-modal-content > .modal-header h5 {
+    font-size: 1rem;
+  }
+  .sitrep-modal-content > .modal-header small {
+    display: none;
+  }
+  .sitrep-modal-content > .modal-header > .ms-auto {
+    width: 100%;
+    justify-content: flex-end;
+  }
 }
 
 /* --- 2. HEADER CỐ ĐỊNH --- */
