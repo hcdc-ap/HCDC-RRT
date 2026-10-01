@@ -669,10 +669,10 @@ document.addEventListener('DOMContentLoaded', function () {
             .order('activation_time', { ascending: false });
           if (error) throw error;
           activeIncidents = data || [];
-
-          // Đồng bộ lại cache để các bước sau (nextToReviewBtn) dùng đúng dữ liệu
+          // KHÔNG ghi vào appState.trackingIncidents: danh sách này chỉ có sự kiện
+          // đang mở, ghi đè làm trang Theo dõi sự kiện mất các sự kiện đã đóng.
           if (!window.appState) window.appState = {};
-          window.appState.trackingIncidents = activeIncidents;
+          window.appState.emergencyActiveIncidents = activeIncidents;
         } catch (fetchErr) {
           console.warn(
             '⚠️ Không tải được sự kiện mới nhất, dùng tạm cache:',
@@ -828,10 +828,12 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         // Quét mảng trackingIncidents để lấy dữ liệu sự kiện cũ
-        const incidents =
-          window.appState?.trackingIncidents ||
-          window.appState?.incidents ||
-          [];
+        const incidents = [
+          ...(window.appState?.emergencyActiveIncidents || []),
+          ...(window.appState?.trackingIncidents ||
+            window.appState?.incidents ||
+            []),
+        ];
         const inc = incidents.find((i) => String(i.id) === String(incidentId));
 
         if (inc) {

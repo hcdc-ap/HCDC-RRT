@@ -272,9 +272,29 @@ document.addEventListener('DOMContentLoaded', function () {
   // ========================================================================
   // MAIN: LOAD EVENT LOGS - FULL VERSION
   // ========================================================================
+  // Họ tên thành viên sự kiện theo email (RPC rrt_incident_member_cards — đọc
+  // được cả nhân sự HCDC/xã khác mà RLS profiles không cho đọc). Lưu tạm 60 giây
+  // vì khung chat tự làm mới liên tục.
+  const memberNameCache = {};
+  async function getMemberNames(incidentId) {
+    const hit = memberNameCache[incidentId];
+    if (hit && Date.now() - hit.at < 60000) return hit.names;
+    const names = {};
+    const { data, error } = await supabaseClient.rpc('rrt_incident_member_cards', {
+      p_incident_id: incidentId,
+    });
+    if (error) console.warn('[chat] Không tải được tên thành viên:', error.message);
+    (data || []).forEach((m) => {
+      if (m.email && m.full_name) names[m.email.toLowerCase().trim()] = m.full_name;
+    });
+    memberNameCache[incidentId] = { at: Date.now(), names };
+    return names;
+  }
+
   window.loadEventLogs = async function (incidentId, isSilentUpdate = false) {
     const chatBox = document.getElementById('dossier-chat-box');
     if (!chatBox) return;
+    const memberNames = await getMemberNames(incidentId).catch(() => ({}));
 
     try {
       // 1. Fetch logs từ Supabase
@@ -299,7 +319,10 @@ document.addEventListener('DOMContentLoaded', function () {
         const side = isMe ? 'right' : 'left';
         const displayName = isMe
           ? 'Tôi'
-          : log.user_email || log.user || 'Thành viên';
+          : memberNames[String(log.user_email || '').toLowerCase().trim()] ||
+            log.user_email ||
+            log.user ||
+            'Thành viên';
 
         let htmlContent = '';
         const reportTypes = [
