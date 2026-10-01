@@ -2,7 +2,7 @@
 // THỐNG KÊ PHẢN HỒI THEO ĐỘI & VỊ TRÍ (cho trang Hồ sơ sự kiện)
 //   Đồng ý / Từ chối / Chưa phản hồi — nhóm theo team. Phục vụ điều xe, vật tư.
 //   Cộng thêm thống kê số lượng vị trí (position) theo từng đội (Bản Tiếng Việt).
-//   Quyền xem: admin (tất cả đội) · ward_admin (chỉ đội thuộc ward mình).
+//   Quyền xem: admin · ward_admin (sự kiện phường/xã mình, gồm cả nhân sự hỗ trợ).
 // ----------------------------------------------------------------------------
 // GHÉP:
 //   (1) Thêm nút vào cụm nút header (cạnh Xét nghiệm/IAP):
@@ -45,11 +45,14 @@
     return [];
   }
 
+  // Thẻ thành viên của sự kiện đang xem (RPC rrt_incident_member_cards): đọc được
+  // cả nhân sự HCDC/xã khác mà appState.users của tuyến cơ sở không có (RLS).
+  let cardMap = null;
+
   // Tra thông tin thành viên theo email (đội, tên, ward, position)
   function lookupMember(email) {
     const e = norm(email);
-    const src = _memberSource();
-    const m = src.find((x) => norm(x.email) === e);
+    const m = (cardMap && cardMap[e]) || _memberSource().find((x) => norm(x.email) === e);
     
     // Lấy chức danh tiếng Anh và dịch sang Tiếng Việt bằng từ điển
     const rawPos = m?.position ? String(m.position).trim() : '';
@@ -120,14 +123,9 @@
   function scopeByRole(members) {
     const role = norm(window.userSession?.role);
     if (role === 'admin' || role === 'super_admin') return members;
-    if (role === 'ward_admin') {
-      const myMaXa = String(window.userSession?.workplace_ma_xa || '').trim();
-      if (!myMaXa) return [];
-      const teamsInMyWard = new Set(
-        members.filter((m) => m.ma_xa && m.ma_xa === myMaXa).map((m) => m.team)
-      );
-      return members.filter((m) => teamsInMyWard.has(m.team));
-    }
+    // Tuyến cơ sở chỉ mở được sự kiện của phường/xã mình (RLS incidents) → thấy
+    // toàn bộ người được điều động vào sự kiện, kể cả nhân sự HCDC/xã khác hỗ trợ.
+    if (role === 'ward_admin') return members;
     return []; 
   }
 
@@ -258,7 +256,19 @@
   }
 
   // Mở modal thống kê
-  window.openTeamStatsModal = function (inc) {
+  window.openTeamStatsModal = async function (inc) {
+    cardMap = {};
+    try {
+      const { data, error } = await window.supabaseClient.rpc('rrt_incident_member_cards', {
+        p_incident_id: inc.id,
+      });
+      if (error) throw error;
+      (data || []).forEach((c) => {
+        if (c.email) cardMap[norm(c.email)] = c;
+      });
+    } catch (e) {
+      console.warn('[team-stats] Không tải được thẻ thành viên:', e.message || e);
+    }
     document.getElementById('team-stats-modal-wrap')?.remove();
     const wrap = document.createElement('div');
     wrap.id = 'team-stats-modal-wrap';

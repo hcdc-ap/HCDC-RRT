@@ -595,7 +595,18 @@ document.addEventListener('DOMContentLoaded', function () {
     const reportsData = reportsRes.data || [];
     const deployHistory = deployRes.data || [];
     const logsData = logsRes.data || [];
-    const aarAuthors = await getLogAuthors(incidentId, logsData).catch(() => ({}));
+    // Tên người trong nhật ký + lịch sử điều động (join profiles bị RLS chặn với
+    // nhân sự HCDC/xã khác → hiện "Thành viên")
+    const aarAuthors = await getLogAuthors(incidentId, [
+      ...logsData,
+      ...deployHistory.flatMap((d) => [{ user_id: d.user_id }, { user_id: d.replaced_by }]),
+    ]).catch(() => ({}));
+    deployHistory.forEach((d) => {
+      if (!d.user_profile?.full_name && aarAuthors[d.user_id])
+        d.user_profile = { ...(d.user_profile || {}), full_name: aarAuthors[d.user_id].full_name };
+      if (d.replaced_by && !d.replaced_profile?.full_name && aarAuthors[d.replaced_by])
+        d.replaced_profile = { ...(d.replaced_profile || {}), full_name: aarAuthors[d.replaced_by].full_name };
+    });
 
     const safeParseJson = (val, fallback = {}) => {
       if (!val) return fallback;
@@ -620,9 +631,9 @@ document.addEventListener('DOMContentLoaded', function () {
     // Helper bóc tách HTML
     const stripHtml = (html) => {
       if (!html) return '';
-      const temp = document.createElement('div');
-      temp.innerHTML = html;
-      return temp.textContent || temp.innerText || '';
+      // DOMParser: tài liệu trơ — không chạy script, không tải ảnh (innerHTML trên
+      // div tạm vẫn chạy được <img onerror> từ nội dung tin nhắn)
+      return new DOMParser().parseFromString(html, 'text/html').body.textContent || '';
     };
 
     // ==========================================
@@ -775,7 +786,7 @@ document.addEventListener('DOMContentLoaded', function () {
       chatIssues.forEach((log, idx) => {
         const time = new Date(log.created_at).toLocaleTimeString('vi-VN');
         const user = aarAuthors[log.user_id]?.full_name || 'Thành viên';
-        let content = stripHtml(log.content);
+        let content = stripHtml(log.content).replace(/\s+/g, ' ').trim();
         const isSOS = log.log_type === 'SOS' ? '[🚨 SOS] ' : '';
         textIssues += `${
           idx + 1
@@ -845,7 +856,7 @@ document.addEventListener('DOMContentLoaded', function () {
       chatProposals.forEach((log, idx) => {
         const time = new Date(log.created_at).toLocaleTimeString('vi-VN');
         const user = aarAuthors[log.user_id]?.full_name || 'Thành viên';
-        let content = stripHtml(log.content);
+        let content = stripHtml(log.content).replace(/\s+/g, ' ').trim();
         textLessons += `${idx + 1}. [${time}] ${user}: ${content.substring(
           0,
           150
@@ -1043,7 +1054,18 @@ document.addEventListener('DOMContentLoaded', function () {
       const reportsData = reportsRes.data || [];
       const deployHistory = deployRes.data || [];
       const logsData = logsRes.data || []; // ✅ Chat logs
-      const aarAuthors = await getLogAuthors(incidentId, logsData).catch(() => ({}));
+      // Tên người trong nhật ký + lịch sử điều động (join profiles bị RLS chặn với
+      // nhân sự HCDC/xã khác → hiện "Thành viên")
+      const aarAuthors = await getLogAuthors(incidentId, [
+        ...logsData,
+        ...deployHistory.flatMap((d) => [{ user_id: d.user_id }, { user_id: d.replaced_by }]),
+      ]).catch(() => ({}));
+      deployHistory.forEach((d) => {
+        if (!d.user_profile?.full_name && aarAuthors[d.user_id])
+          d.user_profile = { ...(d.user_profile || {}), full_name: aarAuthors[d.user_id].full_name };
+        if (d.replaced_by && !d.replaced_profile?.full_name && aarAuthors[d.replaced_by])
+          d.replaced_profile = { ...(d.replaced_profile || {}), full_name: aarAuthors[d.replaced_by].full_name };
+      });
 
       console.log('📊 Fetched:', {
         objectives: objectivesData.length,
@@ -1203,10 +1225,10 @@ document.addEventListener('DOMContentLoaded', function () {
           // Strip HTML nếu có
           let content = log.content;
           if (content?.includes('<')) {
-            const temp = document.createElement('div');
-            temp.innerHTML = content;
-            content = temp.textContent || temp.innerText || content;
+            content =
+              new DOMParser().parseFromString(content, 'text/html').body.textContent || content;
           }
+          content = String(content || '').replace(/\s+/g, ' ').trim();
           aarIssues += `${idx + 1}. [${time}] ${user}: ${content.substring(
             0,
             150
@@ -1262,10 +1284,10 @@ document.addEventListener('DOMContentLoaded', function () {
           const user = aarAuthors[log.user_id]?.full_name || 'Thành viên';
           let content = log.content;
           if (content?.includes('<')) {
-            const temp = document.createElement('div');
-            temp.innerHTML = content;
-            content = temp.textContent || temp.innerText || content;
+            content =
+              new DOMParser().parseFromString(content, 'text/html').body.textContent || content;
           }
+          content = String(content || '').replace(/\s+/g, ' ').trim();
           aarLessons += `${idx + 1}. [${time}] ${user}: ${content.substring(
             0,
             150

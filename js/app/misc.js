@@ -303,9 +303,10 @@ window.openAarModal = async function (incident, isViewOnly) {
   $('#aar-issues').val(aar.aar_issues || '');
   $('#aar-lessons-learned').val(aar.aar_lessons_learned || '');
 
-  // 4. View-only cho non-admin (hoặc khi gọi xem kết quả)
+  // 4. Chỉ xem khi gọi xem kết quả hoặc không có quyền quản lý sự kiện
+  // (HCDC, tuyến cơ sở của phường/xã sự kiện — khớp RLS incidents_update)
   const isView =
-    isViewOnly || window.userSession?.role?.toLowerCase() !== 'admin';
+    isViewOnly || !(window.canManageIncident ? window.canManageIncident(incident) : false);
   $('#aar-summary').prop('disabled', isView);
   $('#aar-issues').prop('disabled', isView);
   $('#aar-lessons-learned').prop('disabled', isView);

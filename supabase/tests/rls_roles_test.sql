@@ -483,3 +483,13 @@ SET ROLE anon;
 SELECT rrt_test.denied('anon: không gọi được người viết tin nhắn',
   $$SELECT * FROM public.rrt_incident_log_authors('10000000-0000-0000-0000-00000000000a')$$);
 RESET ROLE;
+
+\echo '--- rrt_incident_log_authors: người trong lịch sử điều động ---'
+INSERT INTO public.deployment_history (incident_id, user_id, action_type, replaced_by) VALUES
+  ('10000000-0000-0000-0000-00000000000a', '00000000-0000-0000-0000-000000000002', 'replace_in', '00000000-0000-0000-0000-0000000000c1');
+SET ROLE authenticated;
+SELECT rrt_test.login('00000000-0000-0000-0000-0000000000a1');
+SELECT rrt_test.eq('tuyến cơ sở A: thấy tên người được điều động (s2) trong lịch sử',
+  (SELECT count(*) FROM public.rrt_incident_log_authors('10000000-0000-0000-0000-00000000000a')
+   WHERE user_id = '00000000-0000-0000-0000-000000000002'), 1);
+RESET ROLE;
