@@ -256,6 +256,7 @@ window.openIAPModal = async function (incidentId) {
     const canEdit = window.canManageIncident(incData);
     $('#modal-incident-plan').data('readonly', !canEdit);
     $('#btn-save-iap').toggle(canEdit);
+    applyIAPReadonly(canEdit, incData);
 
     // Mở modal an toàn
     const modalEl = document.getElementById('modal-incident-plan');
@@ -432,6 +433,68 @@ function addObjectiveBlock(id = null, content = '', activities = []) {
   updateProgress(id);
 }
 
+// Chế độ chỉ xem (nhân viên, Đội trưởng, nhân sự HCDC xem sự kiện đã đóng):
+// khóa mọi ô nhập; riêng công việc giao cho CHÍNH MÌNH (cột Phụ trách = email
+// hoặc họ tên) được tick hoàn thành để báo tiến độ (RPC rrt_set_my_activity_status,
+// ghi kèm 1 dòng nhật ký sự kiện). Góp ý diễn tập 08/10 (3.6).
+function applyIAPReadonly(canEdit, incData) {
+  const $modal = $('#modal-incident-plan');
+  $modal.find('.iap-self-hint').remove();
+  if (canEdit) {
+    $modal.find('.modal-body input, .modal-body textarea, .modal-body select, .modal-body button').prop('disabled', false);
+    return;
+  }
+  $modal
+    .find('.modal-body input, .modal-body textarea, .modal-body select, .modal-body button')
+    .prop('disabled', true);
+  const me = window.userSession || {};
+  const mine = (v) => {
+    const s = String(v || '').trim().toLowerCase();
+    return (
+      !!s &&
+      [me.id, me.email, me.full_name].some((x) => x && String(x).trim().toLowerCase() === s)
+    );
+  };
+  const isOpen = incData?.status !== 'closed';
+  let count = 0;
+  $modal.find('tr[data-act-id]').each(function () {
+    const $tr = $(this);
+    const actId = $tr.attr('data-act-id');
+    if (!isOpen || !actId || !mine($tr.find('.act-assignee').val())) return;
+    count++;
+    $tr.addClass('table-warning');
+    $tr
+      .find('.act-status')
+      .prop('disabled', false)
+      .attr('title', 'Công việc của bạn — tick để báo hoàn thành')
+      .removeAttr('onchange')
+      .off('change')
+      .on('change', async function () {
+        const done = this.checked;
+        const box = this;
+        box.disabled = true;
+        const { error } = await window.supabaseClient.rpc('rrt_set_my_activity_status', {
+          p_activity_id: actId,
+          p_done: done,
+        });
+        box.disabled = false;
+        if (error) {
+          box.checked = !done;
+          showToast('Không cập nhật được: ' + error.message, 'error');
+          return;
+        }
+        showToast(done ? 'Đã báo hoàn thành công việc.' : 'Đã đánh dấu lại chưa hoàn thành.', 'success');
+      });
+  });
+  if (count)
+    $modal
+      .find('.modal-body')
+      .first()
+      .prepend(
+        `<div class="alert alert-warning py-2 small iap-self-hint">Bạn có ${count} công việc được giao (tô vàng). Tick ô đầu dòng để báo hoàn thành — Đội trưởng và quản trị thấy ngay trong nhật ký sự kiện.</div>`
+      );
+}
+
 function addActivityRowToObj(objId, data = {}) {
   const groups = [
     'Điều tra',
@@ -452,7 +515,7 @@ function addActivityRowToObj(objId, data = {}) {
   const isChecked = data.status === 'Done' ? 'checked' : '';
 
   const html = `
-        <tr>
+        <tr data-act-id="${window.escapeHtml(String(data.id || ''))}">
             <td class="align-top text-center pt-2">
                 <input type="checkbox" class="form-check-input act-status" 
                        style="cursor: pointer; width: 20px; height: 20px;" 
@@ -469,7 +532,7 @@ function addActivityRowToObj(objId, data = {}) {
                 }</textarea>
             </td>
             <td class="align-top">
-                <textarea class="form-control form-control-sm act-assignee table-textarea" rows="2" placeholder="Phụ trách...">${
+                <textarea class="form-control form-control-sm act-assignee table-textarea" rows="2" placeholder="Họ tên hoặc email người phụ trách">${
                   data.assignee || ''
                 }</textarea>
             </td>

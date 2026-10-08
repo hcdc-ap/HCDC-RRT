@@ -108,3 +108,11 @@ test('trang kết quả email/PXN: không gán thẳng tham số URL vào innerH
     assert.match(src, /innerHTML\s*=\s*safeMsg\(msgText\)/, `${page}: thiếu safeMsg()`);
   }
 });
+
+test('không còn liên kết về địa chỉ cũ hcdc-ap.github.io/RRT/ (404)', () => {
+  const pages = fs.readdirSync(ROOT).filter((f) => f.endsWith('.html'));
+  for (const p of pages) {
+    const src = fs.readFileSync(path.join(ROOT, p), 'utf8');
+    assert.doesNotMatch(src, /hcdc-ap\.github\.io\/RRT\//, `${p}: liên kết hcdc-ap.github.io/RRT/ không tồn tại`);
+  }
+});

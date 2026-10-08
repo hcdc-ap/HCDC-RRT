@@ -593,9 +593,39 @@ window.RealtimeManager = {
     if (changed) await window.reloadData({ showSpinner: false, refreshUI: true });
   },
 
+  // Hồ sơ đổi vai trò / đơn vị trong lúc đang mở webapp (vd. HCDC chuyển người về
+  // Trạm Y tế để diễn tập): phiên trình duyệt còn giữ quyền cũ → menu, bộ lọc sai
+  // cho tới khi đăng nhập lại (diễn tập 08/10, tình huống 2.5). Phát hiện và tải
+  // lại trang để áp dụng quyền mới.
+  _profileTick: 0,
+  async checkProfileChanged() {
+    const me = window.userSession;
+    if (!me?.id || this._reloading) return;
+    const keys = ['role', 'workplace_ma_xa', 'fax', 'team', 'position', 'registration_status'];
+    const { data, error } = await window.supabaseClient
+      .from('profiles')
+      .select(keys.join(', '))
+      .eq('id', me.id)
+      .maybeSingle();
+    if (error || !data) return;
+    const norm = (v) => String(v ?? '').trim().toLowerCase();
+    const changed = keys.filter((k) => k in me && norm(me[k]) !== norm(data[k]));
+    if (!changed.length) return;
+    this._reloading = true;
+    console.log('[realtime] hồ sơ đã đổi:', changed);
+    if (typeof showToast === 'function')
+      showToast('Vai trò / đơn vị / đội của bạn vừa được cập nhật — đang tải lại để áp dụng.', 'info');
+    try {
+      localStorage.removeItem('userSession');
+    } catch (e) {}
+    setTimeout(() => window.location.reload(), 2500);
+  },
+
   async pollVisible() {
     if (!this.isActive) return;
     try {
+      // Hồ sơ của chính mình: kiểm tra mỗi 3 lần (khoảng 1 phút)
+      if (++this._profileTick % 3 === 0) await this.checkProfileChanged();
       if (this.isShown('page-tracking')) {
         const id = this.dossierOpenFor();
         if (id) await this.refreshDossier(id, { logs: true, members: true });
