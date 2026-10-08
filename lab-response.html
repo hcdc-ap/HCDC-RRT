@@ -159,7 +159,7 @@
             return;
           }
           if (data.status !== 'inquiry_sent') {
-            renderState('warning', "Yêu cầu này đã được đơn vị xử lý trước đó. Bạn không cần thao tác lại, xin cảm ơn!", '<a href="https://hcdc-ap.github.io/RRT/" class="btn">🏠 Về Trang chủ</a>');
+            renderState('warning', "Yêu cầu này đã được đơn vị xử lý trước đó. Bạn không cần thao tác lại, xin cảm ơn!", '<a href="https://hcdc-ap.github.io/HCDC-RRT/" class="btn">🏠 Về Trang chủ</a>');
             return;
           }
           renderForm(data);
@@ -209,7 +209,7 @@
       .then(res => res.json())
       .then(data => {
         if (data.success === true) {
-          renderState('success', "Cảm ơn đơn vị. HCDC đã ghi nhận thông tin phản hồi và sẽ tiến hành phê duyệt điều phối mẫu trên hệ thống.", '<a href="https://hcdc-ap.github.io/RRT/" class="btn">🏠 Đóng cửa sổ</a>');
+          renderState('success', "Cảm ơn đơn vị. HCDC đã ghi nhận thông tin phản hồi và sẽ tiến hành phê duyệt điều phối mẫu trên hệ thống.", '<a href="https://hcdc-ap.github.io/HCDC-RRT/" class="btn">🏠 Đóng cửa sổ</a>');
         } else {
           renderState('error', (data.message || "Có lỗi xảy ra trong quá trình ghi nhận.") + " Vui lòng thử lại sau.");
         }

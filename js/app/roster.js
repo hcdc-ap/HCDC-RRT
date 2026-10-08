@@ -1288,6 +1288,122 @@ document.addEventListener('DOMContentLoaded', function () {
   };
   let shiftMembersTeam = null; // đội đang hiện danh sách (null = chưa tải)
 
+  // ------------------------------------------------------------------
+  // THỐNG KÊ LỊCH TRỰC THEO NGÀY (HCDC) — góp ý diễn tập 08/10 (1.2, 1.5):
+  // trong 1 ngày có bao nhiêu Trạm Y tế có lịch trực, ai đã nhận / chờ / báo bận,
+  // xã nào chưa có lịch. Đội Trạm theo mẫu "Team <xã> NN" → suy ra xã.
+  // ------------------------------------------------------------------
+  const WARD_TEAM_RE = /^Team (.+\D) (\d{2,3})$/;
+  async function renderRosterDayStats(day) {
+    const body = document.getElementById('roster-day-stats-body');
+    if (!body) return;
+    const esc = window.escapeHtml;
+    body.innerHTML = '<div class="text-center p-3"><span class="spinner-border spinner-border-sm"></span> Đang tổng hợp…</div>';
+    const sb = window.supabaseClient;
+    const [wardsRes, schedRes] = await Promise.all([
+      sb.from('ward_codes').select('ten_xa, ma_xa').order('ten_xa'),
+      sb.from('roster_schedules').select('id, team_name, location_text, note').eq('duty_date', day),
+    ]);
+    if (schedRes.error) {
+      body.innerHTML = `<div class="alert alert-danger">Lỗi: ${esc(schedRes.error.message)}</div>`;
+      return;
+    }
+    const scheds = schedRes.data || [];
+    const ids = scheds.map((s) => s.id);
+    const asgRes = ids.length
+      ? await sb.from('roster_assignments').select('schedule_id, assignment_status').in('schedule_id', ids)
+      : { data: [] };
+    const wards = wardsRes.data || [];
+
+    // Gom theo đơn vị: xã (từ tên đội) hoặc HCDC
+    const groups = new Map();
+    scheds.forEach((s) => {
+      const m = String(s.team_name || '').match(WARD_TEAM_RE);
+      const unit = m ? m[1] : 'HCDC';
+      if (!groups.has(unit)) groups.set(unit, { unit, teams: [], loc: new Set(), st: { confirmed: 0, pending: 0, declined: 0 } });
+      const g = groups.get(unit);
+      g.teams.push(s.team_name);
+      if (s.location_text) g.loc.add(s.location_text);
+      (asgRes.data || [])
+        .filter((a) => a.schedule_id === s.id)
+        .forEach((a) => {
+          const k = a.assignment_status === 'confirmed' ? 'confirmed' : a.assignment_status === 'declined' ? 'declined' : 'pending';
+          g.st[k]++;
+        });
+    });
+    const tram = [...groups.values()].filter((g) => g.unit !== 'HCDC').sort((a, b) => a.unit.localeCompare(b.unit, 'vi'));
+    const hcdc = groups.get('HCDC');
+    const scheduled = new Set(tram.map((g) => g.unit));
+    const missing = wards.filter((w) => !scheduled.has(w.ten_xa));
+    const sum = (k) => tram.reduce((n, g) => n + g.st[k], 0);
+    const card = (label, value, color) =>
+      `<div class="col-6 col-md-3"><div class="border rounded p-2 text-center h-100"><div class="small text-muted">${label}</div><div class="fs-4 fw-bold" style="color:${color}">${value}</div></div></div>`;
+    const row = (g) => `<tr>
+        <td>${esc(g.unit)}</td><td class="small">${g.teams.map(esc).join('<br>')}</td>
+        <td class="text-center">${g.st.confirmed + g.st.pending + g.st.declined}</td>
+        <td class="text-center text-success fw-bold">${g.st.confirmed}</td>
+        <td class="text-center text-secondary">${g.st.pending}</td>
+        <td class="text-center text-danger">${g.st.declined}</td>
+        <td class="small">${[...g.loc].map(esc).join('; ') || '<span class="text-muted">—</span>'}</td></tr>`;
+    body.innerHTML = `
+      <div class="row g-2 mb-3">
+        ${card('Trạm Y tế có lịch trực', `${tram.length}<span class="fs-6 text-muted">/${wards.length || 168}</span>`, '#006a75')}
+        ${card('Nhân sự được phân công', sum('confirmed') + sum('pending') + sum('declined'), '#17252a')}
+        ${card('Đã nhận ca', sum('confirmed'), '#13795b')}
+        ${card('Chờ xác nhận / báo bận', `${sum('pending')} / ${sum('declined')}`, '#c2352b')}
+      </div>
+      ${
+        tram.length
+          ? `<div class="table-responsive"><table class="table table-sm align-middle">
+              <thead><tr><th>Xã/phường/đặc khu</th><th>Đội</th><th class="text-center">Người</th><th class="text-center">Đã nhận</th><th class="text-center">Chờ</th><th class="text-center">Báo bận</th><th>Địa điểm</th></tr></thead>
+              <tbody>${tram.map(row).join('')}</tbody></table></div>`
+          : '<div class="alert alert-secondary">Chưa có Trạm Y tế nào có lịch trực trong ngày này.</div>'
+      }
+      ${hcdc ? `<div class="mt-2 small text-muted">Đội HCDC trực cùng ngày: ${hcdc.teams.map(esc).join(', ')} (${hcdc.st.confirmed}/${hcdc.st.confirmed + hcdc.st.pending + hcdc.st.declined} đã nhận)</div>` : ''}
+      ${
+        wards.length
+          ? `<details class="mt-3"><summary>Xã/phường/đặc khu CHƯA có lịch trực (${missing.length})</summary>
+              <div class="small mt-2" style="columns: 3 180px;">${missing.map((w) => esc(w.ten_xa)).join('<br>')}</div></details>`
+          : ''
+      }`;
+  }
+
+  window.openRosterDayStats = function () {
+    document.getElementById('roster-day-stats-wrap')?.remove();
+    const today = (() => {
+      const t = new Date();
+      return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`;
+    })();
+    const wrap = document.createElement('div');
+    wrap.id = 'roster-day-stats-wrap';
+    wrap.innerHTML = `
+      <div class="modal fade" id="rosterDayStatsModal" tabindex="-1">
+        <div class="modal-dialog modal-xl modal-dialog-scrollable">
+          <div class="modal-content" style="left:0; padding:0;">
+            <div class="modal-header" style="background:#006a75;color:#fff;">
+              <h5 class="modal-title"><i class='bx bx-bar-chart-alt-2'></i> Thống kê lịch trực theo ngày</h5>
+              <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+              <div class="d-flex align-items-center gap-2 mb-3">
+                <label for="roster-day-stats-date" class="mb-0">Ngày:</label>
+                <input type="date" id="roster-day-stats-date" class="form-control" style="max-width:200px" value="${today}">
+              </div>
+              <div id="roster-day-stats-body"></div>
+            </div>
+          </div>
+        </div>
+      </div>`;
+    document.body.appendChild(wrap);
+    const el = document.getElementById('rosterDayStatsModal');
+    document.getElementById('roster-day-stats-date').addEventListener('change', (e) => {
+      if (e.target.value) renderRosterDayStats(e.target.value);
+    });
+    new bootstrap.Modal(el).show();
+    el.addEventListener('hidden.bs.modal', () => wrap.remove(), { once: true });
+    renderRosterDayStats(today);
+  };
+
   function updateShiftMemberCount() {
     const boxes = document.querySelectorAll('#new-shift-members input[type=checkbox]');
     const checked = [...boxes].filter((b) => b.checked).length;

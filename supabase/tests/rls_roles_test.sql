@@ -634,3 +634,70 @@ RESET ROLE;
 SELECT rrt_test.eq('chuyển về Trạm: đội HCDC cũ tự về "Chưa có đội"',
   (SELECT count(*) FROM public.profiles WHERE id = '00000000-0000-0000-0000-0000000000c1' AND team = 'No team'), 1);
 UPDATE public.profiles SET fax = 'HCDC', workplace_ward = NULL, team = 'HCDC' WHERE id = '00000000-0000-0000-0000-0000000000c1';
+
+-- ============================================================================
+\echo '--- Sự kiện đã đóng: nhân sự HCDC được xem (rút kinh nghiệm) ---'
+INSERT INTO auth.users (id, email) VALUES ('00000000-0000-0000-0000-0000000000c2', 'h2@t.vn');
+INSERT INTO public.profiles (id, email, role, registration_status, approval_status, fax, team) VALUES
+  ('00000000-0000-0000-0000-0000000000c2', 'h2@t.vn', 'user', 'approved', 'approved',
+   'Trung tâm Kiểm soát bệnh tật Thành phố Hồ Chí Minh', 'Team 5');
+INSERT INTO public.incidents (id, event_name, status, ma_xa, initial_selected_members) VALUES
+  ('10000000-0000-0000-0000-0000000000cc', 'Ổ dịch đã đóng', 'closed', 'XB', 's3@t.vn'),
+  ('10000000-0000-0000-0000-0000000000ac', 'Ổ dịch đang mở', 'active', 'XB', 's3@t.vn');
+INSERT INTO public.incident_logs (incident_id, user_id, content) VALUES
+  ('10000000-0000-0000-0000-0000000000cc', '00000000-0000-0000-0000-000000000003', 'bài học');
+SET ROLE authenticated;
+SELECT rrt_test.login('00000000-0000-0000-0000-0000000000c2');
+SELECT rrt_test.eq('HCDC: xem được sự kiện đã đóng (không tham gia)',
+  (SELECT count(*) FROM public.incidents WHERE id = '10000000-0000-0000-0000-0000000000cc'), 1);
+SELECT rrt_test.eq('HCDC: xem được nhật ký sự kiện đã đóng',
+  (SELECT count(*) FROM public.incident_logs WHERE incident_id = '10000000-0000-0000-0000-0000000000cc' AND content = 'bài học'), 1);
+SELECT rrt_test.eq('HCDC: KHÔNG xem sự kiện đang mở không tham gia',
+  (SELECT count(*) FROM public.incidents WHERE id = '10000000-0000-0000-0000-0000000000ac'), 0);
+SELECT rrt_test.denied('HCDC: không sửa sự kiện đã đóng',
+  $$UPDATE public.incidents SET event_name = 'x' WHERE id = '10000000-0000-0000-0000-0000000000cc'$$);
+SELECT rrt_test.denied('HCDC: không ghi nhật ký sự kiện đã đóng không tham gia',
+  $$INSERT INTO public.incident_logs (incident_id, user_id, content) VALUES ('10000000-0000-0000-0000-0000000000cc', auth.uid(), 'x')$$);
+SELECT rrt_test.login('00000000-0000-0000-0000-000000000001');
+SELECT rrt_test.eq('nhân viên Trạm: KHÔNG xem sự kiện đã đóng của phường khác',
+  (SELECT count(*) FROM public.incidents WHERE id = '10000000-0000-0000-0000-0000000000cc'), 0);
+SELECT rrt_test.login('00000000-0000-0000-0000-0000000000c1');
+SELECT rrt_test.eq('đơn vị không phải HCDC (fax khác): KHÔNG xem sự kiện đã đóng',
+  (SELECT count(*) FROM public.incidents WHERE id = '10000000-0000-0000-0000-0000000000cc'), 0);
+RESET ROLE;
+SET ROLE authenticated;
+SELECT rrt_test.login('00000000-0000-0000-0000-0000000000c2');
+SELECT rrt_test.eq('HCDC: xem thẻ thành viên sự kiện đã đóng',
+  (SELECT count(*) FROM public.rrt_incident_member_cards('10000000-0000-0000-0000-0000000000cc')), 1);
+SELECT rrt_test.denied('HCDC: không thêm báo cáo vào sự kiện đã đóng',
+  $$INSERT INTO public.incident_reports (incident_id, report_type) VALUES ('10000000-0000-0000-0000-0000000000cc', 'x')$$);
+RESET ROLE;
+
+-- ============================================================================
+\echo '--- Tự đánh dấu công việc IAP (rrt_set_my_activity_status) ---'
+UPDATE public.profiles SET full_name = 'Nguyễn Văn Ba' WHERE id = '00000000-0000-0000-0000-000000000003';
+INSERT INTO public.incident_activities (id, incident_id, content, assignee_id, status) VALUES
+  ('50000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-00000000000b', 'Khoanh vùng', 'nguyễn văn ba', 'pending'),
+  ('50000000-0000-0000-0000-000000000002', '10000000-0000-0000-0000-00000000000b', 'Lấy mẫu', 'người khác', 'pending'),
+  ('50000000-0000-0000-0000-000000000003', '10000000-0000-0000-0000-0000000000cc', 'Việc sự kiện đã đóng', 's3@t.vn', 'pending');
+SET ROLE authenticated;
+SELECT rrt_test.login('00000000-0000-0000-0000-000000000003');
+SELECT rrt_test.allowed('người phụ trách (khớp họ tên): tick hoàn thành',
+  $$SELECT public.rrt_set_my_activity_status('50000000-0000-0000-0000-000000000001', true)$$);
+SELECT rrt_test.denied('không tick công việc của người khác',
+  $$SELECT public.rrt_set_my_activity_status('50000000-0000-0000-0000-000000000002', true)$$);
+SELECT rrt_test.denied('không tick công việc của sự kiện đã đóng',
+  $$SELECT public.rrt_set_my_activity_status('50000000-0000-0000-0000-000000000003', true)$$);
+SELECT rrt_test.login('00000000-0000-0000-0000-000000000001');
+SELECT rrt_test.denied('người không xem được sự kiện: không tick',
+  $$SELECT public.rrt_set_my_activity_status('50000000-0000-0000-0000-000000000001', false)$$);
+RESET ROLE;
+SELECT rrt_test.eq('đã ghi trạng thái hoàn thành + người hoàn thành + nhật ký',
+  (SELECT count(*) FROM public.incident_activities WHERE id = '50000000-0000-0000-0000-000000000001'
+     AND status = 'completed' AND completed_by = '00000000-0000-0000-0000-000000000003')
+  + (SELECT count(*) FROM public.incident_logs WHERE incident_id = '10000000-0000-0000-0000-00000000000b'
+     AND log_type = 'activity' AND content LIKE '✅%Khoanh vùng'), 2);
+SET ROLE anon;
+SELECT rrt_test.denied('anon: không gọi được',
+  $$SELECT public.rrt_set_my_activity_status('50000000-0000-0000-0000-000000000001', true)$$);
+RESET ROLE;

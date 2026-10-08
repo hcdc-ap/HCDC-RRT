@@ -918,9 +918,14 @@
                 <li><a class="active" href="#">Lịch trực định kỳ</a></li>
               </ul>
             </div>
-            <button id="btn-auto-trigger" class="btn btn-primary" data-permission="admin, ward_admin">
-              <i class='bx bxs-magic-wand'></i> Lịch trình (AP Assistant)
-            </button>
+            <div class="d-flex gap-2 flex-wrap">
+              <button id="btn-roster-day-stats" class="btn btn-outline-primary" data-permission="admin" onclick="openRosterDayStats()">
+                <i class='bx bx-bar-chart-alt-2'></i> Thống kê theo ngày
+              </button>
+              <button id="btn-auto-trigger" class="btn btn-primary" data-permission="admin, ward_admin">
+                <i class='bx bxs-magic-wand'></i> Lịch trình (AP Assistant)
+              </button>
+            </div>
           </div>
           <div class="roster-container">
             <div class="roster-control">

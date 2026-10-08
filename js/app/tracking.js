@@ -55,25 +55,22 @@ document.addEventListener('DOMContentLoaded', function () {
     const myEmail = String(window.userSession?.email || '')
       .toLowerCase()
       .trim();
-    const myMaXa = String(window.userSession?.workplace_ma_xa || '').trim();
-    if (role === 'admin') {
-      // admin: thấy tất cả — không lọc
-    } else {
-      incidents = incidents.filter((inc) => {
-        const isMyWard =
-          role === 'ward_admin' &&
-          myMaXa &&
-          String(inc.ma_xa || '').trim() === myMaXa;
-        const members = String(inc.members || '').toLowerCase();
-        const initial = String(
-          inc.initial_selected_members || ''
-        ).toLowerCase();
-        const declined = String(inc.declined_members || '').toLowerCase();
-        const hasJoined = members.includes(myEmail);
-        const isInvited =
-          initial.includes(myEmail) && !declined.includes(myEmail);
-        return isMyWard || hasJoined || isInvited;
-      });
+    // Phạm vi xem do database (RLS) quyết định theo hồ sơ HIỆN TẠI — không lọc
+    // lại theo hồ sơ lưu ở trình duyệt (có thể cũ, vd. vừa được chuyển xã/vai
+    // trò: diễn tập 08/10, tình huống 2.5). Chỉ ẩn sự kiện ĐANG HOẠT ĐỘNG mà
+    // mình đã báo không tham gia (và không còn trong danh sách tham gia).
+    if (role !== 'admin') {
+      const inList = (list) =>
+        String(list || '')
+          .toLowerCase()
+          .split(';')
+          .some((x) => x.trim() === myEmail);
+      incidents = incidents.filter(
+        (inc) =>
+          role === 'ward_admin' ||
+          inc.status === 'closed' ||
+          !(inList(inc.declined_members) && !inList(inc.members))
+      );
     }
 
     // 2b. Lấy THỜI GIAN KẾT THÚC cho các sự kiện đã đóng (1 query duy nhất)
@@ -431,6 +428,33 @@ document.addEventListener('DOMContentLoaded', function () {
       // HCDC và tuyến cơ sở của phường/xã sự kiện (RPC rrt_replace_incident_member kiểm quyền)
       rotationControls.style.display =
         window.canManageIncident?.(inc) && !isClosed ? 'flex' : 'none';
+    }
+
+    // 4b. Ô nhắn tin: ẩn khi chỉ được XEM (nhân sự HCDC xem sự kiện đã đóng để rút
+    // kinh nghiệm, không quản lý và không có trong danh sách sự kiện — RLS chặn ghi)
+    const composer = document.querySelector('#tab-live-log .input-wrapper');
+    if (composer) {
+      const me = String(window.userSession?.email || '').toLowerCase().trim();
+      const inList = (l) =>
+        String(l || '')
+          .toLowerCase()
+          .split(';')
+          .some((x) => x.trim() === me);
+      const canPost =
+        window.canManageIncident?.(inc) ||
+        inList(inc.members) ||
+        inList(inc.initial_selected_members);
+      composer.style.display = canPost ? 'flex' : 'none';
+      let note = document.getElementById('dossier-readonly-note');
+      if (!note) {
+        note = document.createElement('div');
+        note.id = 'dossier-readonly-note';
+        note.className = 'text-muted small mt-2';
+        note.textContent =
+          'Chỉ xem: sự kiện đã kết thúc, được chia sẻ để rút kinh nghiệm.';
+        composer.parentNode.insertBefore(note, composer.nextSibling);
+      }
+      note.style.display = canPost ? 'none' : 'block';
     }
 
     // 5. Nút Xóa sự kiện — chỉ Quản trị RRT (HCDC); phải gõ đúng tên để xác nhận
