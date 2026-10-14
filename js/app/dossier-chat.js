@@ -678,9 +678,9 @@ document.addEventListener('DOMContentLoaded', function () {
     if (objectivesData.length > 0) {
       objectivesData.forEach((obj, idx) => {
         textSummary += `\n* Mục tiêu ${idx + 1}: ${obj.objective_text}\n`;
-        htmlSummary += `<li><b>Mục tiêu ${idx + 1}:</b> ${
+        htmlSummary += `<li><b>Mục tiêu ${idx + 1}:</b> ${window.escapeHtml(
           obj.objective_text
-        }<ul>`;
+        )}<ul>`;
         const matchedActs = activitiesData.filter(
           (a) => String(a.objective_id) === String(obj.id)
         );
@@ -695,7 +695,7 @@ document.addEventListener('DOMContentLoaded', function () {
               isDone
                 ? '<span class="text-success fw-bold">✓</span>'
                 : '<span class="text-warning fw-bold">⏳</span>'
-            } ${act.content} <i>(Phụ trách: ${assignee})</i></li>`;
+            } ${window.escapeHtml(act.content)} <i>(Phụ trách: ${window.escapeHtml(assignee)})</i></li>`;
           });
         } else {
           textSummary += `  (Chưa có hoạt động chi tiết)\n`;
@@ -718,9 +718,9 @@ document.addEventListener('DOMContentLoaded', function () {
         textSummary += `- ${log.name}: ${log.qty || 0} ${
           log.unit || ''
         }${noteStr}\n`;
-        htmlSummary += `<li>${log.name}: <b>${log.qty || 0}</b> ${
+        htmlSummary += `<li>${window.escapeHtml(log.name)}: <b>${window.escapeHtml(String(log.qty || 0))}</b> ${window.escapeHtml(
           log.unit || ''
-        }${noteStr}</li>`;
+        )}${window.escapeHtml(noteStr)}</li>`;
       });
       htmlSummary += `</ul></div>`;
     }
@@ -770,7 +770,7 @@ document.addEventListener('DOMContentLoaded', function () {
       reportsWithIssues.forEach((r) => {
         let iss = r.issues.trim().replace(/^[-•]\s*/, '');
         uniqueIssues.add(iss);
-        htmlIssues += `<li>${iss} <i>(Báo cáo)</i></li>`;
+        htmlIssues += `<li>${window.escapeHtml(iss)} <i>(Báo cáo)</i></li>`;
       });
       textIssues +=
         Array.from(uniqueIssues)
@@ -800,10 +800,10 @@ document.addEventListener('DOMContentLoaded', function () {
         }. [${time}] ${user}: ${isSOS}${content.substring(0, 150)}${
           content.length > 150 ? '...' : ''
         }\n`;
-        htmlIssues += `<li><span class="badge bg-danger">${time}</span> <b>${user}:</b> ${isSOS}${content.substring(
+        htmlIssues += `<li><span class="badge bg-danger">${time}</span> <b>${window.escapeHtml(user)}:</b> ${isSOS}${window.escapeHtml(content.substring(
           0,
           150
-        )}</li>`;
+        ))}</li>`;
       });
       textIssues += '\n';
       hasIssue = true;
@@ -815,7 +815,7 @@ document.addEventListener('DOMContentLoaded', function () {
       textIssues += `* Thông tin yêu cầu quan trọng (CIR):\n`;
       cirItems.forEach((item) => {
         textIssues += `- ${item.trim()}\n`;
-        htmlIssues += `<li><span class="badge bg-warning text-dark">CIR</span> ${item.trim()}</li>`;
+        htmlIssues += `<li><span class="badge bg-warning text-dark">CIR</span> ${window.escapeHtml(item.trim())}</li>`;
       });
       hasIssue = true;
     }
@@ -846,7 +846,7 @@ document.addEventListener('DOMContentLoaded', function () {
       reportsWithProposals.forEach((r) => {
         let pro = r.next_steps.trim().replace(/^[-•]\s*/, '');
         uniqueProposals.add(pro);
-        htmlLessons += `<li>${pro}</li>`;
+        htmlLessons += `<li>${window.escapeHtml(pro)}</li>`;
       });
       textLessons +=
         Array.from(uniqueProposals)
@@ -868,10 +868,10 @@ document.addEventListener('DOMContentLoaded', function () {
           0,
           150
         )}...\n`;
-        htmlLessons += `<li>[${time}] <b>${user}:</b> ${content.substring(
+        htmlLessons += `<li>[${time}] <b>${window.escapeHtml(user)}:</b> ${window.escapeHtml(content.substring(
           0,
           150
-        )}...</li>`;
+        ))}...</li>`;
       });
       hasLesson = true;
     }

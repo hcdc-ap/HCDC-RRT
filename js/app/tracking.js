@@ -814,7 +814,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     <i class='bx bx-check-circle me-1'></i> Tóm tắt kết quả
                 </div>
                 <div class="card-body py-2 small text-dark">
-                    ${data.aar_summary.replace(/\n/g, '<br>')}
+                    ${window.escapeHtml(data.aar_summary).replace(/\n/g, '<br>')}
                 </div>
             </div>`;
     }
@@ -827,7 +827,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     <i class='bx bx-error me-1'></i> Vấn đề / Khó khăn
                 </div>
                 <div class="card-body py-2 small text-dark">
-                    ${data.aar_issues.replace(/\n/g, '<br>')}
+                    ${window.escapeHtml(data.aar_issues).replace(/\n/g, '<br>')}
                 </div>
             </div>`;
     }
@@ -840,7 +840,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     <i class='bx bx-bulb me-1'></i> Bài học kinh nghiệm
                 </div>
                 <div class="card-body py-2 small text-dark">
-                    ${data.aar_lessons_learned.replace(/\n/g, '<br>')}
+                    ${window.escapeHtml(data.aar_lessons_learned).replace(/\n/g, '<br>')}
                 </div>
             </div>`;
     }
@@ -894,6 +894,86 @@ document.addEventListener('DOMContentLoaded', function () {
   // ==========================================
   // CHUYỂN TAB TRONG DOSSIER (Nhật ký / AAR)
   // ==========================================
+  // ------------------------------------------------------------------
+  // TAB "ĐIỀU PHỐI MẪU" trong Hồ sơ sự kiện: toàn bộ lịch sử điều phối mẫu xét
+  // nghiệm của sự kiện (mọi ngày), chỉ xem. Ai xem được sự kiện thì xem được tab
+  // (RLS lab_dispatch_log: disp_select_rrt). Thao tác gửi / chốt / hủy vẫn ở
+  // công cụ "Xét nghiệm" (chỉ HCDC). Realtime: RealtimeManager → lab_dispatch_log.
+  // ------------------------------------------------------------------
+  const DISPATCH_STATUS = {
+    suggested: ['Đề xuất chờ HCDC duyệt', 'bg-secondary'],
+    inquiry_sent: ['Đã gửi khảo sát, chờ PXN phản hồi', 'bg-info text-dark'],
+    // Trạng thái lưu trong DB (CHECK lab_dispatch_log_status_check)
+    accepted: ['PXN nhận', 'bg-success'],
+    partially_accepted: ['PXN nhận một phần', 'bg-warning text-dark'],
+    // Trạng thái hiển thị cũ (giữ phòng dữ liệu cũ)
+    accepted_full: ['PXN nhận đủ', 'bg-success'],
+    accepted_partial: ['PXN nhận một phần', 'bg-warning text-dark'],
+    rejected: ['PXN không nhận / quá tải', 'bg-danger'],
+    dispatched: ['Đã chốt điều phối', 'bg-primary'],
+    completed: ['Hoàn thành', 'bg-success'],
+    cancelled: ['Đã hủy', 'bg-dark'],
+  };
+  window.loadDossierDispatchHistory = async function (incidentId, opts = {}) {
+    const box = document.getElementById('dossier-dispatch-history');
+    if (!box || !incidentId) return;
+    const esc = window.escapeHtml;
+    if (!opts.silent) box.innerHTML = '<p class="text-muted text-center mt-4">Đang tải lịch sử điều phối mẫu…</p>';
+    const { data, error } = await window.supabaseClient
+      .from('lab_dispatch_log')
+      .select(
+        'id, status, dispatch_date, created_at, requested_sample_count, accepted_sample_count, sample_count, ' +
+          'requested_test_types, accepted_test_types, pathogens, laboratories(name), test_types(name)'
+      )
+      .eq('incident_id', incidentId)
+      .order('created_at', { ascending: false });
+    if (String(window.currentDossierId) !== String(incidentId)) return;
+    if (error) {
+      box.innerHTML = `<div class="alert alert-danger mt-3">Không tải được lịch sử điều phối: ${esc(error.message)}</div>`;
+      return;
+    }
+    const rows = data || [];
+    const sig = JSON.stringify(rows);
+    if (opts.silent && box.dataset.sig === sig) return;
+    box.dataset.sig = sig;
+    if (!rows.length) {
+      box.innerHTML =
+        '<p class="text-muted text-center mt-5">Sự kiện chưa có yêu cầu điều phối mẫu xét nghiệm nào.</p>';
+      return;
+    }
+    const sum = (k, st) => rows.filter((r) => !st || st.includes(r.status)).reduce((n, r) => n + (r[k] || 0), 0);
+    const labs = new Set(rows.filter((r) => r.status !== 'cancelled').map((r) => r.laboratories?.name).filter(Boolean));
+    const fmt = (t) =>
+      t ? new Date(t).toLocaleString('vi-VN', { hour12: false, day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+    const list = (a) => (Array.isArray(a) && a.length ? a.map(esc).join(', ') : '');
+    box.innerHTML = `
+      <div class="d-flex flex-wrap gap-3 my-3 small">
+        <div class="border rounded px-3 py-2"><div class="text-muted">Lượt yêu cầu</div><b class="fs-5">${rows.length}</b></div>
+        <div class="border rounded px-3 py-2"><div class="text-muted">PXN tham gia</div><b class="fs-5">${labs.size}</b></div>
+        <div class="border rounded px-3 py-2"><div class="text-muted">Mẫu đã chốt điều phối</div><b class="fs-5 text-primary">${sum('sample_count', ['dispatched', 'completed'])}</b></div>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-sm align-middle">
+          <thead><tr><th>Thời gian</th><th>Phòng xét nghiệm</th><th>Kỹ thuật / tác nhân</th><th class="text-center">Mẫu YC / nhận / chốt</th><th>Trạng thái</th></tr></thead>
+          <tbody>${rows
+            .map((r) => {
+              const [label, cls] = DISPATCH_STATUS[r.status] || [r.status || '', 'bg-light text-dark'];
+              const techs = list(r.requested_test_types) || esc(r.test_types?.name || '');
+              const acc = list(r.accepted_test_types);
+              const path = list(r.pathogens);
+              return `<tr>
+                <td class="small text-nowrap">${esc(fmt(r.created_at))}</td>
+                <td>${esc(r.laboratories?.name || '—')}</td>
+                <td class="small">${techs || '—'}${acc && acc !== techs ? `<div class="text-success">Nhận: ${acc}</div>` : ''}${path ? `<div class="text-muted">Tác nhân: ${path}</div>` : ''}</td>
+                <td class="text-center text-nowrap">${r.requested_sample_count || 0} / ${r.accepted_sample_count || 0} / <b>${r.sample_count || 0}</b></td>
+                <td><span class="badge ${cls}">${esc(label)}</span></td></tr>`;
+            })
+            .join('')}</tbody>
+        </table>
+      </div>
+      <div class="small text-muted">Gửi khảo sát, chốt, hủy điều phối: công cụ "Xét nghiệm" (Quản trị RRT HCDC). Tab tự cập nhật khi PXN phản hồi.</div>`;
+  };
+
   window.switchDossierTab = function (tabId, btnElement) {
     const dossierView = document.getElementById('tracking-view-dossier');
     if (!dossierView) return;
@@ -912,6 +992,11 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // Active nút được nhấn
     if (btnElement) btnElement.classList.add('active');
+
+    if (tabId === 'tab-dispatch-history') {
+      const incidentId = window.currentDossierId || window.selectedIncidentId;
+      if (incidentId) window.loadDossierDispatchHistory(incidentId);
+    }
 
     // GỌI HÀM TẢI DỮ LIỆU KHI CHUYỂN SANG TAB AAR
     if (tabId === 'tab-aar-preview') {
