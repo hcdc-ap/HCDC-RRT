@@ -701,3 +701,46 @@ SET ROLE anon;
 SELECT rrt_test.denied('anon: không gọi được',
   $$SELECT public.rrt_set_my_activity_status('50000000-0000-0000-0000-000000000001', true)$$);
 RESET ROLE;
+
+-- ============================================================================
+\echo '--- lab_dispatch_log: phạm vi đọc (RRT / LIMS / tải trong ngày) ---'
+-- PGlite không tạo được bảng laboratories từ schema gốc (cột PostGIS): bảng tối giản cho test
+CREATE TABLE IF NOT EXISTS public.laboratories (id uuid PRIMARY KEY, name text NOT NULL);
+INSERT INTO public.laboratories (id, name) VALUES
+  ('60000000-0000-0000-0000-000000000001', 'PXN 1'), ('60000000-0000-0000-0000-000000000002', 'PXN 2');
+-- Dữ liệu mẫu tạo không qua phiên giả lập (chốt hồ sơ chỉ áp dụng người dùng đăng nhập)
+SELECT set_config('request.jwt.claims', '{}', false);
+INSERT INTO public.incidents (id, event_name, status, ma_xa, initial_selected_members, members) VALUES
+  ('10000000-0000-0000-0000-0000000000e1', 'Điều phối A', 'active', 'XA', 's1@t.vn', 's1@t.vn'),
+  ('10000000-0000-0000-0000-0000000000e2', 'Điều phối B', 'active', 'XB', 's3@t.vn', 's3@t.vn');
+INSERT INTO auth.users (id, email) VALUES
+  ('00000000-0000-0000-0000-0000000000d1', 'labadmin@t.vn'), ('00000000-0000-0000-0000-0000000000d2', 'hcdcadmin@t.vn');
+INSERT INTO public.profiles (id, email, role, registration_status, lab_id) VALUES
+  ('00000000-0000-0000-0000-0000000000d1', 'labadmin@t.vn', 'lab_admin', 'approved', '60000000-0000-0000-0000-000000000001'),
+  ('00000000-0000-0000-0000-0000000000d2', 'hcdcadmin@t.vn', 'hcdc_admin', 'approved', NULL);
+INSERT INTO public.lab_dispatch_log (id, lab_id, incident_id, status, sample_count, dispatch_date) VALUES
+  ('70000000-0000-0000-0000-000000000001', '60000000-0000-0000-0000-000000000002', '10000000-0000-0000-0000-0000000000e1', 'dispatched', 3, '2026-01-01'),
+  ('70000000-0000-0000-0000-000000000002', '60000000-0000-0000-0000-000000000002', '10000000-0000-0000-0000-0000000000e2', 'dispatched', 2, (now() AT TIME ZONE 'utc')::date),
+  ('70000000-0000-0000-0000-000000000003', '60000000-0000-0000-0000-000000000001', NULL, 'dispatched', 1, '2026-01-01');
+SET ROLE authenticated;
+SELECT rrt_test.login('00000000-0000-0000-0000-000000000001');
+SELECT rrt_test.eq('nhân viên phường A: dòng của sự kiện mình (cũ) + dòng hôm nay, không lịch sử PXN khác',
+  (SELECT count(*) FROM public.lab_dispatch_log WHERE id IN ('70000000-0000-0000-0000-000000000001','70000000-0000-0000-0000-000000000002'))
+  * 10 + (SELECT count(*) FROM public.lab_dispatch_log WHERE id = '70000000-0000-0000-0000-000000000003'), 20);
+SELECT rrt_test.login('00000000-0000-0000-0000-000000000003');
+SELECT rrt_test.eq('nhân viên phường B: không đọc lịch sử sự kiện phường A',
+  (SELECT count(*) FROM public.lab_dispatch_log WHERE id = '70000000-0000-0000-0000-000000000001'), 0);
+SELECT rrt_test.login('00000000-0000-0000-0000-0000000000d1');
+SELECT rrt_test.eq('LIMS lab_admin: lịch sử PXN mình + dòng hôm nay, không lịch sử PXN khác',
+  (SELECT count(*) FROM public.lab_dispatch_log WHERE id IN ('70000000-0000-0000-0000-000000000003','70000000-0000-0000-0000-000000000002'))
+  * 10 + (SELECT count(*) FROM public.lab_dispatch_log WHERE id = '70000000-0000-0000-0000-000000000001'), 20);
+SELECT rrt_test.login('00000000-0000-0000-0000-0000000000d2');
+SELECT rrt_test.eq('LIMS hcdc_admin: đọc mọi dòng (báo cáo theo khoảng ngày)',
+  (SELECT count(*) FROM public.lab_dispatch_log WHERE id::text LIKE '70000000-%'), 3);
+SELECT rrt_test.login('00000000-0000-0000-0000-00000000000a');
+SELECT rrt_test.eq('Quản trị RRT: đọc mọi dòng',
+  (SELECT count(*) FROM public.lab_dispatch_log WHERE id::text LIKE '70000000-%'), 3);
+SELECT rrt_test.login('00000000-0000-0000-0000-0000000000fe');
+SELECT rrt_test.eq('tài khoản chưa duyệt: không đọc được dòng nào',
+  (SELECT count(*) FROM public.lab_dispatch_log WHERE id::text LIKE '70000000-%'), 0);
+RESET ROLE;
