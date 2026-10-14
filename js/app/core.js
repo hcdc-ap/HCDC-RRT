@@ -510,6 +510,11 @@ window.RealtimeManager = {
         if (this.isShown('page-tracking')) window.renderTrackingPage?.(true, { silent: true });
       })
     );
+    // Điều phối mẫu xét nghiệm của sự kiện (tab "Điều phối mẫu" trong hồ sơ)
+    on('lab_dispatch_log', (p) => {
+      const id = incOf(p);
+      this.debounce('disp:' + id, () => this.refreshDispatchTab(id));
+    });
     // Chuông thông báo
     on(
       'notifications',
@@ -576,6 +581,13 @@ window.RealtimeManager = {
     }
   },
 
+  // Tab "Điều phối mẫu" đang mở của hồ sơ sự kiện
+  async refreshDispatchTab(incidentId) {
+    const id = this.dossierOpenFor(incidentId);
+    if (!id || !document.getElementById('tab-dispatch-history')?.classList.contains('active')) return;
+    await window.loadDossierDispatchHistory?.(id, { silent: true });
+  },
+
   // Lịch trực: chỉ vẽ lại khi dữ liệu thật sự đổi (tránh nháy lịch mỗi lần kiểm tra)
   async refreshRoster(force) {
     if (!this.isShown('page-roster') || typeof window.reloadData !== 'function') return;
@@ -628,7 +640,10 @@ window.RealtimeManager = {
       if (++this._profileTick % 3 === 0) await this.checkProfileChanged();
       if (this.isShown('page-tracking')) {
         const id = this.dossierOpenFor();
-        if (id) await this.refreshDossier(id, { logs: true, members: true });
+        if (id) {
+          await this.refreshDossier(id, { logs: true, members: true });
+          await this.refreshDispatchTab(id);
+        }
         else await window.renderTrackingPage?.(true, { silent: true });
       }
       if (this.isShown('page-roster')) await this.refreshRoster(false);
