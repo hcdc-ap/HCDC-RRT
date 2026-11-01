@@ -1,12 +1,21 @@
-# Đặt webhook cho bot RRT kèm secret_token, rồi lưu secret vào Supabase.
+﻿# Đặt webhook cho bot RRT kèm secret_token, rồi lưu secret vào Supabase.
 # Chạy trong PowerShell tại thư mục gốc repo (đã `supabase link`). Token bot nhập ẩn, không lưu vào file.
-#   powershell -File tools/telegram-set-webhook.ps1
+#   powershell -ExecutionPolicy Bypass -File tools/telegram-set-webhook.ps1
 # Thứ tự: setWebhook (có secret) trước, đặt biến TELEGRAM_WEBHOOK_SECRET sau — hàm chỉ kiểm tra khi biến có mặt.
 $ErrorActionPreference = 'Stop'
 $ref = 'sxzjbygiowpscyhiffqc'
 $sec = Read-Host 'Dán token bot RRT (@rrt_alert_bot, KHÔNG phải bot LIMS)' -AsSecureString
 $token = [Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR($sec))
-$me = Invoke-RestMethod "https://api.telegram.org/bot$token/getMe"
+$token = $token.Trim().Trim([char]34).Trim([char]39)
+if ($token -match '^bot') { $token = $token.Substring(3) }
+if ($token -notmatch '^\d{6,12}:[A-Za-z0-9_-]{30,}$') {
+  throw "Token sai định dạng (dạng đúng: 123456789:AAH... không có khoảng trắng). Độ dài đã nhập: $($token.Length) ký tự."
+}
+try {
+  $me = Invoke-RestMethod "https://api.telegram.org/bot$token/getMe"
+} catch {
+  throw 'Telegram không nhận token này (lỗi 401/404): token sai, đã bị thu hồi hoặc chép thiếu. Lấy lại ở @BotFather -> /mybots -> bot -> API Token.'
+}
 if ($me.result.username -ne 'rrt_alert_bot') { throw "Token thuộc bot @$($me.result.username), không phải @rrt_alert_bot. Dừng." }
 $url = "https://$ref.supabase.co/functions/v1/telegram-bot-handler"
 $bytes = New-Object byte[] 32
