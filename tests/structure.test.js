@@ -116,3 +116,40 @@ test('không còn liên kết về địa chỉ cũ hcdc-ap.github.io/RRT/ (404)
     assert.doesNotMatch(src, /hcdc-ap\.github\.io\/RRT\//, `${p}: liên kết hcdc-ap.github.io/RRT/ không tồn tại`);
   }
 });
+
+test('mọi trang HTML có CSP (script-src giới hạn nguồn, object-src none) và referrer policy', () => {
+  const pages = fs.readdirSync(ROOT).filter((f) => f.endsWith('.html'));
+  for (const p of pages) {
+    const src = fs.readFileSync(path.join(ROOT, p), 'utf8');
+    assert.match(src, /http-equiv="Content-Security-Policy"[^>]*script-src 'self'[^>]*object-src 'none'/, `${p}: thiếu CSP`);
+    assert.match(src, /name="referrer"/, `${p}: thiếu referrer policy`);
+  }
+});
+
+test('script/stylesheet CDN có SRI (trừ Highcharts và Google Fonts)', () => {
+  const pages = fs.readdirSync(ROOT).filter((f) => f.endsWith('.html'));
+  for (const p of pages) {
+    const src = fs.readFileSync(path.join(ROOT, p), 'utf8');
+    for (const m of src.matchAll(/<(?:script|link)\b[^>]*(?:src|href)="(https:\/\/[^"]+)"[^>]*>/g)) {
+      const url = m[1];
+      if (/rel="(?:preconnect|icon|shortcut icon)"/.test(m[0])) continue;
+      if (/fonts\.googleapis\.com|code\.highcharts\.com|github\.com/.test(url)) continue;
+      assert.match(m[0], /integrity="sha(?:256|384)-/, `${p}: thiếu SRI cho ${url}`);
+    }
+  }
+});
+
+test('chính sách mật khẩu form khớp Supabase: tối thiểu 12 ký tự', () => {
+  const login = fs.readFileSync(path.join(ROOT, 'js/app/login-ui.js'), 'utf8');
+  const shell = fs.readFileSync(path.join(ROOT, 'js/app/shell.js'), 'utf8');
+  assert.match(login, /\.\{12,72\}\$\//);
+  assert.match(login, /value\.length >= 12/);
+  assert.match(shell, /newPass\.length < 12/);
+  assert.doesNotMatch(login, /\.\{8,32\}/);
+});
+
+test('đăng ký gửi họ tên/đơn vị/điện thoại qua metadata (không dựa vào update profiles khi chưa có phiên)', () => {
+  const login = fs.readFileSync(path.join(ROOT, 'js/app/login-ui.js'), 'utf8');
+  assert.match(login, /options:\s*\{\s*data:\s*\{\s*full_name/);
+  assert.match(login, /data\.session && data\.user/);
+});

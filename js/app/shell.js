@@ -187,6 +187,47 @@ document.addEventListener('DOMContentLoaded', function () {
       submitChangePassword(); // Gọi hàm xử lý
     });
   });
+  // LIÊN KẾT TELEGRAM: lấy mã dùng một lần (RPC rrt_create_telegram_link_code), gửi cho bot
+  window.openTelegramLinkModal = async function () {
+    const modalEl = document.getElementById('modal-telegram-link');
+    if (!modalEl) return;
+    const oldInstance = bootstrap.Modal.getInstance(modalEl);
+    if (oldInstance) oldInstance.dispose();
+    document.querySelectorAll('.modal-backdrop').forEach((el) => el.remove());
+    new bootstrap.Modal(modalEl).show();
+
+    const codeEl = document.getElementById('tg-link-code');
+    const openEl = document.getElementById('tg-link-open');
+    const statusEl = document.getElementById('tg-link-status');
+    codeEl.textContent = '…';
+    openEl.removeAttribute('href');
+    statusEl.textContent = '';
+    try {
+      const uid = window.userSession?.id;
+      if (uid) {
+        const { data: me } = await window.supabaseClient
+          .from('profiles')
+          .select('telegram_chat_id')
+          .eq('id', uid)
+          .maybeSingle();
+        statusEl.textContent = me?.telegram_chat_id
+          ? 'Tài khoản đã liên kết Telegram. Chỉ cần lấy mã mới khi đổi sang tài khoản Telegram khác.'
+          : 'Tài khoản chưa liên kết Telegram.';
+      }
+      const { data: code, error } = await window.supabaseClient.rpc(
+        'rrt_create_telegram_link_code'
+      );
+      if (error) throw error;
+      codeEl.textContent = code;
+      openEl.href =
+        'https://t.me/rrt_alert_bot?start=' + encodeURIComponent(code);
+    } catch (err) {
+      console.error('Lỗi tạo mã liên kết Telegram:', err);
+      codeEl.textContent = '—';
+      showToast('Không tạo được mã liên kết: ' + (err.message || err), 'error');
+    }
+  };
+
   //ĐỔI MẬT KHẨU
   window.openChangePassModal = function () {
     const modalEl = document.getElementById('modal-change-password');
@@ -226,8 +267,18 @@ document.addEventListener('DOMContentLoaded', function () {
     if (newPass !== confirmPass) {
       return showToast('Mật khẩu mới và xác nhận không khớp!', 'error');
     }
-    if (newPass.length < 6) {
-      return showToast('Mật khẩu mới phải có ít nhất 6 ký tự!', 'warning');
+    if (
+      newPass.length < 12 ||
+      newPass.length > 72 ||
+      !/[a-z]/.test(newPass) ||
+      !/[A-Z]/.test(newPass) ||
+      !/\d/.test(newPass) ||
+      !/[^a-zA-Z\d\s]/.test(newPass)
+    ) {
+      return showToast(
+        'Mật khẩu mới phải 12-72 ký tự, có chữ hoa, chữ thường, số và ký tự đặc biệt!',
+        'warning'
+      );
     }
 
     if (typeof showLoadingSpinner === 'function') showLoadingSpinner();
@@ -284,8 +335,12 @@ document.addEventListener('DOMContentLoaded', function () {
       let errorMsg = err.message;
       if (errorMsg.includes('different from the old password')) {
         errorMsg = 'Mật khẩu mới không được giống với mật khẩu cũ!';
-      } else if (errorMsg.includes('least 6 characters')) {
-        errorMsg = 'Mật khẩu mới phải có ít nhất 6 ký tự!';
+      } else if (
+        errorMsg.includes('least 6 characters') ||
+        errorMsg.toLowerCase().includes('password should')
+      ) {
+        errorMsg =
+          'Mật khẩu mới phải 12-72 ký tự, có chữ hoa, chữ thường, số và ký tự đặc biệt!';
       }
 
       if (typeof showToast === 'function') {

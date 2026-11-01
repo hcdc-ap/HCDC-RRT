@@ -118,3 +118,15 @@ bỏ quyền đọc riêng cột này (Edge Function dùng service_role, không 
 Truy vấn `select('*')` trên bảng này sẽ lỗi quyền — phải liệt kê cột
 (`tests/structure.test.js` kiểm tra tự động cho app RRT). **App LIMS** nếu đọc
 `lab_dispatch_log` bằng `select('*')` cần đổi tương tự trước khi áp.
+
+## Rà soát an toàn thông tin 11/2026 — thứ tự triển khai
+
+Sao lưu trước (đã có `backup-supabase-2026-11-01-truoc-nang-cap-rrt`, gồm cả mã Edge Function cũ). Thứ tự bắt buộc, vì LIMS dùng chung project:
+
+1. **CSDL** — `supabase db query --linked -f supabase/migrations/20261101000000_rrt_telegram_link_code.sql` (hoàn tác: `rollback/20261101000000_rrt_telegram_link_code_down.sql`). Chỉ thêm 1 bảng, 1 hàm; sửa `handle_new_user` (không metadata thì hành vi y như cũ).
+2. **Bí mật gửi email** — `supabase secrets set GAS_WEBHOOK_SECRET=<giá trị đang chạy>` (giá trị cũ nằm ở bản sao `edge-functions/send-notification-free` trong thư mục sao lưu). Phải đặt TRƯỚC khi deploy bước 3, vì mã mới không còn giá trị dự phòng. Sau đó nên đổi sang giá trị mới ở cả Supabase lẫn Google Apps Script.
+3. **Deploy** `send-notification-free`, `send-lab-inquiry`, `notify-lab-result`: `supabase functions deploy <tên> --project-ref sxzjbygiowpscyhiffqc`. Kiểm tra: kích hoạt một thông báo thử, email phải tới.
+4. **Webhook Telegram có secret** — tạo `S=$(openssl rand -hex 32)`; gọi `https://api.telegram.org/bot<TOKEN>/setWebhook` với `url=https://sxzjbygiowpscyhiffqc.supabase.co/functions/v1/telegram-bot-handler` và `secret_token=$S`; rồi `supabase secrets set TELEGRAM_WEBHOOK_SECRET=$S`. Đặt webhook trước, biến môi trường sau (hàm chỉ kiểm tra khi biến có mặt).
+5. **Deploy** `telegram-bot-handler` cùng lúc đưa giao diện mới lên GitHub Pages (nút "Liên kết Telegram" cần bước 1). Cách liên kết bằng email không còn hoạt động.
+6. **Xoá** hàm cũ không còn dùng: `supabase functions delete send-notification --project-ref sxzjbygiowpscyhiffqc` (trigger chỉ trỏ `send-notification-free`).
+7. Chạy `sql/kiem_tra_rls.sql` (LIMS) để xác nhận không có mục `loi` mới.

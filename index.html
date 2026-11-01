@@ -2,6 +2,8 @@
 <html lang="vi">
 
 <head>
+  <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com https://code.jquery.com https://cdnjs.cloudflare.com https://cdn.datatables.net https://code.highcharts.com https://cdn.sheetjs.com; object-src 'none'; base-uri 'self'; form-action 'self'">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
   <base target="_self">
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
@@ -25,18 +27,18 @@
 
   <link href="https://fonts.googleapis.com/css2?family=Ubuntu:wght@400;700&family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link href="https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css" integrity="sha384-42kyIPf7HDYLkGffmxDhSx/3Z/53wGBs3nD6wEFxsbeDc7rMO6mkYbkAcpRsnMU2" crossorigin="anonymous" rel="stylesheet">
-  <link rel="stylesheet" href="https://unicons.iconscout.com/release/v4.0.8/css/line.css">
+  <link rel="stylesheet" href="https://unicons.iconscout.com/release/v4.0.8/css/line.css" integrity="sha384-2mD18YQDRE2gaMLgbA4j3ZoBRBOBtavcut3Cmbu/wEzjyRUaazYR4bXTTgsoz5gU" crossorigin="anonymous" >
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous" rel="stylesheet">
-  <link rel="stylesheet" href="https://code.jquery.com/ui/1.13.2/themes/base/jquery-ui.css">
-  <link rel="stylesheet" href="https://cdn.datatables.net/2.0.8/css/dataTables.dataTables.min.css">
-  <link rel="stylesheet" href="https://cdn.datatables.net/responsive/3.0.2/css/responsive.dataTables.min.css">
-  <link rel="stylesheet" href="https://cdn.datatables.net/buttons/3.0.2/css/buttons.dataTables.min.css">
+  <link rel="stylesheet" href="https://code.jquery.com/ui/1.13.2/themes/base/jquery-ui.css" integrity="sha384-vIQIPaHJRqkO8xhnLxSZ0rHF6LyiWXbLF3grsa9pv9yDFyOPGrE1teHOuRNMJoZs" crossorigin="anonymous" >
+  <link rel="stylesheet" href="https://cdn.datatables.net/2.0.8/css/dataTables.dataTables.min.css" integrity="sha384-zUxWDVAcow8yNu+q4VFsyZA3qWsKKGdWPW0SVjaR12LQze4SY8Nr75US6VDhbWkf" crossorigin="anonymous" >
+  <link rel="stylesheet" href="https://cdn.datatables.net/responsive/3.0.2/css/responsive.dataTables.min.css" integrity="sha384-kz9bozrCHP/y+wTJV8P+n/dMBOh00rqNmmIAgHckzFWpoSB49V5ornW1aY+uYTyA" crossorigin="anonymous" >
+  <link rel="stylesheet" href="https://cdn.datatables.net/buttons/3.0.2/css/buttons.dataTables.min.css" integrity="sha384-bmRGZjM60LuyQcBG51pH+swEjyknoKhaKYJcm871tz9jtbe/TkKueOcoi27/ROBG" crossorigin="anonymous" >
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" integrity="sha384-OXVF05DQEe311p6ohU11NwlnX08FzMCsyoXzGOaL+83dKAb3qS17yZJxESl8YrJQ" crossorigin="anonymous" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" integrity="sha384-IrMr0LFnIMa9H6HhC5VVqVuWNEIwspnRLKQc0SUyPj4Cy4s02DiWDZEoJOo5WNK6" crossorigin="anonymous" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha384-sHL9NAb7lN7rfvG5lfHpm643Xkcjzp4jFvuavGOndn6pjVqS6ny56CAt3nsEVT4H" crossorigin="anonymous" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" integrity="sha384-pmjIAcz2bAn0xukfxADbZIb3t8oRT9Sv0rvO+BR5Csr6Dhqq+nZs59P0pPKQJkEV" crossorigin="anonymous" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" integrity="sha384-wgw+aLYNQ7dlhK47ZPK7FRACiq7ROZwgFNg0m04avm4CaXS+Z9Y7nMu8yNjBKYC+" crossorigin="anonymous" />
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css" integrity="sha384-NZLkVuBRMEeB4VeZz27WwTRvlhec30biQ8Xx7zG7JJnkvEKRg5qi6BNbEXo9ydwv" crossorigin="anonymous" />
   <script>
     // Tắt console.log/console.debug khi chạy ở domain production (giữ nguyên
     // console.warn/console.error). Chạy trên localhost/127.0.0.1 vẫn log bình
@@ -52,28 +54,28 @@
   <script src="https://code.jquery.com/jquery-3.7.1.min.js" integrity="sha256-/JqT3SQfawRcv/BIHPThkBvs0OEvtFFmqPF/lYI/Cxo=" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
   <script src="https://code.jquery.com/ui/1.13.2/jquery-ui.min.js" integrity="sha256-lSjKY0/srUM9BE3dPm+c4fBo1dky2v27Gdjm2uoZaL0=" crossorigin="anonymous"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.4/moment.min.js"></script>
-  <script src="https://cdn.datatables.net/2.0.8/js/dataTables.min.js" defer></script>
-  <script src="https://cdn.datatables.net/buttons/3.0.2/js/dataTables.buttons.min.js" defer></script>
-  <script src="https://cdn.datatables.net/buttons/3.0.2/js/buttons.html5.min.js" defer></script>
-  <script src="https://cdn.datatables.net/buttons/3.0.2/js/buttons.print.min.js" defer></script>
-  <script src="https://cdn.datatables.net/buttons/3.0.2/js/buttons.colVis.min.js" defer></script>
-  <script src="https://cdn.datatables.net/responsive/3.0.2/js/dataTables.responsive.min.js" defer></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.4/moment.min.js" integrity="sha384-VCGDSwGwLWkVOK5vAWSaY38KZ4oKJ0whHjpJQhjqrMlWadpf2dUVKLgOLBdEaLvZ" crossorigin="anonymous" ></script>
+  <script src="https://cdn.datatables.net/2.0.8/js/dataTables.min.js" defer integrity="sha384-nJy9D0UBD2LV93ED7IXSsdWfa9PumZvn70zRSR/oFw5Zq0x6gWwWdpLeGsbVATVg" crossorigin="anonymous" ></script>
+  <script src="https://cdn.datatables.net/buttons/3.0.2/js/dataTables.buttons.min.js" defer integrity="sha384-jPaMsN6SxAc+ygF7CdEg+EKYMjx3XDhocPUxNhKs4WZ59peJ3FOc7nMxACfz0RQk" crossorigin="anonymous" ></script>
+  <script src="https://cdn.datatables.net/buttons/3.0.2/js/buttons.html5.min.js" defer integrity="sha384-zWqQK2IyQYBqc1nygGxSMEUQW6oFcVqJJcNvJ6s2e2OTjbusDxQLbTaC4pBUuT0N" crossorigin="anonymous" ></script>
+  <script src="https://cdn.datatables.net/buttons/3.0.2/js/buttons.print.min.js" defer integrity="sha384-DA2KQaF68H2KUFghq/nTCNv5Aln8p4MFuQtWs6B6EF+KqYUe2rHI2p7+52OAqoV5" crossorigin="anonymous" ></script>
+  <script src="https://cdn.datatables.net/buttons/3.0.2/js/buttons.colVis.min.js" defer integrity="sha384-LC8PmH0Tdjy6c1Hesl75hUSKQuoIo3PCAr3svr0xJ4y90sNaTEMLK5n68Fl5VBqB" crossorigin="anonymous" ></script>
+  <script src="https://cdn.datatables.net/responsive/3.0.2/js/dataTables.responsive.min.js" defer integrity="sha384-qEa+gLeZqlM4MkIP5DOnREMSFFhbLu5+8SDh56fRGErssuPwLefhyOE3uf4KcVEZ" crossorigin="anonymous" ></script>
   <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js" integrity="sha384-d3UHjPdzJkZuk5H3qKYMLRyWLAQBJbby2yr2Q58hXXtAGF8RSNO9jpLDlKKPv5v3" crossorigin="anonymous" defer></script>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH" crossorigin="anonymous" defer></script>
   <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js" integrity="sha384-eXVCORTRlv4FUUgS/xmOyr66XBVraen8ATNLMESp92FKXLAMiKkerixTiBvXriZr" crossorigin="anonymous" defer></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js" defer></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js" defer integrity="sha384-JP5UPxIO2Tm2o79Fb0tGYMa44jkWar53aBoCbd8ah0+LcCDoohTIYr+zIXyfGIJN" crossorigin="anonymous" ></script>
   <script src="https://unpkg.com/leaflet.browser.print@1.0.6/dist/leaflet.browser.print.min.js" integrity="sha384-yoKEDASIbCEoyd5CXreDYnbFov068s8ijSZvASs+naaWKkHbT9NMWXM6BTqaF3ZB" crossorigin="anonymous" defer></script>
   <script src="https://code.highcharts.com/maps/13.1.1/highmaps.js" defer></script>
   <script src="https://code.highcharts.com/maps/13.1.1/modules/exporting.js" defer></script>
   <script src="https://code.highcharts.com/maps/13.1.1/modules/accessibility.js" defer></script>
   <script src="https://code.highcharts.com/maps/13.1.1/modules/tiledwebmap.js" defer></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.4.4/proj4.js" defer></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js" defer></script>
-  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js" defer></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.10/pdfmake.min.js" defer></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.10/vfs_fonts.js" defer></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.4.4/proj4.js" defer integrity="sha384-pU4pDPdqMsHkAy7/JQNJwTeNXagKwH2SWnbWDC8xjhh7ZFlKOt3bVv5KPr22+h7B" crossorigin="anonymous" ></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer integrity="sha384-JcnsjUPPylna1s1fvi1u12X5qjY5OL56iySh75FdtrwhO/SWXgMjoVqcKyIIWOLk" crossorigin="anonymous" ></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js" defer integrity="sha384-fCAW/rDWORTbQXSiB7mOg0QtQ5c+r0f544y6XoKjuVva0nMBlCpNUjiFeG5iMdS3" crossorigin="anonymous" ></script>
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js" defer integrity="sha384-EnyY0/GSHQGSxSgMwaIPzSESbqoOLSexfnSMN2AP+39Ckmn92stwABZynq1JyzdT" crossorigin="anonymous" ></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.10/pdfmake.min.js" defer integrity="sha384-vseuUuO/VRMn00lXYd5m/Pk4l/7RjMqhXGf6G0RALy+On0txYb39dQsUQDAd7q5L" crossorigin="anonymous" ></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.10/vfs_fonts.js" defer integrity="sha384-1y8s2U/Jjn4/oeCEBcfYH3M6XeQtcg4LRmluN92FS69UgtLzoyhn3swew8Ynj8Ai" crossorigin="anonymous" ></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js" integrity="sha384-Rj26LVGvoeRVR6+mwQmFfcR3QOBEwT+ZmuCWpuiqeTzJpCs0ER4ITAWGb4Hiy3Ok" crossorigin="anonymous"></script>
 </head>
 
@@ -197,7 +199,7 @@
                 </i>
                 <div class="otp-password-requirements-container" id="otp-password-requirements-container">
                   <ul class="otp-password-requirements" id="otp-password-requirements">
-                    <li id="otp-password-requirements-length"><i class="uil uil-info-circle"></i>&nbsp;Từ 8 đến 32 ký tự</li>
+                    <li id="otp-password-requirements-length"><i class="uil uil-info-circle"></i>&nbsp;Từ 12 đến 72 ký tự</li>
                     <li id="otp-password-requirements-number"><i class="uil uil-info-circle"></i>&nbsp;Chứa ít nhất 1 số</li>
                     <li id="otp-password-requirements-lower"><i class="uil uil-info-circle"></i>&nbsp;Chứa ít nhất 1 chữ cái thường</li>
                     <li id="otp-password-requirements-upper"><i class="uil uil-info-circle"></i>&nbsp;Chứa ít nhất 1 chữ cái viết hoa</li>
@@ -280,7 +282,7 @@
                 </i>
                 <div class="password-requirements-container" id="password-requirements-container">
                   <ul class="password-requirements" id="password-requirements">
-                    <li id="password-requirements-length"><i class="uil uil-info-circle"></i>&nbsp;Từ 8 đến 32 ký tự</li>
+                    <li id="password-requirements-length"><i class="uil uil-info-circle"></i>&nbsp;Từ 12 đến 72 ký tự</li>
                     <li id="password-requirements-number"><i class="uil uil-info-circle"></i>&nbsp;Chứa ít nhất 1 số</li>
                     <li id="password-requirements-lower"><i class="uil uil-info-circle"></i>&nbsp;Chứa ít nhất 1 chữ cái thường</li>
                     <li id="password-requirements-upper"><i class="uil uil-info-circle"></i>&nbsp;Chứa ít nhất 1 chữ cái viết hoa</li>
@@ -482,6 +484,7 @@
           <ul>
             <li><a href="#" id="accountLink">Tài khoản</a></li>
             <li><a href="#" id="changePassLink" onclick="openChangePassModal()">Đổi mật khẩu</a></li>
+            <li><a href="#" id="telegramLinkLink" onclick="openTelegramLinkModal(); return false;">Liên kết Telegram</a></li>
             <li>
               <a href="#" id="messageLink">Tin nhắn</a>
             </li>
@@ -3412,7 +3415,7 @@
           <div class="mb-3">
             <label for="new-pass" class="form-label">Mật khẩu mới</label>
             <div class="input-group">
-              <input type="password" id="new-pass" name="new-pass" class="form-control" autocomplete="new-password" placeholder="Tối thiểu 6 ký tự">
+              <input type="password" id="new-pass" name="new-pass" class="form-control" autocomplete="new-password" placeholder="Tối thiểu 12 ký tự, có chữ hoa, thường, số, ký hiệu">
               <button class="btn btn-outline-secondary" type="button" onclick="togglePassword('new-pass', this)">
                 <i class='bx bx-show'></i>
               </button>
@@ -3434,6 +3437,52 @@
             <button type="button" class="btn btn-primary" onclick="window.submitChangePassword()">XÁC NHẬN</button>
           </div>
         </form>
+      </div>
+    </div>
+  </div>
+  <div id="modal-telegram-link" class="modal fade" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title"><i class='bx bxl-telegram'></i> Liên kết Telegram</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <p id="tg-link-status" class="mb-2"></p>
+          <p class="mb-2">Bấm nút bên dưới để mở bot, hoặc gửi mã này cho bot <b>@rrt_alert_bot</b> trong Telegram. Mã có hiệu lực <b>10 phút</b> và chỉ dùng được một lần.</p>
+          <div class="text-center my-3">
+            <code id="tg-link-code" class="fs-3 user-select-all px-3 py-2 border rounded bg-light">…</code>
+          </div>
+          <div class="text-center">
+            <a id="tg-link-open" class="btn btn-primary" href="#" target="_blank" rel="noopener">Mở Telegram</a>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Đóng</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div id="modal-telegram-link" class="modal fade" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title"><i class='bx bxl-telegram'></i> Liên kết Telegram</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <p id="tg-link-status" class="mb-2"></p>
+          <p class="mb-2">Bấm nút bên dưới để mở bot, hoặc gửi mã này cho bot <b>@rrt_alert_bot</b> trong Telegram. Mã có hiệu lực <b>10 phút</b> và chỉ dùng được một lần.</p>
+          <div class="text-center my-3">
+            <code id="tg-link-code" class="fs-3 user-select-all px-3 py-2 border rounded bg-light">…</code>
+          </div>
+          <div class="text-center">
+            <a id="tg-link-open" class="btn btn-primary" href="#" target="_blank" rel="noopener">Mở Telegram</a>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Đóng</button>
+        </div>
       </div>
     </div>
   </div>
