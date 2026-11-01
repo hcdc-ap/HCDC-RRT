@@ -111,7 +111,7 @@ window.RRT_GUIDE = {
           title: 'Đăng nhập lần đầu',
           items: [
             'Mở trang đăng nhập, nhập **Email đăng nhập** và **Mật khẩu**, bấm [[Đăng nhập]].',
-            'Chưa có tài khoản? Bấm [[Đăng ký]] ở cuối form, điền Tên người dùng, Đơn vị công tác, Email, Số điện thoại, Mật khẩu, đồng ý điều khoản rồi bấm [[Đăng ký]].',
+            'Chưa có tài khoản? Bấm [[Đăng ký]] ở cuối form, điền Tên người dùng, Đơn vị công tác, Email, Số điện thoại, Mật khẩu, đồng ý điều khoản rồi bấm [[Đăng ký]]. Mật khẩu phải 12–72 ký tự, có chữ hoa, chữ thường, số và ký tự đặc biệt. Sau đó **mở email và bấm liên kết xác nhận** (xem cả thư mục Spam) — chưa xác nhận email thì chưa đăng nhập được.',
             'Sau khi đăng ký, hệ thống tạo tài khoản với vai trò **Nhân viên RRT** ở trạng thái **Chờ duyệt**. Đăng nhập, vào trang **Biểu mẫu RRT**, bấm [[Biểu mẫu RRT]] để điền đầy đủ hồ sơ năng lực (kỹ năng, học vấn, ngoại ngữ…) rồi nộp.',
             'Ở mục **6. Đơn vị công tác**, cán bộ tuyến cơ sở chọn **Trạm Y tế Phường/Xã/ Đặc khu** hoặc **UBND Phường/Xã/ Đặc khu**, rồi chọn đúng **Phường/Xã/Đặc khu nơi bạn đang công tác**. Nhờ đó Quản trị tuyến cơ sở của phường/xã bạn mới thấy và duyệt được hồ sơ.',
             'Chờ Quản trị tuyến cơ sở (hoặc Quản trị RRT HCDC) duyệt. Khi được duyệt, tài khoản mới dùng được đầy đủ chức năng theo vai trò.',
@@ -131,7 +131,7 @@ window.RRT_GUIDE = {
           items: [
             'Ở màn hình đăng nhập, bấm [[Quên mật khẩu?]], nhập **Email** đăng nhập rồi bấm [[Gửi liên kết]] — **chỉ bấm một lần**.',
             'Mở hộp thư, tìm email khôi phục mật khẩu **mới nhất** (xem cả thư mục Spam/Quảng cáo) và bấm vào liên kết trong email.',
-            'Trình duyệt mở lại trang RRT với form **Đặt lại mật khẩu**. Nhập **Mật khẩu mới** và **Xác nhận mật khẩu** (8–32 ký tự, có chữ hoa, chữ thường, số và ký tự đặc biệt), bấm [[Xác nhận]].',
+            'Trình duyệt mở lại trang RRT với form **Đặt lại mật khẩu**. Nhập **Mật khẩu mới** và **Xác nhận mật khẩu** (12–72 ký tự, có chữ hoa, chữ thường, số và ký tự đặc biệt), bấm [[Xác nhận]].',
             'Thấy thông báo **"Đổi mật khẩu thành công"** là xong — đăng nhập lại bằng mật khẩu mới.',
           ],
         },
@@ -154,7 +154,7 @@ window.RRT_GUIDE = {
             'Ô **Search** — tìm nhanh trong trang đang mở.',
             'Nút bật/tắt **giao diện tối** (biểu tượng mặt trời/mặt trăng).',
             'Biểu tượng **chuông** — danh sách thông báo gần đây (xem nhanh, bấm vào để mở trang **Tin nhắn** đầy đủ).',
-            'Biểu tượng **hồ sơ** (ảnh đại diện) — mở menu [[Tài khoản]] / [[Đổi mật khẩu]] / [[Tin nhắn]] / [[Đăng xuất]].',
+            'Biểu tượng **hồ sơ** (ảnh đại diện) — mở menu [[Tài khoản]] / [[Đổi mật khẩu]] / [[Liên kết Telegram]] / [[Tin nhắn]] / [[Đăng xuất]].',
           ],
         },
       ],
@@ -250,7 +250,7 @@ window.RRT_GUIDE = {
           t: 'steps',
           items: [
             'Bấm biểu tượng hồ sơ ở góc phải trên cùng → [[Tài khoản]] để mở đúng hồ sơ RRT của bạn tại trang **Biểu mẫu RRT** (xem/sửa thông tin cá nhân, kỹ năng, học vấn…).',
-            'Bấm [[Đổi mật khẩu]] để mở hộp thoại đổi mật khẩu: nhập **Mật khẩu cũ**, **Mật khẩu mới**, **Xác nhận mật khẩu mới** (tối thiểu 6 ký tự, khớp nhau) rồi xác nhận.',
+            'Bấm [[Đổi mật khẩu]] để mở hộp thoại đổi mật khẩu: nhập **Mật khẩu cũ**, **Mật khẩu mới**, **Xác nhận mật khẩu mới** (12–72 ký tự, có chữ hoa, chữ thường, số và ký tự đặc biệt, khớp nhau) rồi xác nhận.',
           ],
         },
         {
