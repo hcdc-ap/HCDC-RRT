@@ -57,7 +57,7 @@ const slider = document.getElementById('slider'),
 // ======================
 const validMail = /^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$/;
 const validPassword =
-  /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^a-zA-Z\d\s]).{8,32}$/;
+  /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^a-zA-Z\d\s]).{12,72}$/;
 
 // ======================
 // HÀM CHUYỂN FORM DUY NHẤT
@@ -372,7 +372,7 @@ function inputValidation() {
           req.firstElementChild.classList.add('uil-times-circle');
         }
       };
-      if (value.length >= 8 && value.length <= 32)
+      if (value.length >= 12 && value.length <= 72)
         valid(passwordRequirementsLength);
       else invalid(passwordRequirementsLength);
       if (/\d/.test(value)) valid(passwordRequirementsNumber);
@@ -594,16 +594,22 @@ window.addEventListener('DOMContentLoaded', () => {
 
       try {
         // 1. Tạo tài khoản trên Auth
+        // Họ tên/đơn vị/điện thoại gửi kèm metadata để trigger handle_new_user ghi vào
+        // profile: khi bật "Confirm email", signUp chưa trả về phiên đăng nhập nên
+        // lệnh update profiles bên dưới (cần auth.uid()) sẽ bị RLS từ chối.
         const { data, error } = await supabaseClient.auth.signUp({
           email: email,
           password: password,
+          options: {
+            data: { full_name: fullName, department: company, phone: phone },
+            emailRedirectTo: window.location.origin + window.location.pathname,
+          },
         });
 
         if (error) throw error;
 
-        // 2. Do chúng ta đã có Trigger tạo profile tự động lúc tạo user (khi làm Database schema),
-        // chúng ta chỉ cần Update thông tin cá nhân vào profile vừa được tạo đó.
-        if (data && data.user) {
+        // 2. Chỉ khi đã có phiên (xác nhận email đang tắt) mới cập nhật trực tiếp.
+        if (data && data.session && data.user) {
           const { error: profileError } = await supabaseClient
             .from('profiles')
             .update({
@@ -619,7 +625,7 @@ window.addEventListener('DOMContentLoaded', () => {
         }
 
         showToast(
-          'Đăng ký thành công! Vui lòng chờ admin phê duyệt.',
+          'Đăng ký thành công! Vui lòng mở email và bấm liên kết xác nhận, sau đó chờ quản trị viên phê duyệt.',
           'success'
         );
 
@@ -685,7 +691,7 @@ window.addEventListener('DOMContentLoaded', () => {
 
       if (!validPassword.test(newPass)) {
         showToast(
-          'Mật khẩu phải 8-32 ký tự, có chữ hoa, chữ thường, số và ký tự đặc biệt!',
+          'Mật khẩu phải 12-72 ký tự, có chữ hoa, chữ thường, số và ký tự đặc biệt!',
           'error'
         );
         return;

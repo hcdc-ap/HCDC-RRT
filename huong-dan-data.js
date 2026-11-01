@@ -230,9 +230,9 @@ window.RRT_GUIDE = {
           t: 'steps',
           title: 'Liên kết Telegram (khuyến nghị)',
           items: [
-            'Mở Telegram, tìm bot của hệ thống HCDC-RRT (hỏi Quản trị RRT nếu bạn chưa có đường dẫn/tên bot).',
-            'Bấm **Start** hoặc gõ `/start`.',
-            'Gõ đúng **địa chỉ email đăng nhập** của bạn và gửi. Bot xác nhận "HỒ SƠ HỢP LỆ" kèm tên bạn là liên kết thành công.',
+            'Trong ứng dụng HCDC-RRT, bấm biểu tượng tài khoản (góc phải) → **Liên kết Telegram**. Ứng dụng hiện một **mã 10 ký tự**, có hiệu lực 10 phút và chỉ dùng một lần.',
+            'Bấm **Mở Telegram** (hoặc mở bot **@rrt_alert_bot** và gửi mã đó).',
+            'Bot xác nhận "LIÊN KẾT THÀNH CÔNG" kèm tên bạn là xong. Không còn liên kết bằng cách gõ email.',
           ],
         },
         {

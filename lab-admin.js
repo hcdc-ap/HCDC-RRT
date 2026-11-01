@@ -1195,10 +1195,10 @@
                     </div>
                     <div>
                       ${
-                        lab.head_phone
+                        lab.id
                           ? `<small class="text-danger d-block">
                               <i class='bx bx-telegram'></i>
-                              Tìm kiếm <strong>@rrt_alert_bot</strong> nhập: <code class="user-select-all bg-white px-2 py-1 border rounded">/start LAB_${lab.head_phone}</code>
+                              Tìm kiếm <strong>@rrt_alert_bot</strong> nhập: <code class="user-select-all bg-white px-2 py-1 border rounded">/start LAB_${lab.id}</code>
                             </small>`
                           : `<small class="text-muted fst-italic">
                               <i class='bx bx-info-circle'></i>
