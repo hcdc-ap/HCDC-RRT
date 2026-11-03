@@ -113,6 +113,7 @@ window.RRT_GUIDE = {
             'Mở trang đăng nhập, nhập **Email đăng nhập** và **Mật khẩu**, bấm [[Đăng nhập]]. Nếu bạn đã bật **Xác thực 2 bước**, hệ thống hỏi thêm **mã 6 số** từ ứng dụng Authenticator (xem mục "Xác thực 2 bước (MFA) và mất điện thoại" bên dưới).',
             'Chưa có tài khoản? Bấm [[Đăng ký]] ở cuối form, điền Tên người dùng, Đơn vị công tác, Email, Số điện thoại, Mật khẩu, đồng ý điều khoản rồi bấm [[Đăng ký]]. Mật khẩu phải 12–72 ký tự, có chữ hoa, chữ thường, số và ký tự đặc biệt. Sau đó **mở email và bấm liên kết xác nhận** (xem cả thư mục Spam) — chưa xác nhận email thì chưa đăng nhập được.',
             'Sau khi đăng ký, hệ thống tạo tài khoản với vai trò **Nhân viên RRT** ở trạng thái **Chờ duyệt**. Đăng nhập, vào trang **Biểu mẫu RRT**, bấm [[Biểu mẫu RRT]] để điền đầy đủ hồ sơ năng lực (kỹ năng, học vấn, ngoại ngữ…) rồi nộp.',
+            'Cuối biểu mẫu có **một ô tích bắt buộc**: bạn chấp nhận tham gia RRT và đồng ý để HCDC sử dụng thông tin trong biểu mẫu (họ tên, năm sinh, đơn vị, số điện thoại, email, địa chỉ, kỹ năng, trình độ) cho việc quản lý nhân sự RRT, xếp lịch trực, điều động và gửi thông báo về sự kiện y tế công cộng qua ứng dụng, email và Telegram. Thông tin chỉ được xem bởi Quản trị RRT (HCDC) và quản trị tuyến cơ sở của đơn vị bạn. Đọc kỹ nội dung ngay tại ô tích rồi mới tích; chưa tích thì không nộp được hồ sơ.',
             'Ở mục **6. Đơn vị công tác**, cán bộ tuyến cơ sở chọn **Trạm Y tế Phường/Xã/ Đặc khu** hoặc **UBND Phường/Xã/ Đặc khu**, rồi chọn đúng **Phường/Xã/Đặc khu nơi bạn đang công tác**. Nhờ đó Quản trị tuyến cơ sở của phường/xã bạn mới thấy và duyệt được hồ sơ.',
             'Chờ Quản trị tuyến cơ sở (hoặc Quản trị RRT HCDC) duyệt. Khi được duyệt, tài khoản mới dùng được đầy đủ chức năng theo vai trò.',
           ],
@@ -855,6 +856,10 @@ window.RRT_GUIDE = {
           summary: 'Xem và cập nhật hồ sơ năng lực RRT của chính bạn, theo dõi trạng thái duyệt.',
           blocks: [
             { t: 'p', text: 'Bạn chỉ thấy đúng một dòng — hồ sơ của chính mình. Cột **Phê duyệt** chỉ hiện huy hiệu trạng thái (Chờ duyệt / Yêu cầu sửa / Đã duyệt), không chỉnh sửa được — việc duyệt do Quản trị RRT thực hiện.' },
+            {
+              t: 'note', kind: 'info', title: 'Ô tích cam kết cuối biểu mẫu',
+              text: 'Khi nộp hoặc cập nhật hồ sơ, bạn phải tích ô: chấp nhận tham gia RRT và đồng ý để HCDC sử dụng thông tin trong biểu mẫu cho việc quản lý nhân sự RRT, xếp lịch trực, điều động và gửi thông báo về sự kiện y tế công cộng (ứng dụng, email, Telegram). Thông tin chỉ được xem bởi Quản trị RRT (HCDC) và quản trị tuyến cơ sở của đơn vị bạn.',
+            },
             {
               t: 'steps',
               items: [
