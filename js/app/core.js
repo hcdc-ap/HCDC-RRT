@@ -101,6 +101,15 @@ rrtShared.authLinkError = null;
         if (typeof window.startPasswordRecovery === 'function') {
           window.startPasswordRecovery(session);
         }
+      } else if (
+        session &&
+        !error &&
+        window.rrtMfaHelpers?.needsSecondStep(session)
+      ) {
+        // Phiên dở dang: đã nhập mật khẩu nhưng chưa qua bước 2 (MFA) rồi F5 → bắt đăng nhập lại
+        console.log('🔐 Phiên chưa qua xác thực 2 bước → đăng xuất.');
+        await window.supabaseClient.auth.signOut();
+        if (typeof window.go === 'function') window.go('login');
       } else if (session && !error) {
         console.log('✅ Tìm thấy vé! Tự động đưa vào Dashboard...');
         // Ép hệ thống chạy thẳng hàm mở Dashboard
@@ -198,6 +207,11 @@ rrtShared.authLinkError = null;
 
   function doInit() {
     try {
+      // Cho js/app/mfa.js tạo client tạm (xác minh mật khẩu cũ mà không đụng phiên chính)
+      rrtShared.supabaseConfig = {
+        url: SUPABASE_URL,
+        key: SUPABASE_ANON_KEY,
+      };
       // ✅ Tạo client với config rõ ràng để tránh conflict
       window.supabaseClient = window.supabase.createClient(
         SUPABASE_URL,
@@ -337,6 +351,18 @@ document.addEventListener('supabase:ready', function ({ detail }) {
       window.rrtShared.passwordRecovery &&
       (event === 'INITIAL_SESSION' || event === 'SIGNED_IN')
     ) {
+      return;
+    }
+
+    // Đã bật MFA nhưng phiên mới qua mật khẩu (aal1): chưa được vào hệ thống.
+    // Đăng nhập mới → luồng đăng nhập (login handler) đang hỏi mã; F5 dở dang → đăng xuất.
+    if (
+      (event === 'INITIAL_SESSION' || event === 'SIGNED_IN') &&
+      window.rrtMfaHelpers?.needsSecondStep(session)
+    ) {
+      if (event === 'INITIAL_SESSION') {
+        setTimeout(() => client.auth.signOut(), 0);
+      }
       return;
     }
 
@@ -1017,6 +1043,7 @@ window.logout = async function () {
 
   // ✅ 4. Sign out từ Supabase
   try {
+    await window.rrtMfa?.logEvent('logout'); // cần phiên còn hiệu lực nên ghi trước signOut
     await window.supabaseClient.auth.signOut();
     console.log('✅ Supabase session cleared');
   } catch (err) {
@@ -1175,18 +1202,27 @@ document.addEventListener('DOMContentLoaded', function () {
       console.log('🔐 Đang đăng nhập với Supabase...');
       await window.supabaseClient.auth.signOut();
 
-      const { error: authError } =
+      const { data: signInData, error: authError } =
         await window.supabaseClient.auth.signInWithPassword({
           email: email,
           password: password,
         });
 
       if (authError) {
+        window.rrtMfa?.logLoginFailed(email);
         throw new Error(authError.message || 'Sai email hoặc mật khẩu!');
+      }
+
+      // 0. Tài khoản đã bật MFA: hỏi mã 6 số (hoặc mã dự phòng) trước khi vào hệ thống
+      if (window.rrtMfaHelpers?.needsSecondStep(signInData?.session)) {
+        if (typeof showLoading === 'function') showLoading(false);
+        await window.rrtMfa.promptLogin(); // ném lỗi nếu người dùng huỷ
+        if (typeof showLoading === 'function') showLoading(true);
       }
 
       // 1. Tải Profile từ DB và lưu vào Session
       await window.loadUserProfile();
+      window.rrtMfa?.logEvent('login_success');
 
       // ✅ 2. ÉP PHÂN QUYỀN NGAY LẬP TỨC bằng profile vừa tải trước khi mở cửa
       if (window.userSession && typeof applyRolePermissions === 'function') {

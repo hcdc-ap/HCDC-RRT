@@ -11,7 +11,8 @@ END $$;
 CREATE SCHEMA auth;
 CREATE SCHEMA IF NOT EXISTS extensions;
 CREATE SCHEMA supabase_functions;
-CREATE TABLE auth.users (id uuid PRIMARY KEY, email text);
+CREATE TABLE auth.users (id uuid PRIMARY KEY, email text, encrypted_password text);
+CREATE TABLE auth.mfa_factors (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), user_id uuid NOT NULL REFERENCES auth.users (id) ON DELETE CASCADE, factor_type text NOT NULL DEFAULT 'totp', status text NOT NULL DEFAULT 'unverified');
 CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS
   $$ SELECT nullif(current_setting('request.jwt.claims', true)::json->>'sub', '')::uuid $$;
 CREATE FUNCTION auth.role() RETURNS text LANGUAGE sql STABLE AS

@@ -110,7 +110,7 @@ window.RRT_GUIDE = {
           t: 'steps',
           title: 'Đăng nhập lần đầu',
           items: [
-            'Mở trang đăng nhập, nhập **Email đăng nhập** và **Mật khẩu**, bấm [[Đăng nhập]].',
+            'Mở trang đăng nhập, nhập **Email đăng nhập** và **Mật khẩu**, bấm [[Đăng nhập]]. Nếu bạn đã bật **Xác thực 2 bước**, hệ thống hỏi thêm **mã 6 số** từ ứng dụng Authenticator (xem mục "Xác thực 2 bước (MFA) và mất điện thoại" bên dưới).',
             'Chưa có tài khoản? Bấm [[Đăng ký]] ở cuối form, điền Tên người dùng, Đơn vị công tác, Email, Số điện thoại, Mật khẩu, đồng ý điều khoản rồi bấm [[Đăng ký]]. Mật khẩu phải 12–72 ký tự, có chữ hoa, chữ thường, số và ký tự đặc biệt. Sau đó **mở email và bấm liên kết xác nhận** (xem cả thư mục Spam) — chưa xác nhận email thì chưa đăng nhập được.',
             'Sau khi đăng ký, hệ thống tạo tài khoản với vai trò **Nhân viên RRT** ở trạng thái **Chờ duyệt**. Đăng nhập, vào trang **Biểu mẫu RRT**, bấm [[Biểu mẫu RRT]] để điền đầy đủ hồ sơ năng lực (kỹ năng, học vấn, ngoại ngữ…) rồi nộp.',
             'Ở mục **6. Đơn vị công tác**, cán bộ tuyến cơ sở chọn **Trạm Y tế Phường/Xã/ Đặc khu** hoặc **UBND Phường/Xã/ Đặc khu**, rồi chọn đúng **Phường/Xã/Đặc khu nơi bạn đang công tác**. Nhờ đó Quản trị tuyến cơ sở của phường/xã bạn mới thấy và duyệt được hồ sơ.',
@@ -154,7 +154,7 @@ window.RRT_GUIDE = {
             'Ô **Search** — tìm nhanh trong trang đang mở.',
             'Nút bật/tắt **giao diện tối** (biểu tượng mặt trời/mặt trăng).',
             'Biểu tượng **chuông** — danh sách thông báo gần đây (xem nhanh, bấm vào để mở trang **Tin nhắn** đầy đủ).',
-            'Biểu tượng **hồ sơ** (ảnh đại diện) — mở menu [[Tài khoản]] / [[Đổi mật khẩu]] / [[Liên kết Telegram]] / [[Tin nhắn]] / [[Đăng xuất]].',
+            'Biểu tượng **hồ sơ** (ảnh đại diện) — mở menu [[Tài khoản]] / [[Đổi mật khẩu]] / [[Liên kết Telegram]] / [[Xác thực 2 bước]] / [[Tin nhắn]] / [[Đăng xuất]].',
           ],
         },
       ],
@@ -258,8 +258,59 @@ window.RRT_GUIDE = {
           text: 'Sau khi đổi mật khẩu thành công, hệ thống tự động đăng xuất sau vài giây — đăng nhập lại bằng mật khẩu mới.',
         },
         {
+          t: 'note', kind: 'tip',
+          text: 'Muốn bảo vệ tài khoản chắc hơn mật khẩu? Bật **Xác thực 2 bước** ở menu hồ sơ → [[Xác thực 2 bước]] (xem mục ngay bên dưới).',
+        },
+        {
           t: 'note', kind: 'info', title: 'Những thông tin bạn không tự đổi được',
           text: '**Email** và **Đơn vị công tác / Phường-Xã nơi công tác** gắn với quyền truy cập dữ liệu, nên sau khi tài khoản được duyệt bạn **không tự đổi được** (sửa trên form sẽ không được lưu). Khi chuyển công tác hoặc đổi email, liên hệ Quản trị RRT (HCDC).',
+        },
+      ],
+    },
+    {
+      id: 'xac-thuc-2-buoc',
+      title: 'Xác thực 2 bước (MFA) và mất điện thoại',
+      summary: 'Thêm mã 6 số từ điện thoại khi đăng nhập; cách vào lại tài khoản nếu mất điện thoại.',
+      blocks: [
+        {
+          t: 'p',
+          text: '**Xác thực 2 bước** thêm một lớp bảo vệ: ngoài mật khẩu, mỗi lần đăng nhập bạn nhập thêm **mã 6 số** (đổi mỗi 30 giây) từ ứng dụng **Google Authenticator** hoặc **Microsoft Authenticator** trên điện thoại. Người khác biết mật khẩu của bạn vẫn không vào được. Tính năng này **không bắt buộc** — không bật thì đăng nhập như bình thường.',
+        },
+        {
+          t: 'steps',
+          title: 'Bật xác thực 2 bước',
+          items: [
+            'Cài ứng dụng **Google Authenticator** hoặc **Microsoft Authenticator** trên điện thoại.',
+            'Trong RRT, bấm biểu tượng hồ sơ (góc phải trên) → [[Xác thực 2 bước]] → [[Bật xác thực 2 bước]].',
+            'Mở ứng dụng Authenticator → **Thêm tài khoản** → **Quét mã QR** trên màn hình. Không quét được thì nhập **khoá** hiện bên dưới mã QR.',
+            'Nhập **mã 6 số** đang hiện trong ứng dụng rồi bấm [[Xác nhận và bật]].',
+            'Hệ thống hiện **10 mã dự phòng** — **chỉ hiện một lần**. Bấm [[Chép]] hoặc [[Tải về (.txt)]] và cất ở nơi an toàn (in ra giấy, trình quản lý mật khẩu), rồi bấm [[Tôi đã lưu mã]].',
+          ],
+        },
+        {
+          t: 'steps',
+          title: 'Đăng nhập khi đã bật',
+          items: [
+            'Nhập email và mật khẩu như thường lệ, bấm [[Đăng nhập]].',
+            'Hộp thoại **Xác thực 2 bước** hiện ra: mở Authenticator, nhập mã 6 số của **HCDC RRT** rồi bấm [[Xác nhận]].',
+          ],
+        },
+        {
+          t: 'note', kind: 'warn', title: 'Nếu bạn mất điện thoại — có 2 cách vào lại',
+          text: '**Cách 1 — Dùng mã dự phòng (tự làm ngay):** ở hộp thoại Xác thực 2 bước, bấm [[Mất điện thoại? Dùng mã dự phòng]], nhập **một** trong 10 mã (dạng ABCD-EFGH, gõ hoa/thường đều được) rồi bấm [[Dùng mã dự phòng]]. Mỗi mã chỉ dùng được một lần; dùng xong, xác thực 2 bước của bạn bị **tắt** — hãy bật lại ngay trên điện thoại mới. **Cách 2 — Nhờ Quản trị RRT (HCDC):** nếu không còn mã dự phòng, liên hệ Quản trị RRT để **đặt lại xác thực 2 bước** cho bạn. Sau đó bạn đăng nhập bằng mật khẩu và bật lại.',
+        },
+        {
+          t: 'list',
+          title: 'Quản lý sau khi bật',
+          items: [
+            '**Tạo lại mã dự phòng**: hồ sơ → [[Xác thực 2 bước]] → [[Tạo lại 10 mã dự phòng]]. Bộ mã cũ mất hiệu lực. Nên làm khi bạn đã dùng gần hết mã hoặc nghi mã bị lộ.',
+            '**Tắt xác thực 2 bước**: hồ sơ → [[Xác thực 2 bước]] → nhập mã 6 số hiện tại → [[Tắt xác thực 2 bước]].',
+            '**Đổi sang điện thoại mới** (còn điện thoại cũ): tắt xác thực 2 bước rồi bật lại trên điện thoại mới.',
+          ],
+        },
+        {
+          t: 'note', kind: 'info', title: 'Lưu ý bảo mật',
+          text: 'Không gửi mã 6 số hoặc mã dự phòng cho bất kỳ ai, kể cả người tự nhận là quản trị viên. Nhập sai mã dự phòng **5 lần** trong 15 phút, tài khoản bị khóa thử mã tạm thời. Mọi lần bật/tắt, dùng mã dự phòng hay admin đặt lại đều được ghi vào **Nhật ký truy cập**.',
         },
       ],
     },
@@ -553,6 +604,49 @@ window.RRT_GUIDE = {
             {
               t: 'note', kind: 'tip',
               text: 'Bấm [[Lịch sử điều phối mẫu hôm nay]] trong hộp thoại (theo từng sự kiện) hoặc [[Lịch sử điều phối mẫu]] ở trang Phòng Xét nghiệm (toàn thành phố) để tra cứu và xuất Excel.',
+            },
+          ],
+        },
+        {
+          id: 'nhat-ky-truy-cap',
+          title: 'Nhật ký truy cập và đặt lại MFA',
+          summary: 'Xem ai đăng nhập/đổi tài khoản khi nào; đặt lại xác thực 2 bước cho thành viên mất điện thoại (chỉ Quản trị RRT (HCDC)).',
+          blocks: [
+            { t: 'p', text: 'Menu bên trái → [[Nhật ký truy cập]] (chỉ Quản trị RRT (HCDC) thấy). Trang có hai phần: **Đặt lại xác thực 2 bước (MFA)** và bảng **Nhật ký**.' },
+            {
+              t: 'table',
+              title: 'Các sự kiện được ghi',
+              head: ['Sự kiện', 'Ý nghĩa'],
+              rows: [
+                ['**Đăng nhập / Đăng nhập thất bại / Đăng xuất**', 'Thất bại ghi email đã gõ và địa chỉ IP (để phát hiện dò mật khẩu).'],
+                ['**Bật / Tắt xác thực 2 bước**', 'Thành viên tự bật hoặc tắt MFA.'],
+                ['**Sai mã xác thực 2 bước**', 'Nhập sai mã 6 số hoặc mã dự phòng (kể cả bị khóa tạm do sai nhiều lần).'],
+                ['**Dùng mã dự phòng / Tạo mã dự phòng**', 'Thành viên mất điện thoại tự vào lại; hoặc tạo bộ mã mới.'],
+                ['**Admin đặt lại MFA**', 'Ghi rõ admin nào đặt lại cho ai.'],
+                ['**Đổi mật khẩu / Duyệt tài khoản**', 'Đổi mật khẩu của chính thành viên; admin hoặc tuyến cơ sở duyệt tài khoản.'],
+              ],
+            },
+            {
+              t: 'steps',
+              title: 'Xem và lọc nhật ký',
+              items: [
+                'Dùng các ô lọc: **Email**, **Sự kiện**, **Kết quả** (thành công/thất bại), **Từ ngày – Đến ngày**, rồi bấm [[Lọc]]. Bấm [[Xoá lọc]] để xem lại tất cả.',
+                'Bảng hiển thị 50 dòng mỗi trang, mới nhất ở trên; dùng [[‹ Trước]] / [[Sau ›]] để chuyển trang.',
+              ],
+            },
+            {
+              t: 'steps',
+              title: 'Đặt lại MFA cho thành viên mất điện thoại',
+              items: [
+                'Thành viên báo mất điện thoại và **không còn mã dự phòng**. Xác minh đúng người trước (gọi điện, hỏi đơn vị) — không đặt lại chỉ vì một tin nhắn.',
+                'Ở phần **Đặt lại xác thực 2 bước (MFA)**, nhập **email** của thành viên, bấm [[Tìm]].',
+                'Kiểm tra đúng họ tên/email hiện ra, bấm [[Xác nhận đặt lại]]. Thiết bị xác thực và mã dự phòng của họ bị xóa.',
+                'Báo thành viên đăng nhập bằng mật khẩu (không còn hỏi mã) và **bật lại** xác thực 2 bước trên điện thoại mới.',
+              ],
+            },
+            {
+              t: 'note', kind: 'warn', title: 'Giới hạn cần biết',
+              text: 'Nhật ký **chỉ thêm, không sửa/xóa được**. Bạn **không tự đặt lại MFA cho chính mình** — hãy dùng mã dự phòng hoặc nhờ một Quản trị RRT khác. Nếu không còn Quản trị RRT nào vào được, quản trị hệ thống xóa thiết bị xác thực tại Supabase Dashboard → Authentication → Users → chọn người dùng → xóa factor MFA. Nếu người đó chưa bật MFA, hệ thống báo "chưa bật xác thực 2 bước".',
             },
           ],
         },

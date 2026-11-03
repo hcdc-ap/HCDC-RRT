@@ -1117,6 +1117,9 @@ document.addEventListener('DOMContentLoaded', function () {
       case 'page-lab-admin':
         renderLabAdminPage();
         break;
+      case 'page-access-log':
+        if (typeof window.renderAccessLogPage === 'function') window.renderAccessLogPage();
+        break;
       case 'page-notification':
         renderMessageTable();
 

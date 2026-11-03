@@ -423,6 +423,9 @@
             <i class='bx bxs-flask bx-sm'></i><span class="text">Phòng Xét nghiệm</span>
           </a>
         </li>
+        <li id="menu-access-log" data-roles="admin">
+          <a href="#" data-target="page-access-log"><i class='bx bxs-shield-alt-2 bx-sm'></i><span class="text">Nhật ký truy cập</span></a>
+        </li>
         <li id="menu-notification">
           <a href="#" data-target="page-notification"><i class='bx bxs-message-dots bx-sm'></i><span class="text">Tin nhắn</span></a>
         </li>
@@ -485,6 +488,7 @@
             <li><a href="#" id="accountLink">Tài khoản</a></li>
             <li><a href="#" id="changePassLink" onclick="openChangePassModal()">Đổi mật khẩu</a></li>
             <li><a href="#" id="telegramLinkLink" onclick="openTelegramLinkModal(); return false;">Liên kết Telegram</a></li>
+            <li><a href="#" id="mfaLink" onclick="openMfaModal(); return false;">Xác thực 2 bước</a></li>
             <li>
               <a href="#" id="messageLink">Tin nhắn</a>
             </li>
@@ -2030,6 +2034,65 @@
           </div>
         </div>
 
+        <div id="page-access-log" style="display:none;">
+          <div class="head-title">
+            <div class="left">
+              <h1>Nhật ký truy cập</h1>
+              <ul class="breadcrumb">
+                <li><a href="#">AP RRT</a></li>
+                <li><i class='bx bx-chevron-right'></i></li>
+                <li><a class="active" href="#">Bảo mật tài khoản</a></li>
+              </ul>
+            </div>
+          </div>
+          <div class="table-data">
+            <div class="order">
+              <div class="head"><h3>Đặt lại xác thực 2 bước (MFA)</h3></div>
+              <p class="small text-muted">Dùng khi thành viên mất điện thoại và không còn mã dự phòng. Sau khi đặt lại, họ đăng nhập bằng mật khẩu và tự bật lại MFA.</p>
+              <div class="d-flex flex-wrap gap-2 align-items-end">
+                <div>
+                  <label for="mfa-reset-email" class="form-label mb-1">Email thành viên</label>
+                  <input id="mfa-reset-email" type="email" class="form-control" placeholder="ten@benhvien.vn" style="min-width:260px">
+                </div>
+                <button id="mfa-reset-find" type="button" class="btn btn-primary">Tìm</button>
+              </div>
+              <p id="mfa-reset-msg" class="text-danger small mt-2 mb-0" role="alert"></p>
+              <div id="mfa-reset-confirm-box" class="alert alert-warning mt-3" hidden>
+                Đặt lại MFA cho <b id="mfa-reset-who"></b>? Thiết bị xác thực và mã dự phòng của họ sẽ bị xoá. Thao tác được ghi vào nhật ký.
+                <div class="mt-2 d-flex gap-2">
+                  <button id="mfa-reset-confirm" type="button" class="btn btn-danger btn-sm">Xác nhận đặt lại</button>
+                  <button id="mfa-reset-cancel" type="button" class="btn btn-outline-secondary btn-sm">Huỷ</button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="table-data">
+            <div class="order">
+              <div class="head"><h3>Nhật ký</h3></div>
+              <div class="d-flex flex-wrap gap-2 align-items-end mb-3">
+                <div><label for="access-log-email" class="form-label mb-1">Email</label><input id="access-log-email" type="text" class="form-control" placeholder="Tìm theo email"></div>
+                <div><label for="access-log-event" class="form-label mb-1">Sự kiện</label><select id="access-log-event" class="form-select"><option value="">Tất cả</option></select></div>
+                <div><label for="access-log-result" class="form-label mb-1">Kết quả</label><select id="access-log-result" class="form-select"><option value="">Tất cả</option><option value="ok">Thành công</option><option value="fail">Thất bại</option></select></div>
+                <div><label for="access-log-from" class="form-label mb-1">Từ ngày</label><input id="access-log-from" type="date" class="form-control"></div>
+                <div><label for="access-log-to" class="form-label mb-1">Đến ngày</label><input id="access-log-to" type="date" class="form-control"></div>
+                <button id="access-log-filter" type="button" class="btn btn-primary">Lọc</button>
+                <button id="access-log-clear" type="button" class="btn btn-secondary">Xoá lọc</button>
+              </div>
+              <div style="overflow-x:auto">
+                <table class="table table-sm align-middle" style="width:100%">
+                  <thead><tr><th>Thời gian</th><th>Người dùng</th><th>Sự kiện</th><th>Kết quả</th><th>Chi tiết</th><th>IP</th></tr></thead>
+                  <tbody id="access-log-body"></tbody>
+                </table>
+              </div>
+              <div class="d-flex align-items-center gap-2">
+                <button id="access-log-prev" type="button" class="btn btn-outline-secondary btn-sm">‹ Trước</button>
+                <span id="access-log-info" class="small text-muted"></span>
+                <button id="access-log-next" type="button" class="btn btn-outline-secondary btn-sm">Sau ›</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
       </main>
       <!-- MAIN -->
     </section>
@@ -3486,6 +3549,87 @@
       </div>
     </div>
   </div>
+  <!-- ============================================================ -->
+  <!-- MODAL: XÁC THỰC 2 BƯỚC (MFA) — bước nhập mã khi đăng nhập -->
+  <!-- ============================================================ -->
+  <div id="modal-mfa-login" class="modal fade" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title"><i class='bx bxs-shield-alt-2'></i> Xác thực 2 bước</h5>
+        </div>
+        <div class="modal-body">
+          <div id="mfa-login-totp">
+            <p class="mb-2">Mở ứng dụng <b>Authenticator</b> trên điện thoại và nhập mã 6 số của <b>HCDC RRT</b>.</p>
+            <input id="mfa-login-code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="7" class="form-control form-control-lg text-center" placeholder="123456" aria-label="Mã 6 số">
+            <button id="mfa-login-submit" type="button" class="btn btn-primary w-100 mt-3">Xác nhận</button>
+            <p class="mt-3 mb-0 small"><a href="#" id="mfa-login-to-backup">Mất điện thoại? Dùng mã dự phòng</a></p>
+          </div>
+          <div id="mfa-login-backup" hidden>
+            <p class="mb-2">Nhập <b>một mã dự phòng</b> (8 ký tự, ví dụ <code>ABCD-EFGH</code>) bạn đã lưu lúc bật xác thực 2 bước. Mỗi mã chỉ dùng được một lần.</p>
+            <input id="mfa-login-backup-code" type="text" autocomplete="off" autocapitalize="characters" maxlength="12" class="form-control form-control-lg text-center" placeholder="ABCD-EFGH" aria-label="Mã dự phòng">
+            <div class="alert alert-warning small mt-3 mb-0">Dùng mã dự phòng sẽ <b>tắt</b> xác thực 2 bước của tài khoản; bạn nên bật lại ngay sau khi vào. Không còn mã? Nhờ Quản trị RRT đặt lại.</div>
+            <button id="mfa-login-backup-submit" type="button" class="btn btn-primary w-100 mt-3">Dùng mã dự phòng</button>
+            <p class="mt-3 mb-0 small"><a href="#" id="mfa-login-to-totp">Quay lại nhập mã từ ứng dụng</a></p>
+          </div>
+          <p id="mfa-login-error" class="text-danger small mt-2 mb-0" role="alert"></p>
+        </div>
+        <div class="modal-footer">
+          <button id="mfa-login-cancel" type="button" class="btn btn-secondary">Huỷ, quay lại đăng nhập</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: XÁC THỰC 2 BƯỚC — bật/tắt trong menu hồ sơ -->
+  <div id="modal-mfa-settings" class="modal fade" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title"><i class='bx bxs-shield-alt-2'></i> Xác thực 2 bước</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Đóng"></button>
+        </div>
+        <div class="modal-body">
+          <div id="mfa-s-off">
+            <p>Thêm một lớp bảo vệ: ngoài mật khẩu, mỗi lần đăng nhập cần mã 6 số từ ứng dụng <b>Google Authenticator</b> / <b>Microsoft Authenticator</b> trên điện thoại. Tính năng này <b>không bắt buộc</b>.</p>
+            <button id="mfa-s-start" type="button" class="btn btn-primary">Bật xác thực 2 bước</button>
+          </div>
+          <div id="mfa-s-enroll" hidden>
+            <p class="mb-2">Mở ứng dụng Authenticator → <b>Thêm tài khoản</b> → quét mã QR:</p>
+            <div class="text-center mb-2"><img id="mfa-s-qr" alt="Mã QR" style="width:180px;height:180px;background:#fff"></div>
+            <p class="small text-muted text-center mb-3">Không quét được? Nhập khoá: <code id="mfa-s-secret" class="user-select-all"></code></p>
+            <label for="mfa-s-enroll-code" class="form-label">Nhập mã 6 số đang hiện trong ứng dụng:</label>
+            <input id="mfa-s-enroll-code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="7" class="form-control text-center" placeholder="123456">
+            <div class="d-flex gap-2 mt-3">
+              <button id="mfa-s-enroll-confirm" type="button" class="btn btn-primary">Xác nhận và bật</button>
+              <button id="mfa-s-enroll-cancel" type="button" class="btn btn-outline-secondary">Huỷ</button>
+            </div>
+          </div>
+          <div id="mfa-s-on" hidden>
+            <p class="mb-2"><span class="badge bg-success">Đang bật</span> Đăng nhập cần thêm mã 6 số từ ứng dụng Authenticator.</p>
+            <p class="small">Mất điện thoại? Dùng <b>mã dự phòng</b> ở màn hình đăng nhập, hoặc nhờ Quản trị RRT đặt lại.</p>
+            <button id="mfa-s-regen" type="button" class="btn btn-outline-primary btn-sm mb-3">Tạo lại 10 mã dự phòng (mã cũ mất hiệu lực)</button>
+            <hr>
+            <label for="mfa-s-off-code" class="form-label">Muốn tắt? Nhập mã 6 số hiện tại để xác nhận:</label>
+            <div class="input-group">
+              <input id="mfa-s-off-code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="7" class="form-control" placeholder="123456">
+              <button id="mfa-s-disable" type="button" class="btn btn-outline-danger">Tắt xác thực 2 bước</button>
+            </div>
+          </div>
+          <div id="mfa-s-codes" hidden>
+            <div class="alert alert-warning small">Đây là <b>10 mã dự phòng</b>, chỉ hiện <b>một lần</b>. Lưu vào nơi an toàn (in ra, trình quản lý mật khẩu). Mỗi mã dùng được 1 lần khi mất điện thoại.</div>
+            <pre id="mfa-s-codes-list" class="border rounded p-3 bg-light fs-5 text-center user-select-all" style="letter-spacing:.08em"></pre>
+            <div class="d-flex flex-wrap gap-2">
+              <button id="mfa-s-copy" type="button" class="btn btn-outline-secondary btn-sm">Chép</button>
+              <button id="mfa-s-download" type="button" class="btn btn-outline-secondary btn-sm">Tải về (.txt)</button>
+              <button id="mfa-s-codes-done" type="button" class="btn btn-primary btn-sm ms-auto">Tôi đã lưu mã</button>
+            </div>
+          </div>
+          <p id="mfa-s-error" class="text-danger small mt-2 mb-0" role="alert"></p>
+        </div>
+      </div>
+    </div>
+  </div>
   <!-- Image Modal/Lightbox -->
   <div id="image-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 9999; justify-content: center; align-items: center;" onclick="this.style.display='none'">
     <img id="image-modal-img" src="" style="max-width: 90%; max-height: 90%; object-fit: contain; border-radius: 8px;">
@@ -3531,6 +3675,7 @@
   </div>
   <!-- Helpers dùng chung — phải nạp TRƯỚC js/app/* -->
   <script src="auth-helpers.js"></script>
+  <script src="mfa-helpers.js"></script>
   <script src="utils/query-cache.js"></script>
   <script src="utils/batch-fetch.js"></script>
   <script src="utils/escape.js"></script>
@@ -3554,9 +3699,11 @@
   <script src="js/app/field-ops.js"></script>
   <script src="js/app/official-reports.js"></script>
   <script src="js/app/iap.js"></script>
+  <script src="js/app/mfa.js"></script>
   <script src="js/app/misc.js"></script>
   <script src="team-response-stats.js"></script>
   <script src="lab-admin.js"></script>
+  <script src="js/app/access-log.js"></script>
   <script src="lab-dispatch-engine.js"></script>
   <script src="lab-dispatch-modal.js"></script>
   <script src="lab-dispatch-actions.js"></script>

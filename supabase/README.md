@@ -130,3 +130,10 @@ Sao lưu trước (đã có `backup-supabase-2026-11-01-truoc-nang-cap-rrt`, g�
 5. **Deploy** `telegram-bot-handler` cùng lúc đưa giao diện mới lên GitHub Pages (nút "Liên kết Telegram" cần bước 1). Cách liên kết bằng email không còn hoạt động.
 6. **Xoá** hàm cũ không còn dùng: `supabase functions delete send-notification --project-ref sxzjbygiowpscyhiffqc` (trigger chỉ trỏ `send-notification-free`).
 7. Chạy `sql/kiem_tra_rls.sql` (LIMS) để xác nhận không có mục `loi` mới.
+
+## Xác thực 2 bước (MFA) + nhật ký truy cập
+
+- Migration `20261103000000_rrt_mfa_audit.sql` (hoàn tác: `rollback/20261103000000_rrt_mfa_audit_down.sql`): hàm `rrt_mfa_ok()`, policy RESTRICTIVE `rrt_mfa_gate` trên mọi bảng public bật RLS (chỉ chặn người ĐÃ bật MFA mà phiên chưa qua bước 2), bảng `rrt_mfa_backup_codes`, `rrt_mfa_attempts`, `rrt_access_log` (chỉ thêm, admin đọc), RPC `rrt_log_event`.
+- Edge Functions: `mfa-backup-codes`, `mfa-recovery`, `mfa-admin-reset`, `auth-log` (deploy với `--no-verify-jwt`; tự kiểm tra JWT trong mã).
+- Bật TOTP trong Dashboard: Authentication → Multi-Factor. Test: `npm test` (tests/mfa-*.test.js chạy migration trên pglite).
+- Admin mất điện thoại và không còn admin khác: Dashboard → Authentication → Users → xóa factor MFA của người dùng.
