@@ -220,6 +220,9 @@ END $$;
 
 -- ---------------------------------------------------------------------------
 -- 5. Cổng MFA trên mọi bảng public đang bật RLS
+-- LƯU Ý: gọi rrt_mfa_ok() TRỰC TIẾP, KHÔNG bọc (SELECT ...). Bọc như vậy tạo SubLink trong
+-- policy và làm bảng profiles báo "infinite recursion detected in policy" khi UPDATE
+-- (policy p_ward_update tự truy vấn lại profiles). Xem tests/mfa-rls.test.js.
 -- ---------------------------------------------------------------------------
 DO $$
 DECLARE r record;
@@ -235,7 +238,7 @@ BEGIN
     EXECUTE format('DROP POLICY IF EXISTS rrt_mfa_gate ON public.%I', r.relname);
     EXECUTE format(
       'CREATE POLICY rrt_mfa_gate ON public.%I AS RESTRICTIVE FOR ALL TO authenticated '
-      'USING ((SELECT public.rrt_mfa_ok())) WITH CHECK ((SELECT public.rrt_mfa_ok()))',
+      'USING (public.rrt_mfa_ok()) WITH CHECK (public.rrt_mfa_ok())',
       r.relname);
   END LOOP;
 END $$;
