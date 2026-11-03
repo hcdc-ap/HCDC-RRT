@@ -42,6 +42,12 @@ test.before(async () => {
     ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
     ALTER TABLE public.secret_data ENABLE ROW LEVEL SECURITY;
     CREATE POLICY p_all ON public.profiles FOR ALL TO authenticated USING (true) WITH CHECK (true);
+    -- Giống p_ward_update thật: WITH CHECK tự truy vấn lại profiles (từng gây infinite recursion với cổng bọc SELECT)
+    CREATE FUNCTION public.current_user_role() RETURNS text LANGUAGE sql STABLE SECURITY DEFINER AS
+      $$ SELECT role FROM public.profiles WHERE id = auth.uid() $$;
+    CREATE POLICY p_ward_update ON public.profiles AS PERMISSIVE FOR UPDATE TO authenticated
+      USING (current_user_role() = 'ward_admin')
+      WITH CHECK (current_user_role() = 'ward_admin' AND (role = (SELECT p.role FROM profiles p WHERE p.id = profiles.id)));
     CREATE POLICY s_all ON public.secret_data FOR ALL TO authenticated USING (true) WITH CHECK (true);
     GRANT SELECT, INSERT, UPDATE, DELETE ON public.profiles, public.secret_data TO authenticated;
     GRANT USAGE ON SEQUENCE public.secret_data_id_seq TO authenticated;
@@ -90,6 +96,16 @@ test('cổng MFA có trên mọi bảng RLS của public (kể cả bảng mới
     WHERE n.nspname = 'public' AND c.relkind = 'r' AND c.relrowsecurity
       AND NOT EXISTS (SELECT 1 FROM pg_policy p WHERE p.polrelid = c.oid AND p.polname = 'rrt_mfa_gate')`);
   assert.deepEqual(r.rows, []);
+});
+
+test('HỒI QUY: sửa hồ sơ (profiles có policy tự truy vấn lại) không bị infinite recursion', async () => {
+  await as(PLAIN, 'aal1');
+  const r = await db.query("UPDATE public.profiles SET email = 'b@x' WHERE id = '" + PLAIN + "'");
+  assert.equal(r.affectedRows, 1);
+  await as(MFA, 'aal2');
+  assert.equal((await db.query("UPDATE public.profiles SET email = 'c@x' WHERE id = '" + MFA + "'")).affectedRows, 1);
+  await as(MFA, 'aal1'); // đã bật MFA nhưng chưa qua bước 2: bị chặn (0 dòng), không phải lỗi recursion
+  assert.equal((await db.query("UPDATE public.profiles SET email = 'c@x' WHERE id = '" + MFA + "'")).affectedRows, 0);
 });
 
 test('nhật ký: ghi qua rrt_log_event, user_id lấy từ phiên', async () => {
