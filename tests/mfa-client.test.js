@@ -52,3 +52,9 @@ test('verifyPassword: dùng client TẠM không lưu phiên; thiếu cấu hình
   w.rrtShared.supabaseConfig = undefined;
   assert.ok((await w.rrtMfa.verifyPassword('a@b.c', 'pw')).error);
 });
+
+test('bật MFA: gửi issuer "HCDC RRT" để ứng dụng Authenticator không hiện tên site của LIMS', () => {
+  const src = require('fs').readFileSync(require('path').join(__dirname, '../js/app/mfa.js'), 'utf8');
+  assert.match(src, /issuer: ISSUER,/);
+  assert.equal(setup({}).rrtMfa.ISSUER, 'HCDC RRT');
+});

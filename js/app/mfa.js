@@ -8,6 +8,7 @@
   'use strict';
 
   const H = window.rrtMfaHelpers;
+  const ISSUER = 'HCDC RRT';
   const sb = () => window.supabaseClient;
   const $ = (id) => document.getElementById(id);
   const toast = (msg, type) => {
@@ -267,6 +268,9 @@
     try {
       const { data, error } = await sb().auth.mfa.enroll({
         factorType: 'totp',
+        // issuer = tên hiện trong ứng dụng Authenticator. Không đặt thì Supabase dùng Site URL
+        // của dự án (đang là hcdc-lims.vercel.app vì dùng chung với LIMS).
+        issuer: ISSUER,
         friendlyName: 'RRT ' + new Date().toISOString(),
       });
       if (error) throw error;
@@ -401,6 +405,7 @@
   }
 
   window.rrtMfa = {
+    ISSUER,
     logEvent,
     logLoginFailed,
     promptLogin,
