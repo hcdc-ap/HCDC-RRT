@@ -288,12 +288,15 @@ document.addEventListener('DOMContentLoaded', function () {
       const email = window.userSession?.email;
       if (!email) throw new Error('Không tìm thấy phiên đăng nhập!');
 
-      // Bước A: Xác thực mật khẩu cũ
-      const { error: signInError } =
-        await window.supabaseClient.auth.signInWithPassword({
-          email: email,
-          password: oldPass,
-        });
+      // Bước A: Xác thực mật khẩu cũ. Người đã bật MFA: dùng client tạm, vì đăng nhập
+      // lại trên client chính sẽ kéo phiên về aal1 và Supabase từ chối updateUser.
+      const useIsolated = window.rrtMfa && (await window.rrtMfa.hasMfa());
+      const { error: signInError } = useIsolated
+        ? await window.rrtMfa.verifyPassword(email, oldPass)
+        : await window.supabaseClient.auth.signInWithPassword({
+            email: email,
+            password: oldPass,
+          });
       if (signInError) throw new Error('Mật khẩu cũ không chính xác!');
 
       // Bước B: Cập nhật mật khẩu mới
@@ -302,6 +305,7 @@ document.addEventListener('DOMContentLoaded', function () {
           password: newPass,
         });
       if (updateError) throw updateError;
+      window.rrtMfa?.logEvent('password_changed');
 
       // 3. THÀNH CÔNG
       if (typeof showToast === 'function') {
