@@ -541,11 +541,23 @@ window.RealtimeManager = {
       const id = incOf(p);
       this.debounce('disp:' + id, () => this.refreshDispatchTab(id));
     });
-    // Chuông thông báo
-    on(
-      'notifications',
-      () => this.debounce('notif', () => window.loadUserNotifications?.(), 600),
-      'INSERT'
+    // Chuông thông báo. Chỉ nhận thông báo của chính mình (cùng bộ định danh với loadUserNotifications):
+    // không lọc thì Realtime phải kiểm RLS cho MỌI người đang online với MỖI thông báo mới
+    // (đo: 600 người online, loạt 50 thông báo mất > 30 s; có lọc còn ~1 s).
+    const myIds = [
+      window.userSession?.email,
+      window.userSession?.username,
+      window.userSession?.id,
+    ].filter((v) => v && !/[,()]/.test(String(v)));
+    ch.on(
+      'postgres_changes',
+      {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'notifications',
+        ...(myIds.length ? { filter: `user_email=in.(${myIds.join(',')})` } : {}),
+      },
+      () => this.debounce('notif', () => window.loadUserNotifications?.(), 600)
     );
 
     ch.subscribe((status) => {
